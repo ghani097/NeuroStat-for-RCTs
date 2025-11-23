@@ -10,6 +10,11 @@ End-to-end EEG pipeline with a three-column GUI for:
 
 Run the GUI: `python run_study_app.py`
 
+### MAIN GUI
+![](FigsREAD/NeuroStatPipeline_GUI.png)
+
+
+
 
 ## Quick Start
 
