@@ -88,7 +88,7 @@ class PreprocessingConfig:
     l_freq: float = 1.0
     h_freq: float = 40.0
     notch_freqs: Sequence[float] = (50.0, 100.0)
-    ica_method: str = "fastica"
+    ica_method: str = "infomax"
     ica_n_components: Optional[int] = None
     random_state: int = 42
     reject_criteria: Optional[Dict[str, float]] = field(
@@ -175,7 +175,7 @@ def _apply_montage(raw: mne.io.BaseRaw) -> None:
             LOGGER.warning("Could not set montage automatically: %s", exc)
 
 
-def preprocess_raw(raw: mne.io.BaseRaw, config: PreprocessingConfig) -> Tuple[mne.io.BaseRaw, ICA]:
+def preprocess_raw(raw: mne.io.BaseRaw, config: PreprocessingConfig, progress_cb: Optional[Callable[[str], None]] = None) -> Tuple[mne.io.BaseRaw, mne.io.BaseRaw, ICA]:
     """Run filtering, referencing, and ICA-based cleanup."""
     # Log basic data shape and duration
     try:
@@ -199,33 +199,24 @@ def preprocess_raw(raw: mne.io.BaseRaw, config: PreprocessingConfig) -> Tuple[mn
     if getattr(config, "use_asr", True):
         try:  # pragma: no cover - ASR may not be installed
             applied = False
-            picks = mne.pick_types(raw.info, eeg=True, meg=False)
-            data = raw.get_data(picks=picks, reject_by_annotation=None)
-            # asrpy API
+            # asrpy API - expects MNE Raw object
             try:
                 from asrpy import ASR  # type: ignore
 
-                asr = ASR(sfreq=raw.info["sfreq"])  # defaults are usually fine
-                data_clean = asr.fit_transform(data)
-                raw._data[picks] = data_clean
+                asr = ASR(sfreq=raw.info["sfreq"])
+                # ASR.fit and transform work on Raw objects directly
+                asr.fit(raw)
+                raw = asr.transform(raw)
                 applied = True
                 LOGGER.info("Applied ASR (asrpy)")
-            except Exception:
-                pass
-            # mne_asr API
-            if not applied:
-                try:
-                    from mne_asr import ASR  # type: ignore
-
-                    asr = ASR(sfreq=raw.info["sfreq"])  # type: ignore
-                    data_clean = asr.fit_transform(data)  # type: ignore
-                    raw._data[picks] = data_clean
-                    applied = True
-                    LOGGER.info("Applied ASR (mne_asr)")
-                except Exception:
-                    pass
+                if progress_cb:
+                    progress_cb("  -> ASR artifact removal applied")
+            except Exception as asr_err:
+                LOGGER.warning("asrpy failed: %s", asr_err)
             if not applied:
                 LOGGER.info("ASR package not available; skipping ASR step")
+                if progress_cb:
+                    progress_cb("  -> ASR skipped (not available)")
         except Exception as exc:  # pragma: no cover
             LOGGER.warning("ASR step failed: %s", exc)
 
@@ -238,9 +229,12 @@ def preprocess_raw(raw: mne.io.BaseRaw, config: PreprocessingConfig) -> Tuple[mn
             raw.notch_filter(valid_notches)
     raw.set_eeg_reference("average", projection=True)
 
+    # Use extended infomax for ICLabel compatibility
+    fit_params = dict(extended=True) if config.ica_method == "infomax" else None
     ica = ICA(
         n_components=config.ica_n_components,
         method=config.ica_method,
+        fit_params=fit_params,
         random_state=config.random_state,
         max_iter="auto",
     )
@@ -248,37 +242,38 @@ def preprocess_raw(raw: mne.io.BaseRaw, config: PreprocessingConfig) -> Tuple[mn
     ica.fit(raw)
     # ICLabel auto-classification (if enabled and available); fallback to EOG detection
     excluded = []
+    iclabel_applied = False
     if getattr(config, "use_iclabel", True):
         try:  # pragma: no cover - optional dependency
             from mne_icalabel import label_components  # type: ignore
 
-            ic_labels, ic_scores = label_components(raw, ica, method="iclabel")
-            thr = float(getattr(config, "iclabel_brain_threshold", 0.85))
+            # label_components returns a dict with 'labels' and 'y_pred_proba'
+            result = label_components(raw, ica, method="iclabel")
+            ic_labels = result.get("labels", [])
+            # ICLabel returns labels like 'brain', 'eye blink', 'muscle', etc.
+            # Exclude components NOT classified as 'brain'
             for idx, lab in enumerate(ic_labels):
-                # Keep if classified as brain with sufficient probability
-                prob_brain = None
-                try:
-                    # Assume first column is Brain
-                    if hasattr(ic_scores, "shape") and ic_scores.ndim == 2 and ic_scores.shape[1] >= 1:
-                        prob_brain = float(ic_scores[idx, 0])
-                except Exception:
-                    prob_brain = None
-                is_brain_label = isinstance(lab, str) and lab.lower() == "brain"
-                if not (is_brain_label and (prob_brain is None or prob_brain >= thr)):
+                label_str = str(lab).lower() if lab else ""
+                if label_str != "brain":
                     excluded.append(idx)
-            LOGGER.info("ICLabel excluded %d components (thr=%.2f)", len(excluded), thr)
-        except Exception:
+            LOGGER.info("ICLabel excluded %d components (non-brain artifacts)", len(excluded))
+            iclabel_applied = True
+            if progress_cb:
+                progress_cb(f"  -> ICLabel: excluded {len(excluded)} artifact components")
+        except Exception as ic_err:
+            LOGGER.warning("ICLabel failed: %s", ic_err)
             try:
                 eog_inds, _ = ica.find_bads_eog(raw)
                 excluded.extend(eog_inds)
+                if progress_cb:
+                    progress_cb(f"  -> EOG detection: excluded {len(eog_inds)} components")
             except RuntimeError:
                 pass
+    if not iclabel_applied and progress_cb:
+        progress_cb("  -> ICLabel skipped (not available)")
     ica.exclude = list(sorted(set(excluded)))
     ica.apply(raw)
-    try:
-        LOGGER.info("ICA applied: excluded %d components", len(ica.exclude))
-    except Exception:
-        pass
+    LOGGER.info("ICA applied: excluded %d components", len(ica.exclude))
     return raw_before, raw, ica
 
 
@@ -316,7 +311,7 @@ def preprocess_file(
     }
     try:
         raw = mne.io.read_raw_eeglab(str(file_path), preload=False, verbose=False)
-        raw_before, raw_after, _ica = preprocess_raw(raw, config.preprocessing)
+        raw_before, raw_after, _ica = preprocess_raw(raw, config.preprocessing, progress_cb)
 
         # Diagnostics
         try:
@@ -985,7 +980,7 @@ def process_file(file_path: Path, config: PipelineConfig, progress_cb: Optional[
         raw = mne.io.read_raw_eeglab(str(file_path), preload=False, verbose=False)
 
         # Preprocess (filter, notch, ref, ICA)
-        raw_before, raw_after, ica = preprocess_raw(raw, config.preprocessing)
+        raw_before, raw_after, ica = preprocess_raw(raw, config.preprocessing, progress_cb)
 
         # Save diagnostic figures
         try:

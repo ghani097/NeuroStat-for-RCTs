@@ -38,7 +38,7 @@ class PLIPipelineApp:
 
         self.root = tk.Tk()
         self.root.title("NeuroStat_Pipeline for RCTs")
-        self.root.geometry("1200x640")
+        self.root.geometry("1200x720")
         self.root.resizable(True, True)
 
         # State
@@ -65,6 +65,12 @@ class PLIPipelineApp:
         self.brain_img_orig = None
         self.brain_img_label = None
 
+        # Run All step selection flags
+        self.run_preprocessing_var = tk.BooleanVar(value=True)
+        self.run_source_var = tk.BooleanVar(value=True)
+        self.run_csv_var = tk.BooleanVar(value=True)
+        self.run_stats_var = tk.BooleanVar(value=True)
+
         self._build_layout()
 
     # ---------- UI Builders ----------
@@ -87,6 +93,9 @@ class PLIPipelineApp:
         col3 = tk.LabelFrame(container, text="3) Source / Connectivity / Stats", width=380)
         col3.pack(side="left", fill="both", expand=True, padx=(6, 0), pady=4)
         self._build_col3(col3)
+
+        # Bottom panel: Run All
+        self._build_run_all_panel()
 
     def _build_col1(self, frame: tk.Frame) -> None:
         # Base folder
@@ -184,6 +193,41 @@ class PLIPipelineApp:
         tk.Label(frame, text="Status").pack(anchor="w", padx=6)
         self.stage3_log = tk.Text(frame, height=16, wrap="word", state="disabled")
         self.stage3_log.pack(fill="both", padx=6, pady=(0, 8), expand=True)
+
+    def _build_run_all_panel(self) -> None:
+        """Build the Run All panel at the bottom of the window."""
+        panel = tk.LabelFrame(self.root, text="Run All Pipeline Steps", fg="blue")
+        panel.pack(fill="x", padx=8, pady=(0, 8))
+
+        # Step selection checkboxes
+        steps_frame = tk.Frame(panel)
+        steps_frame.pack(fill="x", padx=6, pady=(6, 4))
+
+        tk.Label(steps_frame, text="Select steps to run:").pack(side="left", padx=(0, 10))
+        tk.Checkbutton(steps_frame, text="1. Preprocessing", variable=self.run_preprocessing_var).pack(side="left", padx=4)
+        tk.Checkbutton(steps_frame, text="2. Source + Connectivity", variable=self.run_source_var).pack(side="left", padx=4)
+        tk.Checkbutton(steps_frame, text="3. CSV Export", variable=self.run_csv_var).pack(side="left", padx=4)
+        tk.Checkbutton(steps_frame, text="4. Statistics", variable=self.run_stats_var).pack(side="left", padx=4)
+
+        # Run All button (prominent)
+        btn_frame = tk.Frame(panel)
+        btn_frame.pack(fill="x", padx=6, pady=(4, 8))
+
+        self.run_all_btn = tk.Button(
+            btn_frame,
+            text="▶ RUN ALL SELECTED STEPS",
+            command=self._run_all_clicked,
+            bg="#4CAF50",
+            fg="white",
+            font=("TkDefaultFont", 10, "bold"),
+            padx=20,
+            pady=6,
+        )
+        self.run_all_btn.pack(side="left", padx=(0, 12))
+
+        # Progress label
+        self.run_all_progress = tk.Label(btn_frame, text="", fg="gray")
+        self.run_all_progress.pack(side="left", fill="x", expand=True)
 
     # ---------- Actions ----------
     def _browse_base(self) -> None:
@@ -326,6 +370,116 @@ class PLIPipelineApp:
         run_stats_for_design(design, cfg, progress_cb=self._log_stage3)
         self._log_stage3(f"Stats saved under {cfg.output_root / 'stats'}")
         messagebox.showinfo("Stats", f"Saved stats under {cfg.output_root / 'stats'}")
+
+    def _run_all_clicked(self) -> None:
+        """Run all selected pipeline steps sequentially."""
+        # Validate inputs first
+        ok = self._validate_design_and_base()
+        if not ok:
+            return
+        base, design, cfg = ok
+
+        # Check at least one step is selected
+        steps_selected = (
+            self.run_preprocessing_var.get()
+            or self.run_source_var.get()
+            or self.run_csv_var.get()
+            or self.run_stats_var.get()
+        )
+        if not steps_selected:
+            messagebox.showwarning("No steps selected", "Please select at least one step to run.")
+            return
+
+        # Disable the Run All button during execution
+        self.run_all_btn.configure(state="disabled")
+        self.run_all_progress.configure(text="Starting pipeline...", fg="blue")
+        self.root.update_idletasks()
+
+        errors = []
+        total_steps = sum([
+            self.run_preprocessing_var.get(),
+            self.run_source_var.get(),
+            self.run_csv_var.get(),
+            self.run_stats_var.get(),
+        ])
+        current_step = 0
+
+        try:
+            # Step 1: Preprocessing
+            if self.run_preprocessing_var.get():
+                current_step += 1
+                self.run_all_progress.configure(text=f"Step {current_step}/{total_steps}: Preprocessing...")
+                self.root.update_idletasks()
+                try:
+                    self._log_pre("=" * 50)
+                    self._log_pre("[RUN ALL] Starting preprocessing …")
+                    summaries = run_preprocessing_for_design(base, design, cfg, progress_cb=self._log_pre)
+                    n = sum(1 for s in summaries if s.get("preprocessed_fif"))
+                    self._log_pre(f"[RUN ALL] Preprocessing complete. {n} files ready.")
+                    self._update_preview_image(cfg.output_root, design)
+                except Exception as e:
+                    errors.append(f"Preprocessing: {e}")
+                    self._log_pre(f"[RUN ALL] Preprocessing error: {e}")
+
+            # Step 2: Source Localization + Connectivity
+            if self.run_source_var.get():
+                current_step += 1
+                self.run_all_progress.configure(text=f"Step {current_step}/{total_steps}: Source + Connectivity...")
+                self.root.update_idletasks()
+                try:
+                    self._log_stage3("=" * 50)
+                    self._log_stage3("[RUN ALL] Running source localization + connectivity …")
+                    summaries = run_source_and_connectivity_for_design(base, design, cfg, progress_cb=self._log_stage3)
+                    m = sum(len(s.get("pli_outputs", {})) for s in summaries)
+                    self._log_stage3(f"[RUN ALL] Source/Connectivity complete. Saved {m} band CSVs.")
+                except Exception as e:
+                    errors.append(f"Source/Connectivity: {e}")
+                    self._log_stage3(f"[RUN ALL] Source/Connectivity error: {e}")
+
+            # Step 3: CSV Export
+            if self.run_csv_var.get():
+                current_step += 1
+                self.run_all_progress.configure(text=f"Step {current_step}/{total_steps}: CSV Export...")
+                self.root.update_idletasks()
+                try:
+                    self._log_stage3("[RUN ALL] Aggregating PLI into Excel …")
+                    table = aggregate_csv_table(design, cfg, progress_cb=self._log_stage3)
+                    self._log_stage3(f"[RUN ALL] Saved table to {cfg.output_root / 'PLI_Table.xlsx'} ({len(table)} rows)")
+                except Exception as e:
+                    errors.append(f"CSV Export: {e}")
+                    self._log_stage3(f"[RUN ALL] CSV Export error: {e}")
+
+            # Step 4: Statistics
+            if self.run_stats_var.get():
+                current_step += 1
+                self.run_all_progress.configure(text=f"Step {current_step}/{total_steps}: Statistics...")
+                self.root.update_idletasks()
+                try:
+                    self._log_stage3("[RUN ALL] Running cluster-based permutation …")
+                    run_stats_for_design(design, cfg, progress_cb=self._log_stage3)
+                    self._log_stage3(f"[RUN ALL] Stats saved under {cfg.output_root / 'stats'}")
+                except Exception as e:
+                    errors.append(f"Statistics: {e}")
+                    self._log_stage3(f"[RUN ALL] Statistics error: {e}")
+
+        finally:
+            # Re-enable the button
+            self.run_all_btn.configure(state="normal")
+
+        # Show completion status
+        if errors:
+            self.run_all_progress.configure(
+                text=f"Completed with {len(errors)} error(s). Check logs for details.",
+                fg="red"
+            )
+            error_msg = "\n".join(errors)
+            messagebox.showwarning("Pipeline completed with errors", f"Errors encountered:\n{error_msg}")
+        else:
+            self.run_all_progress.configure(text="All steps completed successfully!", fg="green")
+            messagebox.showinfo(
+                "Pipeline Complete",
+                f"All selected steps completed successfully!\n\nOutput saved to:\n{cfg.output_root}"
+            )
 
     def _update_preview_image(self, output_root: Path, design: StudyDesign) -> None:
         # find a traces image from first available subject
