@@ -65,6 +65,12 @@ Column 3 — Source / Connectivity / Stats
 - `Get CSV for network analysis` — aggregates per-band CSVs into a single Excel file
 - `Run Cluster-based permutation` — runs edge-wise t-tests and cluster-based permutation using edge adjacency, saves figures and arrays
 
+Run All Panel (Bottom)
+- Select which pipeline steps to include: Preprocessing, Source + Connectivity, CSV Export, Statistics
+- Click `RUN ALL SELECTED STEPS` to execute the full pipeline sequentially
+- Progress indicator shows current step and completion status
+- Errors are logged and reported at the end without stopping the entire pipeline
+
 Start the app via `run_study_app.py`. The GUI code is in `app_gui.py`; the pipeline code lives in `pli_pipeline.py`.
 
 
@@ -126,8 +132,9 @@ The images in this section are illustrative screenshots stored in `FigsREAD/` so
   - If CuPy is detected and enabled, PLI can run on GPU for speed. Otherwise it falls back to CPU.
 
 - ICLabel and ASR (optional):
-  - ICLabel: `pip install mne-icalabel` (components with label “brain” and probability ≥ threshold are kept; others are rejected)
-  - ASR: `pip install asrpy` or `pip install mne-asr`
+  - ICLabel: `pip install mne-icalabel` (components not labeled as "brain" are rejected as artifacts)
+  - The pipeline uses extended infomax ICA for optimal ICLabel compatibility
+  - ASR: `pip install asrpy` (artifact subspace reconstruction for continuous data cleaning)
 
 
 ## Troubleshooting
