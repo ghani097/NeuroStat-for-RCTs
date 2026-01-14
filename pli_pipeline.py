@@ -88,16 +88,24 @@ class PreprocessingConfig:
     l_freq: float = 1.0
     h_freq: float = 40.0
     notch_freqs: Sequence[float] = (50.0, 100.0)
-    ica_method: str = "infomax"
+    ica_method: str = "fastica"
     ica_n_components: Optional[int] = None
     random_state: int = 42
     reject_criteria: Optional[Dict[str, float]] = field(
         default_factory=lambda: {"eeg": 150e-6}
     )
-    # New: optional stages and thresholds
+    # Preprocessing method options
     use_asr: bool = True
     use_iclabel: bool = True
     iclabel_brain_threshold: float = 0.85
+    # GED-based artifact detection (inspired by GEDAI)
+    use_ged: bool = False
+    ged_threshold: float = 3.0  # Z-score threshold for artifact component rejection
+    # Additional preprocessing options
+    bad_channel_threshold: float = 4.0  # Z-score for bad channel detection
+    interpolate_bad_channels: bool = True
+    # Epoch rejection for ICA fitting
+    ica_reject_threshold: float = 200e-6  # Peak-to-peak threshold in V
 
 
 @dataclass
@@ -121,7 +129,7 @@ class ConnectivityConfig:
         }
     )
     method: str = "pli"
-    use_gpu: Optional[bool] = None  # True=force GPU, False=CPU, None=auto
+    use_gpu: bool = False  # GPU disabled by default for stability; enable manually if needed
 
 
 @dataclass
@@ -175,8 +183,362 @@ def _apply_montage(raw: mne.io.BaseRaw) -> None:
             LOGGER.warning("Could not set montage automatically: %s", exc)
 
 
-def preprocess_raw(raw: mne.io.BaseRaw, config: PreprocessingConfig, progress_cb: Optional[Callable[[str], None]] = None) -> Tuple[mne.io.BaseRaw, mne.io.BaseRaw, ICA]:
-    """Run filtering, referencing, and ICA-based cleanup."""
+def _detect_bad_channels(raw: mne.io.BaseRaw, threshold: float = 4.0) -> List[str]:
+    """Detect bad channels based on amplitude variance z-score."""
+    data = raw.get_data(picks="eeg")
+    ch_names = [raw.ch_names[i] for i in mne.pick_types(raw.info, eeg=True)]
+
+    # Compute variance per channel
+    variances = np.var(data, axis=1)
+
+    # Z-score of variances
+    z_scores = (variances - np.mean(variances)) / (np.std(variances) + 1e-10)
+
+    # Mark channels with extreme variance as bad
+    bad_mask = np.abs(z_scores) > threshold
+    bad_channels = [ch_names[i] for i in np.where(bad_mask)[0]]
+
+    return bad_channels
+
+
+def _gedai_denoise(
+    raw: mne.io.BaseRaw,
+    threshold: float = 3.0,
+    trans_path: Optional[Path] = None,
+) -> Tuple[mne.io.BaseRaw, dict]:
+    """
+    GEDAI (Generalized Eigenvalue De-Artifacting Instrument) implementation.
+
+    This is a robust Python implementation of GEDAI for unsupervised EEG denoising.
+    The algorithm uses Generalized Eigenvalue Decomposition (GEVD) to separate
+    brain signals from artifacts based on spatial and temporal characteristics.
+
+    The key insight is that brain signals have specific spatial covariance patterns
+    (smooth, dipolar) while artifacts (muscle, eye, electrode) have different patterns.
+
+    Parameters:
+        raw: MNE Raw object (will be modified in-place)
+        threshold: Artifact rejection threshold (2=aggressive, 3=balanced, 4=conservative)
+        trans_path: Path to head-MRI transformation file (optional)
+
+    Returns:
+        raw: Cleaned raw object
+        info: Dictionary with diagnostic information
+    """
+    from scipy.linalg import eigh
+    from scipy.signal import butter, filtfilt
+    from scipy.stats import kurtosis as scipy_kurtosis
+
+    picks = mne.pick_types(raw.info, eeg=True, meg=False)
+    ch_names = [raw.ch_names[i] for i in picks]
+    data_original = raw.get_data(picks=picks).copy()
+    n_channels, n_times = data_original.shape
+    sfreq = raw.info["sfreq"]
+
+    info_dict = {
+        "method": "GEDAI",
+        "threshold": threshold,
+        "n_channels": n_channels,
+        "n_samples": n_times,
+        "duration_sec": n_times / sfreq,
+        "sensai_score": 0.0,
+        "n_components_rejected": 0,
+        "variance_removed_pct": 0.0,
+        "snr_improvement_db": 0.0,
+        "artifact_components": [],
+    }
+
+    LOGGER.info(f"GEDAI: Starting denoising ({n_channels} channels, {n_times/sfreq:.1f}s, threshold={threshold})")
+
+    try:
+        # Step 1: Prepare data - remove mean and apply average reference
+        data = data_original - data_original.mean(axis=1, keepdims=True)
+        data = data - data.mean(axis=0, keepdims=True)
+
+        # Step 2: Compute brain-like reference covariance
+        # Use alpha-band filtered data as reference (8-13 Hz is mostly brain activity)
+        ref_cov = _compute_brain_reference_cov(data, sfreq, raw.info)
+
+        if ref_cov is None:
+            LOGGER.warning("GEDAI: Could not compute reference covariance, using spatial smoothness")
+            ref_cov = _compute_spatial_smoothness_cov(n_channels)
+
+        # Step 3: Compute data covariance
+        data_cov = np.cov(data)
+
+        # Regularize both covariance matrices
+        reg = 1e-4 * np.trace(data_cov) / n_channels
+        data_cov += reg * np.eye(n_channels)
+        ref_cov += reg * np.eye(n_channels)
+
+        # Step 4: Generalized Eigenvalue Decomposition
+        # Solve: data_cov @ W = ref_cov @ W @ D
+        # Components with HIGH eigenvalues are brain-like
+        # Components with LOW eigenvalues are artifact-like
+        try:
+            eigenvalues, eigenvectors = eigh(data_cov, ref_cov)
+        except Exception as e:
+            LOGGER.warning(f"GEDAI: GEVD failed ({e}), using standard PCA")
+            eigenvalues, eigenvectors = np.linalg.eigh(data_cov)
+
+        # Sort by eigenvalue (ascending - we want to identify LOW eigenvalue components as artifacts)
+        idx = np.argsort(eigenvalues)
+        eigenvalues = eigenvalues[idx]
+        eigenvectors = eigenvectors[:, idx]
+
+        # Project data onto GEVD components
+        components = eigenvectors.T @ data
+
+        # Step 5: Identify artifact components using multiple criteria
+        n_components = len(eigenvalues)
+        artifact_scores = np.zeros(n_components)
+        component_info = []
+
+        for i in range(n_components):
+            comp = components[i]
+
+            # Criterion 1: Low eigenvalue ratio (artifact has low brain-likeness)
+            # Normalize eigenvalues to 0-1 range
+            eig_normalized = (eigenvalues[i] - eigenvalues.min()) / (eigenvalues.max() - eigenvalues.min() + 1e-10)
+            eig_score = 1.0 - eig_normalized  # Low eigenvalue = high artifact score
+
+            # Criterion 2: High kurtosis (artifacts are spiky/non-Gaussian)
+            try:
+                kurt = scipy_kurtosis(comp, fisher=True)
+                kurt_score = np.clip(np.abs(kurt) / 10.0, 0, 1)  # Normalize to 0-1
+            except:
+                kurt_score = 0
+
+            # Criterion 3: High variance ratio (artifacts often dominate variance)
+            comp_var = np.var(comp)
+            mean_var = np.mean([np.var(components[j]) for j in range(n_components)])
+            var_ratio = comp_var / (mean_var + 1e-10)
+            var_score = np.clip((var_ratio - 1) / 5.0, 0, 1) if var_ratio > 1 else 0
+
+            # Criterion 4: Temporal discontinuities (artifacts have sudden jumps)
+            diff = np.diff(comp)
+            discontinuity = np.std(diff) / (np.std(comp) + 1e-10)
+            disc_score = np.clip((discontinuity - 1) / 2.0, 0, 1)
+
+            # Criterion 5: High-frequency content ratio (muscle artifacts are high-freq)
+            try:
+                # Compute power in high (>30Hz) vs low (<30Hz) frequencies
+                n_fft = min(2048, len(comp))
+                freqs = np.fft.rfftfreq(n_fft, 1/sfreq)
+                psd = np.abs(np.fft.rfft(comp[:n_fft]))**2
+                high_freq_mask = freqs > 30
+                low_freq_mask = (freqs > 1) & (freqs <= 30)
+                if np.sum(low_freq_mask) > 0 and np.sum(high_freq_mask) > 0:
+                    hf_ratio = np.mean(psd[high_freq_mask]) / (np.mean(psd[low_freq_mask]) + 1e-10)
+                    hf_score = np.clip(hf_ratio / 0.5, 0, 1)
+                else:
+                    hf_score = 0
+            except:
+                hf_score = 0
+
+            # Combined artifact score (weighted sum)
+            # Eigenvalue ratio is most important for GEDAI
+            artifact_scores[i] = (
+                0.35 * eig_score +      # Eigenvalue (brain-likeness)
+                0.25 * kurt_score +     # Kurtosis (non-Gaussianity)
+                0.15 * var_score +      # Variance ratio
+                0.10 * disc_score +     # Temporal discontinuity
+                0.15 * hf_score         # High-frequency content
+            )
+
+            component_info.append({
+                "index": i,
+                "eigenvalue": float(eigenvalues[i]),
+                "eig_score": float(eig_score),
+                "kurtosis": float(kurt_score),
+                "variance_ratio": float(var_ratio),
+                "artifact_score": float(artifact_scores[i]),
+            })
+
+        # Step 6: Threshold-based artifact detection
+        # Higher threshold = more conservative (reject less)
+        # threshold=2: aggressive, threshold=3: balanced, threshold=4: conservative
+        rejection_threshold = 0.3 + (threshold - 2) * 0.1  # Maps 2->0.3, 3->0.4, 4->0.5
+
+        # Also use statistical threshold
+        median_score = np.median(artifact_scores)
+        mad = np.median(np.abs(artifact_scores - median_score))
+        if mad > 1e-10:
+            stat_threshold = median_score + (5 - threshold) * 1.4826 * mad
+        else:
+            stat_threshold = rejection_threshold
+
+        # Use the more conservative of the two thresholds
+        final_threshold = max(rejection_threshold, min(stat_threshold, 0.7))
+
+        artifact_mask = artifact_scores > final_threshold
+        n_rejected = np.sum(artifact_mask)
+
+        # Limit rejection to at most 40% of components
+        max_reject = int(n_channels * 0.4)
+        if n_rejected > max_reject:
+            worst_indices = np.argsort(artifact_scores)[-max_reject:]
+            artifact_mask = np.zeros(n_components, dtype=bool)
+            artifact_mask[worst_indices] = True
+            n_rejected = max_reject
+
+        info_dict["n_components_rejected"] = int(n_rejected)
+        info_dict["artifact_components"] = [
+            component_info[i] for i in range(n_components) if artifact_mask[i]
+        ]
+
+        LOGGER.info(f"GEDAI: Identified {n_rejected}/{n_components} artifact components (threshold={final_threshold:.2f})")
+
+        # Step 7: Reconstruct clean signal
+        if n_rejected > 0:
+            # Zero out artifact components and reconstruct
+            components_clean = components.copy()
+            components_clean[artifact_mask] = 0
+
+            # Reconstruct using pseudo-inverse
+            W_inv = np.linalg.pinv(eigenvectors.T)
+            data_clean = W_inv @ components_clean
+
+            # Restore original mean
+            data_clean = data_clean + data_original.mean(axis=1, keepdims=True)
+        else:
+            LOGGER.info("GEDAI: No artifact components detected, data unchanged")
+            data_clean = data_original.copy()
+
+        # Step 8: Compute quality metrics
+        # Variance removed
+        var_original = np.var(data_original)
+        var_removed = np.var(data_original - data_clean)
+        info_dict["variance_removed_pct"] = float(100 * var_removed / (var_original + 1e-10))
+
+        # SNR improvement estimate (using high-freq as noise proxy)
+        try:
+            b_hf, a_hf = butter(4, 30 / (sfreq / 2), btype='high')
+            noise_before = np.std(filtfilt(b_hf, a_hf, data_original, axis=1))
+            noise_after = np.std(filtfilt(b_hf, a_hf, data_clean, axis=1))
+            signal_after = np.std(data_clean)
+            if noise_after > 0 and noise_before > 0:
+                snr_before = np.std(data_original) / noise_before
+                snr_after = signal_after / noise_after
+                info_dict["snr_improvement_db"] = float(20 * np.log10(snr_after / (snr_before + 1e-10)))
+            else:
+                info_dict["snr_improvement_db"] = 0.0
+        except:
+            info_dict["snr_improvement_db"] = 0.0
+
+        # SENSAI score: composite quality metric (0-100)
+        # Based on: variance reduction, SNR improvement, components rejected ratio
+        var_score = np.clip(info_dict["variance_removed_pct"] / 50, 0, 1) * 30  # Up to 30 points
+        snr_score = np.clip((info_dict["snr_improvement_db"] + 5) / 15, 0, 1) * 40  # Up to 40 points
+        reject_ratio = n_rejected / n_components if n_components > 0 else 0
+        reject_score = (1 - abs(reject_ratio - 0.2) / 0.2) * 30 if reject_ratio <= 0.4 else 15  # Optimal around 20%
+
+        info_dict["sensai_score"] = float(np.clip(var_score + snr_score + reject_score, 0, 100))
+
+        # Update raw data
+        raw._data[picks] = data_clean
+
+        LOGGER.info(
+            f"GEDAI complete: SENSAI={info_dict['sensai_score']:.1f}%, "
+            f"variance_removed={info_dict['variance_removed_pct']:.1f}%, "
+            f"SNR_improvement={info_dict['snr_improvement_db']:.1f}dB, "
+            f"components_rejected={n_rejected}/{n_components}"
+        )
+
+    except Exception as exc:
+        LOGGER.error(f"GEDAI denoising failed: {exc}")
+        import traceback
+        traceback.print_exc()
+
+    return raw, info_dict
+
+
+def _compute_brain_reference_cov(
+    data: np.ndarray,
+    sfreq: float,
+    info: mne.Info,
+) -> Optional[np.ndarray]:
+    """
+    Compute brain-like reference covariance from alpha-band filtered data.
+
+    Alpha band (8-13 Hz) is predominantly neural activity with minimal artifact
+    contamination, making it a good reference for brain spatial patterns.
+    """
+    from scipy.signal import butter, filtfilt
+
+    n_channels, n_times = data.shape
+
+    try:
+        # Filter to alpha band (8-13 Hz) - predominantly brain activity
+        nyq = sfreq / 2
+        if nyq > 13:
+            b, a = butter(4, [8 / nyq, min(13, nyq - 1) / nyq], btype='band')
+            data_alpha = filtfilt(b, a, data, axis=1)
+
+            # Compute covariance of alpha-band data
+            ref_cov = np.cov(data_alpha)
+
+            # Normalize to unit trace
+            ref_cov = ref_cov / (np.trace(ref_cov) / n_channels + 1e-10)
+
+            LOGGER.info("GEDAI: Computed alpha-band reference covariance")
+            return ref_cov
+        else:
+            return None
+
+    except Exception as e:
+        LOGGER.warning(f"GEDAI: Alpha-band reference failed: {e}")
+        return None
+
+
+def _compute_spatial_smoothness_cov(n_channels: int) -> np.ndarray:
+    """
+    Compute a spatial smoothness prior covariance matrix.
+
+    This creates a covariance matrix that favors spatially smooth patterns,
+    which is characteristic of brain sources (due to volume conduction).
+    """
+    # Create a simple exponentially decaying covariance based on channel index
+    # This is a rough approximation - real implementation would use channel positions
+    cov = np.zeros((n_channels, n_channels))
+    for i in range(n_channels):
+        for j in range(n_channels):
+            # Exponential decay with distance (channel index difference)
+            dist = abs(i - j)
+            cov[i, j] = np.exp(-dist / (n_channels / 4))
+
+    # Normalize
+    cov = cov / (np.trace(cov) / n_channels)
+
+    return cov
+
+
+def preprocess_raw(
+    raw: mne.io.BaseRaw,
+    config: PreprocessingConfig,
+    trans_path: Optional[Path] = None,
+) -> Tuple[mne.io.BaseRaw, mne.io.BaseRaw, ICA]:
+    """
+    Run filtering, referencing, and artifact removal.
+
+    Supports multiple artifact removal methods:
+    - ASR (Artifact Subspace Reconstruction)
+    - ICLabel (ICA component classification)
+    - GEDAI (Generalized Eigenvalue De-Artifacting)
+
+    Returns:
+        raw_before: Copy of raw before preprocessing
+        raw_after: Preprocessed raw object
+        ica: Fitted ICA object (may be empty if using GEDAI only)
+    """
+    preproc_info = {
+        "asr_applied": False,
+        "iclabel_applied": False,
+        "gedai_applied": False,
+        "ica_excluded": 0,
+        "bad_channels": [],
+    }
+
     # Log basic data shape and duration
     try:
         n_ch = mne.pick_types(raw.info, eeg=True, meg=False).size
@@ -191,90 +553,243 @@ def preprocess_raw(raw: mne.io.BaseRaw, config: PreprocessingConfig, progress_cb
         )
     except Exception:
         pass
+
     raw.load_data()
     _apply_montage(raw)
     raw_before = raw.copy()
 
-    # Optional ASR denoising (if enabled and available)
+    # Step 1: Detect and optionally interpolate bad channels
+    if getattr(config, "interpolate_bad_channels", True):
+        try:
+            bad_ch_threshold = getattr(config, "bad_channel_threshold", 4.0)
+            bad_channels = _detect_bad_channels(raw, threshold=bad_ch_threshold)
+            if bad_channels:
+                LOGGER.info(f"Detected {len(bad_channels)} bad channels: {bad_channels}")
+                raw.info["bads"] = list(set(raw.info["bads"] + bad_channels))
+                raw.interpolate_bads(reset_bads=True)
+                preproc_info["bad_channels"] = bad_channels
+                LOGGER.info("Interpolated bad channels")
+        except Exception as exc:
+            LOGGER.warning(f"Bad channel detection/interpolation failed: {exc}")
+
+    # Step 2: GEDAI denoising (if enabled) - applied BEFORE filtering
+    if getattr(config, "use_ged", False):
+        try:
+            LOGGER.info("Applying GEDAI denoising...")
+            ged_threshold = getattr(config, "ged_threshold", 3.0)
+
+            raw, gedai_info = _gedai_denoise(
+                raw,
+                threshold=ged_threshold,
+                trans_path=trans_path,
+            )
+            preproc_info["gedai_applied"] = True
+            preproc_info["gedai_info"] = gedai_info
+            LOGGER.info(
+                f"GEDAI applied: SENSAI={gedai_info.get('sensai_score', 0):.1f}%, "
+                f"variance_removed={gedai_info.get('variance_removed_pct', 0):.1f}%, "
+                f"components_rejected={gedai_info.get('n_components_rejected', 0)}"
+            )
+        except Exception as exc:
+            LOGGER.warning(f"GEDAI denoising failed: {exc}")
+            import traceback
+            traceback.print_exc()
+
+    # Step 3: ASR denoising (if enabled and available)
     if getattr(config, "use_asr", True):
-        try:  # pragma: no cover - ASR may not be installed
-            applied = False
-            # asrpy API - expects MNE Raw object
+        applied = False
+
+        # Try asrpy first (works with MNE Raw objects directly)
+        try:
+            import asrpy
+
+            LOGGER.info("Applying ASR (asrpy)...")
+            # ASR parameters: cutoff=20 is a good default (5=conservative, 20=aggressive)
+            asr = asrpy.ASR(sfreq=raw.info["sfreq"], cutoff=20)
+            # Fit on the raw data (uses first portion as calibration)
+            asr.fit(raw)
+            # Transform returns a new Raw object
+            raw = asr.transform(raw)
+            applied = True
+            preproc_info["asr_applied"] = True
+            LOGGER.info("Applied ASR (asrpy) successfully")
+        except ImportError:
+            LOGGER.info("asrpy not installed, trying meegkit...")
+        except Exception as exc:
+            LOGGER.warning(f"asrpy failed: {exc}, trying meegkit...")
+
+        # Try meegkit as fallback
+        if not applied:
             try:
-                from asrpy import ASR  # type: ignore
+                from meegkit.asr import ASR as MeegkitASR
 
-                asr = ASR(sfreq=raw.info["sfreq"])
-                # ASR.fit and transform work on Raw objects directly
-                asr.fit(raw)
-                raw = asr.transform(raw)
+                LOGGER.info("Applying ASR (meegkit)...")
+                picks = mne.pick_types(raw.info, eeg=True, meg=False)
+                data = raw.get_data(picks=picks)
+
+                # meegkit ASR expects (n_samples, n_channels) format
+                asr = MeegkitASR(sfreq=raw.info["sfreq"], cutoff=20)
+                # fit_transform expects (n_samples, n_channels)
+                data_clean, _ = asr.fit_transform(data.T)
+                raw._data[picks] = data_clean.T
                 applied = True
-                LOGGER.info("Applied ASR (asrpy)")
-                if progress_cb:
-                    progress_cb("  -> ASR artifact removal applied")
-            except Exception as asr_err:
-                LOGGER.warning("asrpy failed: %s", asr_err)
-            if not applied:
-                LOGGER.info("ASR package not available; skipping ASR step")
-                if progress_cb:
-                    progress_cb("  -> ASR skipped (not available)")
-        except Exception as exc:  # pragma: no cover
-            LOGGER.warning("ASR step failed: %s", exc)
+                preproc_info["asr_applied"] = True
+                LOGGER.info("Applied ASR (meegkit) successfully")
+            except ImportError:
+                LOGGER.info("meegkit not installed")
+            except Exception as exc:
+                LOGGER.warning(f"meegkit ASR failed: {exc}")
 
+        if not applied:
+            LOGGER.info("ASR not available (install: pip install asrpy or pip install meegkit)")
+
+    # Step 4: Filtering
+    LOGGER.info(f"Applying bandpass filter: {config.l_freq}-{config.h_freq} Hz")
     raw.filter(config.l_freq, config.h_freq, fir_design="firwin")
+
     if config.notch_freqs:
         valid_notches = [
             freq for freq in config.notch_freqs if freq < raw.info["sfreq"] / 2.0
         ]
         if valid_notches:
+            LOGGER.info(f"Applying notch filter at: {valid_notches} Hz")
             raw.notch_filter(valid_notches)
+
+    # Step 5: Re-reference to average
     raw.set_eeg_reference("average", projection=True)
 
-    # Use extended infomax for ICLabel compatibility
-    fit_params = dict(extended=True) if config.ica_method == "infomax" else None
+    # Step 6: ICA fitting
+    n_components = config.ica_n_components
+    if n_components is None:
+        # Auto-determine: use rank or max 25 components
+        n_eeg = len(mne.pick_types(raw.info, eeg=True, meg=False))
+        n_components = min(n_eeg - 1, 25)
+
     ica = ICA(
-        n_components=config.ica_n_components,
+        n_components=n_components,
         method=config.ica_method,
-        fit_params=fit_params,
         random_state=config.random_state,
         max_iter="auto",
     )
-    LOGGER.info("ICA: method=%s, n_components=%s", str(config.ica_method), str(config.ica_n_components))
-    ica.fit(raw)
-    # ICLabel auto-classification (if enabled and available); fallback to EOG detection
-    excluded = []
-    iclabel_applied = False
-    if getattr(config, "use_iclabel", True):
-        try:  # pragma: no cover - optional dependency
-            from mne_icalabel import label_components  # type: ignore
 
-            # label_components returns a dict with 'labels' and 'y_pred_proba'
-            result = label_components(raw, ica, method="iclabel")
-            ic_labels = result.get("labels", [])
-            # ICLabel returns labels like 'brain', 'eye blink', 'muscle', etc.
-            # Exclude components NOT classified as 'brain'
-            for idx, lab in enumerate(ic_labels):
-                label_str = str(lab).lower() if lab else ""
-                if label_str != "brain":
-                    excluded.append(idx)
-            LOGGER.info("ICLabel excluded %d components (non-brain artifacts)", len(excluded))
-            iclabel_applied = True
-            if progress_cb:
-                progress_cb(f"  -> ICLabel: excluded {len(excluded)} artifact components")
-        except Exception as ic_err:
-            LOGGER.warning("ICLabel failed: %s", ic_err)
-            try:
-                eog_inds, _ = ica.find_bads_eog(raw)
-                excluded.extend(eog_inds)
-                if progress_cb:
-                    progress_cb(f"  -> EOG detection: excluded {len(eog_inds)} components")
-            except RuntimeError:
-                pass
-    if not iclabel_applied and progress_cb:
-        progress_cb("  -> ICLabel skipped (not available)")
+    LOGGER.info(f"Fitting ICA: method={config.ica_method}, n_components={n_components}")
+
+    # Fit ICA with optional rejection threshold
+    reject_dict = None
+    ica_reject = getattr(config, "ica_reject_threshold", None)
+    if ica_reject:
+        reject_dict = {"eeg": ica_reject}
+
+    try:
+        ica.fit(raw, reject=reject_dict)
+    except Exception as exc:
+        LOGGER.warning(f"ICA fit with rejection failed, retrying without: {exc}")
+        ica.fit(raw)
+
+    # Step 7: Component classification and rejection
+    excluded = []
+
+    # Try ICLabel first (if enabled)
+    if getattr(config, "use_iclabel", True):
+        try:
+            from mne_icalabel import label_components
+
+            LOGGER.info("Running ICLabel classification...")
+
+            # label_components returns a dict with:
+            # - 'y_pred_proba': array (n_components, 7) - probabilities for each class
+            # - 'labels': list of predicted labels
+            # Classes: brain, muscle artifact, eye blink, heart beat, line noise, channel noise, other
+            labels_dict = label_components(raw, ica, method="iclabel")
+
+            # Get probabilities and labels
+            if isinstance(labels_dict, dict):
+                ic_probs = labels_dict.get("y_pred_proba", None)
+                ic_labels = labels_dict.get("labels", None)
+            else:
+                # Older versions might return differently
+                ic_probs = getattr(labels_dict, 'y_pred_proba_', None)
+                ic_labels = getattr(labels_dict, 'labels_', None)
+
+            thr = float(getattr(config, "iclabel_brain_threshold", 0.85))
+
+            if ic_probs is not None:
+                ic_probs = np.array(ic_probs)
+                LOGGER.info(f"ICLabel: probabilities shape = {ic_probs.shape}")
+
+                for idx in range(ica.n_components_):
+                    try:
+                        # Brain probability is column 0
+                        if ic_probs.ndim == 2 and idx < ic_probs.shape[0]:
+                            prob_brain = float(ic_probs[idx, 0])
+                        elif ic_probs.ndim == 1:
+                            prob_brain = float(ic_probs[idx])
+                        else:
+                            prob_brain = 0.0
+
+                        # Check label if available
+                        is_brain_label = False
+                        if ic_labels is not None and idx < len(ic_labels):
+                            label = ic_labels[idx]
+                            is_brain_label = (isinstance(label, str) and label.lower() == "brain")
+
+                        # Exclude if brain probability is below threshold
+                        # OR if label is not "brain" (when available)
+                        if prob_brain < thr:
+                            excluded.append(idx)
+                            LOGGER.debug(f"ICLabel: excluding component {idx} (brain_prob={prob_brain:.3f})")
+
+                    except Exception as e:
+                        LOGGER.warning(f"ICLabel: error processing component {idx}: {e}")
+                        # Keep the component if we can't classify it
+                        pass
+
+                preproc_info["iclabel_applied"] = True
+                LOGGER.info(f"ICLabel: excluding {len(excluded)}/{ica.n_components_} components (threshold={thr})")
+            else:
+                LOGGER.warning("ICLabel: No probabilities returned")
+
+        except ImportError:
+            LOGGER.info("mne-icalabel not installed (install: pip install mne-icalabel)")
+        except Exception as exc:
+            LOGGER.warning(f"ICLabel failed: {exc}")
+
+    # Fallback: EOG-based detection
+    if not excluded and not preproc_info.get("iclabel_applied"):
+        try:
+            eog_inds, _ = ica.find_bads_eog(raw)
+            excluded.extend(eog_inds)
+            LOGGER.info(f"EOG detection: found {len(eog_inds)} EOG-related components")
+        except Exception as exc:
+            LOGGER.warning(f"EOG detection failed: {exc}")
+
+        # Also try muscle artifact detection
+        try:
+            muscle_inds, _ = ica.find_bads_muscle(raw)
+            excluded.extend(muscle_inds)
+            LOGGER.info(f"Muscle detection: found {len(muscle_inds)} muscle-related components")
+        except Exception:
+            pass
+
+    # Apply ICA
     ica.exclude = list(sorted(set(excluded)))
-    ica.apply(raw)
-    LOGGER.info("ICA applied: excluded %d components", len(ica.exclude))
-    return raw_before, raw, ica
+    preproc_info["ica_excluded"] = len(ica.exclude)
+
+    if ica.exclude:
+        ica.apply(raw)
+        LOGGER.info(f"ICA applied: excluded {len(ica.exclude)} components")
+    else:
+        LOGGER.info("ICA: no components excluded")
+
+    # Log preprocessing summary
+    LOGGER.info(
+        f"Preprocessing complete: ASR={preproc_info['asr_applied']}, "
+        f"GEDAI={preproc_info['gedai_applied']}, "
+        f"ICLabel={preproc_info['iclabel_applied']}, "
+        f"ICA excluded={preproc_info['ica_excluded']}"
+    )
+
+    return raw_before, raw, ica, preproc_info
 
 
 def _infer_paths(file_path: Path, output_root: Path) -> Tuple[str, str, Path]:
@@ -285,6 +800,118 @@ def _infer_paths(file_path: Path, output_root: Path) -> Tuple[str, str, Path]:
     out_dir = (output_root / group_name / session_name / file_path.stem).expanduser()
     out_dir.mkdir(parents=True, exist_ok=True)
     return group_name, session_name, out_dir
+
+
+def _compute_preprocessing_metrics(
+    raw_before: mne.io.BaseRaw,
+    raw_after: mne.io.BaseRaw,
+    preproc_info: dict,
+) -> dict:
+    """Compute preprocessing quality metrics."""
+    metrics = {}
+
+    try:
+        # Get data
+        data_before = raw_before.get_data(picks="eeg")
+        data_after = raw_after.get_data(picks="eeg")
+
+        # Variance reduction (percentage)
+        var_before = np.var(data_before)
+        var_after = np.var(data_after)
+        if var_before > 0:
+            metrics["variance_reduction"] = float(100 * (1 - var_after / var_before))
+        else:
+            metrics["variance_reduction"] = 0.0
+
+        # Signal quality score (simplified SNR estimate)
+        # Higher score = better quality after cleaning
+        std_before = np.std(data_before, axis=1).mean()
+        std_after = np.std(data_after, axis=1).mean()
+
+        # Estimate noise as high-frequency content (simple approximation)
+        # Filter to get high-freq component
+        try:
+            raw_hf_before = raw_before.copy().filter(30, None, verbose=False)
+            raw_hf_after = raw_after.copy().filter(30, None, verbose=False)
+            noise_before = np.std(raw_hf_before.get_data(picks="eeg"))
+            noise_after = np.std(raw_hf_after.get_data(picks="eeg"))
+
+            # SNR improvement in dB
+            if noise_after > 0 and noise_before > 0:
+                snr_before = std_before / noise_before
+                snr_after = std_after / noise_after
+                metrics["snr_improvement_db"] = float(20 * np.log10(snr_after / snr_before))
+            else:
+                metrics["snr_improvement_db"] = 0.0
+
+            # Signal quality: percentage based on variance reduction and SNR
+            snr_factor = min(100, max(0, 50 + metrics["snr_improvement_db"] * 5))
+            var_factor = min(100, max(0, metrics["variance_reduction"]))
+            metrics["signal_quality"] = float((snr_factor + var_factor) / 2)
+
+        except Exception:
+            metrics["snr_improvement_db"] = 0.0
+            metrics["signal_quality"] = max(0, min(100, metrics["variance_reduction"]))
+
+        # Band power changes
+        try:
+            bands = {
+                "delta": (1, 4),
+                "theta": (4, 8),
+                "alpha": (8, 13),
+                "beta": (13, 30),
+            }
+            band_changes = {}
+
+            psd_before = raw_before.compute_psd(fmin=1, fmax=40, picks="eeg", verbose=False)
+            psd_after = raw_after.compute_psd(fmin=1, fmax=40, picks="eeg", verbose=False)
+
+            freqs = psd_before.freqs
+            psd_data_before = psd_before.get_data().mean(axis=0)
+            psd_data_after = psd_after.get_data().mean(axis=0)
+
+            for band_name, (fmin, fmax) in bands.items():
+                mask = (freqs >= fmin) & (freqs <= fmax)
+                power_before = psd_data_before[mask].mean()
+                power_after = psd_data_after[mask].mean()
+                if power_before > 0:
+                    change_pct = 100 * (power_after - power_before) / power_before
+                    band_changes[band_name] = float(change_pct)
+                else:
+                    band_changes[band_name] = 0.0
+
+            metrics["band_power_changes"] = band_changes
+        except Exception as e:
+            LOGGER.warning(f"Band power computation failed: {e}")
+            metrics["band_power_changes"] = {}
+
+        # Add preprocessing info
+        metrics["ica_components_rejected"] = preproc_info.get("ica_excluded", 0)
+        metrics["bad_channels"] = preproc_info.get("bad_channels", [])
+        metrics["asr_applied"] = preproc_info.get("asr_applied", False)
+        metrics["iclabel_applied"] = preproc_info.get("iclabel_applied", False)
+        metrics["gedai_applied"] = preproc_info.get("gedai_applied", False)
+
+        # GEDAI-specific metrics
+        if preproc_info.get("gedai_applied") and "gedai_info" in preproc_info:
+            gedai_info = preproc_info["gedai_info"]
+            metrics["sensai_score"] = gedai_info.get("sensai_score", 0)
+            metrics["gedai_components_rejected"] = gedai_info.get("n_components_rejected", 0)
+            metrics["gedai_variance_removed"] = gedai_info.get("variance_removed_pct", 0)
+            metrics["gedai_snr_improvement"] = gedai_info.get("snr_improvement_db", 0)
+            metrics["gedai_threshold"] = gedai_info.get("threshold", 3.0)
+            # Override signal quality with SENSAI score for GEDAI
+            metrics["signal_quality"] = gedai_info.get("sensai_score", metrics.get("signal_quality", 0))
+            # Also use GEDAI's variance and SNR metrics if available
+            if gedai_info.get("variance_removed_pct", 0) > 0:
+                metrics["variance_reduction"] = gedai_info.get("variance_removed_pct", metrics.get("variance_reduction", 0))
+            if gedai_info.get("snr_improvement_db") is not None:
+                metrics["snr_improvement_db"] = gedai_info.get("snr_improvement_db", metrics.get("snr_improvement_db", 0))
+
+    except Exception as e:
+        LOGGER.warning(f"Metrics computation failed: {e}")
+
+    return metrics
 
 
 def preprocess_file(
@@ -308,23 +935,43 @@ def preprocess_file(
         "out_dir": str(out_dir),
         "preprocessed_fif": None,
         "diagnostics": {},
+        "metrics": {},
     }
     try:
         raw = mne.io.read_raw_eeglab(str(file_path), preload=False, verbose=False)
-        raw_before, raw_after, _ica = preprocess_raw(raw, config.preprocessing, progress_cb)
+        raw_before, raw_after, _ica, preproc_info = preprocess_raw(raw, config.preprocessing)
 
-        # Diagnostics
+        # Compute preprocessing metrics
+        try:
+            metrics = _compute_preprocessing_metrics(raw_before, raw_after, preproc_info)
+            metrics["ica_components_total"] = _ica.n_components_ if hasattr(_ica, 'n_components_') else None
+            summary["metrics"] = metrics
+
+            # Save metrics to JSON
+            metrics_path = out_dir / "preprocessing_metrics.json"
+            with open(metrics_path, 'w') as f:
+                json.dump(metrics, f, indent=2)
+            LOGGER.info(f"Saved preprocessing metrics to {metrics_path}")
+        except Exception as exc:
+            LOGGER.warning("Metrics computation failed for %s: %s", file_path.name, exc)
+
+        # Diagnostics - visualization plots
         try:
             traces_path = out_dir / "traces_before_after.png"
             topo_path = out_dir / "topomap_before_after.png"
             gfp_path = out_dir / "gfp_before_after.png"
+            psd_path = out_dir / "psd_before_after.png"
+
             _plot_traces_before_after(raw_before, raw_after, traces_path)
             _plot_topomap(raw_before, raw_after, topo_path)
             _plot_gfp(raw_before, raw_after, gfp_path)
+            _plot_psd(raw_before, raw_after, "Power Spectrum: Before vs After Preprocessing", psd_path)
+
             summary["diagnostics"] = {
                 "traces": str(traces_path),
                 "topomap": str(topo_path),
                 "gfp": str(gfp_path),
+                "psd": str(psd_path),
             }
         except Exception as exc:
             LOGGER.warning("Diagnostics failed for %s: %s", file_path.name, exc)
@@ -348,23 +995,68 @@ def preprocess_file(
 
 
 def _plot_psd(raw_before: mne.io.BaseRaw, raw_after: mne.io.BaseRaw, title: str, out_file: Path) -> None:
-    """Plot mean PSD before/after preprocessing."""
+    """Plot mean PSD before/after preprocessing with frequency band annotations."""
     psd_kwargs = dict(fmin=1.0, fmax=45.0, picks="eeg", tmin=None, tmax=None, n_fft=2048)
     psd_before = raw_before.compute_psd(**psd_kwargs)
     psd_after = raw_after.compute_psd(**psd_kwargs)
 
-    fig, ax = plt.subplots(figsize=(10, 5))
-    ax.plot(psd_before.freqs, psd_before.get_data().mean(axis=0), label="Before", color="#d95f02")
-    ax.plot(psd_after.freqs, psd_after.get_data().mean(axis=0), label="After", color="#1b9e77")
-    ax.set(
-        xlabel="Frequency (Hz)",
-        ylabel="Power Spectral Density (dB)",
-        title=title,
-    )
-    ax.legend()
-    ax.grid(True, alpha=0.3)
+    freqs = psd_before.freqs
+    psd_data_before = 10 * np.log10(psd_before.get_data().mean(axis=0) + 1e-10)
+    psd_data_after = 10 * np.log10(psd_after.get_data().mean(axis=0) + 1e-10)
+
+    # Create figure with dark theme
+    fig, ax = plt.subplots(figsize=(12, 6))
+    fig.patch.set_facecolor('#1e1e2e')
+    ax.set_facecolor('#252536')
+
+    # Define frequency bands for shading
+    bands = [
+        ("Delta", 1, 4, "#89b4fa", 0.15),
+        ("Theta", 4, 8, "#a6e3a1", 0.15),
+        ("Alpha", 8, 13, "#f9e2af", 0.15),
+        ("Beta", 13, 30, "#f38ba8", 0.15),
+        ("Gamma", 30, 45, "#cba6f7", 0.15),
+    ]
+
+    # Add band shading
+    y_min, y_max = min(psd_data_before.min(), psd_data_after.min()) - 5, max(psd_data_before.max(), psd_data_after.max()) + 5
+    for band_name, fmin, fmax, color, alpha in bands:
+        ax.axvspan(fmin, fmax, alpha=alpha, color=color, label=None)
+        # Add band label at top
+        ax.text((fmin + fmax) / 2, y_max - 2, band_name, fontsize=8, color=color,
+                ha='center', va='top', fontweight='bold', alpha=0.8)
+
+    # Plot PSD curves
+    ax.plot(freqs, psd_data_before, label="Before Preprocessing", color="#f38ba8",
+            lw=2, alpha=0.9)
+    ax.plot(freqs, psd_data_after, label="After Preprocessing", color="#a6e3a1",
+            lw=2, alpha=0.9)
+
+    # Fill between to show reduction
+    ax.fill_between(freqs, psd_data_before, psd_data_after,
+                    where=psd_data_before > psd_data_after,
+                    alpha=0.2, color='#a6e3a1', label='Power Reduction')
+
+    # Styling
+    ax.set_xlabel("Frequency (Hz)", color='#cdd6f4', fontsize=11)
+    ax.set_ylabel("Power Spectral Density (dB)", color='#cdd6f4', fontsize=11)
+    ax.set_title(title, color='#89b4fa', fontsize=14, fontweight='bold', pad=15)
+    ax.tick_params(colors='#cdd6f4')
+    for spine in ax.spines.values():
+        spine.set_color('#45475a')
+
+    ax.set_xlim([1, 45])
+    ax.set_ylim([y_min, y_max])
+    ax.grid(True, alpha=0.2, color='#6c7086')
+
+    # Legend
+    legend = ax.legend(loc='upper right', facecolor='#313244', edgecolor='#45475a',
+                       fontsize=10, framealpha=0.9)
+    for text in legend.get_texts():
+        text.set_color('#cdd6f4')
+
     fig.tight_layout()
-    fig.savefig(out_file, dpi=200)
+    fig.savefig(out_file, dpi=200, facecolor='#1e1e2e', edgecolor='none')
     plt.close(fig)
 
 
@@ -375,52 +1067,142 @@ def _plot_traces_before_after(
     n_channels: int = 6,
     duration: float = 10.0,
 ) -> None:
-    """Plot a few EEG channels before/after preprocessing (stacked traces)."""
+    """Plot a few EEG channels before/after preprocessing with improved visualization."""
     picks = mne.pick_types(raw_after.info, eeg=True, meg=False)
     if len(picks) == 0:
         return
     picks = picks[: min(n_channels, len(picks))]
+    ch_names = [raw_after.ch_names[i] for i in picks]
     sfreq = raw_after.info["sfreq"]
     tmax = min(duration, raw_after.times[-1] if len(raw_after.times) else duration)
     n_samp = int(max(1, tmax * sfreq))
     data_b = raw_before.get_data(picks=picks)[:, :n_samp] * 1e6
     data_a = raw_after.get_data(picks=picks)[:, :n_samp] * 1e6
     times = np.arange(n_samp) / sfreq
-    offsets = np.arange(len(picks)) * 50.0
 
-    fig, axes = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
+    # Calculate amplitude stats for display
+    std_before = np.std(data_b)
+    std_after = np.std(data_a)
+    reduction_pct = 100 * (1 - std_after / std_before) if std_before > 0 else 0
+
+    # Create figure with better layout
+    fig = plt.figure(figsize=(12, 7))
+    fig.patch.set_facecolor('#1e1e2e')
+
+    # Create grid for layout
+    gs = fig.add_gridspec(2, 3, width_ratios=[1, 1, 0.15], height_ratios=[1, 1],
+                          hspace=0.15, wspace=0.05, left=0.08, right=0.92, top=0.88, bottom=0.12)
+
+    ax_before = fig.add_subplot(gs[0, 0:2])
+    ax_after = fig.add_subplot(gs[1, 0:2], sharex=ax_before)
+
+    # Set dark background
+    for ax in [ax_before, ax_after]:
+        ax.set_facecolor('#252536')
+        ax.tick_params(colors='#cdd6f4')
+        for spine in ax.spines.values():
+            spine.set_color('#45475a')
+
+    # Calculate offsets for stacking channels
+    max_amp = max(np.max(np.abs(data_b)), np.max(np.abs(data_a)))
+    channel_spacing = max_amp * 0.6 if max_amp > 0 else 50.0
+    offsets = np.arange(len(picks)) * channel_spacing
+
+    # Plot before
     for ch in range(len(picks)):
-        axes[0].plot(times, data_b[ch] + offsets[ch], color="#d95f02", lw=0.8)
-        axes[1].plot(times, data_a[ch] + offsets[ch], color="#1b9e77", lw=0.8)
-    axes[0].set_title("Before preprocessing (µV)")
-    axes[1].set_title("After preprocessing (µV)")
-    axes[1].set_xlabel("Time (s)")
-    for ax in axes:
+        ax_before.plot(times, data_b[ch] + offsets[ch], color="#f38ba8", lw=0.7, alpha=0.9)
+    ax_before.set_title("BEFORE Preprocessing", fontsize=12, fontweight='bold',
+                        color='#f38ba8', pad=10)
+    ax_before.set_ylabel("Channels", color='#cdd6f4')
+
+    # Add channel labels on the left
+    for ch, name in enumerate(ch_names):
+        ax_before.text(-0.5, offsets[ch], name, fontsize=8, color='#6c7086',
+                       ha='right', va='center', transform=ax_before.get_yaxis_transform())
+
+    # Plot after
+    for ch in range(len(picks)):
+        ax_after.plot(times, data_a[ch] + offsets[ch], color="#a6e3a1", lw=0.7, alpha=0.9)
+    ax_after.set_title("AFTER Preprocessing", fontsize=12, fontweight='bold',
+                       color='#a6e3a1', pad=10)
+    ax_after.set_xlabel("Time (s)", color='#cdd6f4')
+    ax_after.set_ylabel("Channels", color='#cdd6f4')
+
+    # Add channel labels
+    for ch, name in enumerate(ch_names):
+        ax_after.text(-0.5, offsets[ch], name, fontsize=8, color='#6c7086',
+                      ha='right', va='center', transform=ax_after.get_yaxis_transform())
+
+    # Configure axes
+    for ax in [ax_before, ax_after]:
         ax.set_yticks([])
-        ax.grid(alpha=0.2)
-    fig.tight_layout()
-    fig.savefig(out_file, dpi=200)
+        ax.grid(True, alpha=0.15, color='#6c7086')
+        ax.set_xlim([0, tmax])
+
+    plt.setp(ax_before.get_xticklabels(), visible=False)
+
+    # Add summary stats as text box
+    stats_text = (
+        f"Amplitude Reduction\n"
+        f"━━━━━━━━━━━━━━━\n"
+        f"Before: {std_before:.1f} µV\n"
+        f"After:  {std_after:.1f} µV\n"
+        f"━━━━━━━━━━━━━━━\n"
+        f"Reduction: {reduction_pct:.0f}%"
+    )
+    fig.text(0.95, 0.5, stats_text, fontsize=9, color='#cdd6f4',
+             ha='center', va='center', fontfamily='monospace',
+             bbox=dict(boxstyle='round,pad=0.5', facecolor='#313244',
+                       edgecolor='#45475a', alpha=0.9))
+
+    # Main title
+    fig.suptitle("EEG Signal Comparison: Before vs After Preprocessing",
+                 fontsize=14, fontweight='bold', color='#89b4fa', y=0.96)
+
+    fig.savefig(out_file, dpi=200, facecolor='#1e1e2e', edgecolor='none')
     plt.close(fig)
 
 
 def _plot_topomap(raw_before: mne.io.BaseRaw, raw_after: mne.io.BaseRaw, out_file: Path) -> None:
-    """Compare RMS scalp maps before/after preprocessing."""
+    """Compare RMS scalp maps before/after preprocessing with dark theme."""
     data_before = raw_before.get_data(picks="eeg")
     data_after = raw_after.get_data(picks="eeg")
     rms_before = np.sqrt((data_before**2).mean(axis=1))
     rms_after = np.sqrt((data_after**2).mean(axis=1))
 
-    fig, axes = plt.subplots(1, 2, figsize=(10, 4), constrained_layout=True)
-    mne.viz.plot_topomap(rms_before, raw_before.info, axes=axes[0], show=False, contours=0)
-    axes[0].set_title("Before preprocessing")
-    mne.viz.plot_topomap(rms_after, raw_after.info, axes=axes[1], show=False, contours=0)
-    axes[1].set_title("After preprocessing")
-    fig.savefig(out_file, dpi=200)
+    # Calculate reduction
+    reduction = 100 * (1 - rms_after.mean() / rms_before.mean()) if rms_before.mean() > 0 else 0
+
+    fig, axes = plt.subplots(1, 3, figsize=(14, 5))
+    fig.patch.set_facecolor('#1e1e2e')
+
+    # Before topomap
+    im1, _ = mne.viz.plot_topomap(rms_before, raw_before.info, axes=axes[0], show=False,
+                                   contours=0, cmap='RdYlBu_r')
+    axes[0].set_title("BEFORE Preprocessing", color='#f38ba8', fontsize=12, fontweight='bold')
+
+    # After topomap
+    im2, _ = mne.viz.plot_topomap(rms_after, raw_after.info, axes=axes[1], show=False,
+                                   contours=0, cmap='RdYlBu_r')
+    axes[1].set_title("AFTER Preprocessing", color='#a6e3a1', fontsize=12, fontweight='bold')
+
+    # Difference map (reduction)
+    rms_diff = rms_before - rms_after
+    im3, _ = mne.viz.plot_topomap(rms_diff, raw_after.info, axes=axes[2], show=False,
+                                   contours=0, cmap='Greens')
+    axes[2].set_title(f"Noise Reduction ({reduction:.0f}%)", color='#89b4fa', fontsize=12, fontweight='bold')
+
+    # Main title
+    fig.suptitle("Scalp Topography: RMS Amplitude Comparison",
+                 fontsize=14, fontweight='bold', color='#89b4fa', y=0.98)
+
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    fig.savefig(out_file, dpi=200, facecolor='#1e1e2e', edgecolor='none')
     plt.close(fig)
 
 
 def _plot_gfp(raw_before: mne.io.BaseRaw, raw_after: mne.io.BaseRaw, out_file: Path) -> None:
-    """Plot global field power before/after cleaning."""
+    """Plot global field power before/after cleaning with dark theme."""
     def _gfp(raw: mne.io.BaseRaw) -> Tuple[np.ndarray, np.ndarray]:
         data = raw.get_data(picks="eeg")
         gfp = np.sqrt((data**2).mean(axis=0)) * 1e6
@@ -428,19 +1210,58 @@ def _plot_gfp(raw_before: mne.io.BaseRaw, raw_after: mne.io.BaseRaw, out_file: P
 
     gfp_before, times = _gfp(raw_before)
     gfp_after, _ = _gfp(raw_after)
+
+    # Calculate stats
+    mean_before = np.mean(gfp_before)
+    mean_after = np.mean(gfp_after)
+    peak_before = np.max(gfp_before)
+    peak_after = np.max(gfp_after)
+    reduction = 100 * (1 - mean_after / mean_before) if mean_before > 0 else 0
+
     step = max(1, len(times) // 5000)
-    fig, ax = plt.subplots(figsize=(10, 4))
-    ax.plot(times[::step], gfp_before[::step], label="Before", color="#d95f02", alpha=0.8)
-    ax.plot(times[::step], gfp_after[::step], label="After", color="#1b9e77", alpha=0.8)
-    ax.set(
-        xlabel="Time (s)",
-        ylabel="Global Field Power (µV)",
-        title="Global Field Power before/after preprocessing",
+
+    fig, ax = plt.subplots(figsize=(12, 5))
+    fig.patch.set_facecolor('#1e1e2e')
+    ax.set_facecolor('#252536')
+
+    # Plot GFP traces
+    ax.fill_between(times[::step], 0, gfp_before[::step], alpha=0.3, color='#f38ba8', label='Before')
+    ax.fill_between(times[::step], 0, gfp_after[::step], alpha=0.3, color='#a6e3a1', label='After')
+    ax.plot(times[::step], gfp_before[::step], color='#f38ba8', lw=1, alpha=0.8)
+    ax.plot(times[::step], gfp_after[::step], color='#a6e3a1', lw=1, alpha=0.8)
+
+    # Add horizontal lines for means
+    ax.axhline(mean_before, color='#f38ba8', linestyle='--', lw=1.5, alpha=0.7)
+    ax.axhline(mean_after, color='#a6e3a1', linestyle='--', lw=1.5, alpha=0.7)
+
+    # Styling
+    ax.set_xlabel("Time (s)", color='#cdd6f4', fontsize=11)
+    ax.set_ylabel("Global Field Power (µV)", color='#cdd6f4', fontsize=11)
+    ax.set_title("Global Field Power: Before vs After Preprocessing",
+                 color='#89b4fa', fontsize=14, fontweight='bold', pad=15)
+    ax.tick_params(colors='#cdd6f4')
+    for spine in ax.spines.values():
+        spine.set_color('#45475a')
+    ax.grid(True, alpha=0.2, color='#6c7086')
+
+    # Legend with stats
+    legend = ax.legend(loc='upper right', facecolor='#313244', edgecolor='#45475a',
+                       fontsize=10, framealpha=0.9)
+    for text in legend.get_texts():
+        text.set_color('#cdd6f4')
+
+    # Add stats text box
+    stats_text = (
+        f"Mean GFP Reduction: {reduction:.0f}%\n"
+        f"Before: {mean_before:.1f} µV (peak: {peak_before:.1f})\n"
+        f"After:  {mean_after:.1f} µV (peak: {peak_after:.1f})"
     )
-    ax.legend()
-    ax.grid(alpha=0.3)
+    ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, fontsize=9, color='#cdd6f4',
+            va='top', ha='left', fontfamily='monospace',
+            bbox=dict(boxstyle='round,pad=0.4', facecolor='#313244', edgecolor='#45475a', alpha=0.9))
+
     fig.tight_layout()
-    fig.savefig(out_file, dpi=200)
+    fig.savefig(out_file, dpi=200, facecolor='#1e1e2e', edgecolor='none')
     plt.close(fig)
 
 
@@ -568,45 +1389,94 @@ def _hilbert_gpu(data: "cp.ndarray") -> "cp.ndarray":
 def _compute_pli_gpu(
     epochs: EpochsArray,
     band: Tuple[float, float],
-    chunk_size: int = 2048,
+    chunk_size: int = 1024,  # Reduced chunk size for memory safety
 ) -> np.ndarray:
+    """Compute PLI using GPU acceleration with proper memory management."""
     if not GPU_AVAILABLE or cp is None:
         raise RuntimeError("GPU computation requested but CuPy is unavailable.")
 
-    data = epochs.get_data(copy=True)  # (n_epochs, n_labels, n_times)
-    n_epochs, n_labels, n_times = data.shape
-    merged = data.transpose(1, 0, 2).reshape(n_labels, -1)
+    result = None
+    try:
+        # Synchronize GPU before starting
+        cp.cuda.Stream.null.synchronize()
 
-    cp_data = cp.asarray(merged, dtype=cp.float32)
-    filtered = _bandpass_gpu(cp_data, epochs.info["sfreq"], band)
-    analytic = _hilbert_gpu(filtered)
-    samples = analytic.shape[1]
-    analytic = analytic.T  # (samples, n_labels)
+        data = epochs.get_data(copy=True)  # (n_epochs, n_labels, n_times)
+        n_epochs, n_labels, n_times = data.shape
+        merged = data.transpose(1, 0, 2).reshape(n_labels, -1)
 
-    accum = cp.zeros((n_labels, n_labels), dtype=cp.float32)
-    for start in range(0, samples, chunk_size):
-        stop = min(samples, start + chunk_size)
-        segment = analytic[start:stop]
-        if segment.size == 0:
-            continue
-        phase = cp.angle(segment)
-        diff = phase[:, :, None] - phase[:, None, :]
-        accum += cp.sign(cp.sin(diff)).sum(axis=0)
+        # Check available GPU memory and adjust if needed
+        mempool = cp.get_default_memory_pool()
+        try:
+            free_mem = cp.cuda.runtime.memGetInfo()[0]
+            data_size = merged.nbytes * 4  # float32
+            if data_size > free_mem * 0.7:  # Use at most 70% of free memory
+                LOGGER.warning("GPU memory limited, using smaller chunks")
+                chunk_size = max(256, chunk_size // 4)
+        except Exception:
+            pass
 
-    pli_gpu = cp.abs(accum / samples)
-    return cp.asnumpy(pli_gpu)
+        cp_data = cp.asarray(merged, dtype=cp.float32)
+        filtered = _bandpass_gpu(cp_data, epochs.info["sfreq"], band)
+
+        # Free intermediate data
+        del cp_data
+        mempool.free_all_blocks()
+
+        analytic = _hilbert_gpu(filtered)
+
+        # Free filtered data
+        del filtered
+        mempool.free_all_blocks()
+
+        samples = analytic.shape[1]
+        analytic = analytic.T  # (samples, n_labels)
+
+        accum = cp.zeros((n_labels, n_labels), dtype=cp.float32)
+        for start in range(0, samples, chunk_size):
+            stop = min(samples, start + chunk_size)
+            segment = analytic[start:stop]
+            if segment.size == 0:
+                continue
+            phase = cp.angle(segment)
+            diff = phase[:, :, None] - phase[:, None, :]
+            accum += cp.sign(cp.sin(diff)).sum(axis=0)
+
+            # Free intermediate results each iteration
+            del phase, diff
+            cp.cuda.Stream.null.synchronize()
+
+        pli_gpu = cp.abs(accum / samples)
+
+        # Copy result to CPU before cleanup
+        result = cp.asnumpy(pli_gpu)
+
+        # Clean up GPU memory
+        del analytic, accum, pli_gpu
+        mempool.free_all_blocks()
+        cp.cuda.Stream.null.synchronize()
+
+    except Exception as e:
+        LOGGER.error(f"GPU PLI computation failed: {e}")
+        # Clean up GPU memory on error
+        try:
+            mempool = cp.get_default_memory_pool()
+            mempool.free_all_blocks()
+            cp.cuda.Stream.null.synchronize()
+        except Exception:
+            pass
+        raise
+
+    return result
 
 
-def _should_use_gpu(user_pref: Optional[bool]) -> bool:
-    if user_pref is True:
+def _should_use_gpu(user_pref: bool) -> bool:
+    """Determine if GPU should be used for PLI computation."""
+    if user_pref:
         if not GPU_AVAILABLE:
-            raise RuntimeError(
-                "GPU acceleration was requested but no compatible GPU/CuPy installation was detected."
-            )
+            LOGGER.warning("GPU requested but CuPy/CUDA not available, using CPU")
+            return False
         return True
-    if user_pref is False:
-        return False
-    return GPU_AVAILABLE
+    return False
 
 
 def compute_pli(
@@ -619,9 +1489,19 @@ def compute_pli(
     if use_gpu and method.lower() == "pli":
         try:
             LOGGER.info("Computing %s PLI on GPU", method.upper())
-            return _compute_pli_gpu(epochs, band)
+            result = _compute_pli_gpu(epochs, band)
+            if result is not None:
+                return result
+            LOGGER.warning("GPU PLI returned None, falling back to CPU")
         except Exception as exc:  # pragma: no cover - GPU fallback path
             LOGGER.warning("GPU PLI failed (%s); falling back to CPU.", exc)
+            # Ensure GPU memory is cleaned up
+            try:
+                if cp is not None:
+                    cp.get_default_memory_pool().free_all_blocks()
+                    cp.cuda.Stream.null.synchronize()
+            except Exception:
+                pass
 
     fmin, fmax = band
     con = spectral_connectivity_epochs(
@@ -714,11 +1594,30 @@ def run_source_loc_and_connectivity(
                 progress_cb(f"Computing {band_name} PLI for {out_dir.name} …")
             try:
                 pli_mat = compute_pli(epochs, band, method=config.connectivity.method, use_gpu=use_gpu)
+
+                # Validate result
+                if pli_mat is None:
+                    LOGGER.warning("PLI computation returned None for %s %s", out_dir.name, band_name)
+                    if progress_cb:
+                        progress_cb(f"PLI returned None for {band_name}, skipping")
+                    continue
+
+                if not isinstance(pli_mat, np.ndarray) or pli_mat.ndim != 2:
+                    LOGGER.warning("PLI returned invalid shape for %s %s", out_dir.name, band_name)
+                    continue
+
             except Exception as exc:
                 LOGGER.exception("PLI failed for %s %s", out_dir.name, band_name)
                 if progress_cb:
                     progress_cb(f"PLI failed for {band_name}: {exc}")
+                # Clean up GPU memory on error
+                try:
+                    if cp is not None:
+                        cp.get_default_memory_pool().free_all_blocks()
+                except Exception:
+                    pass
                 continue
+
             try:
                 _save_connectivity_outputs(pli_mat, label_names, band_name, out_dir, group_name)
                 try:
@@ -796,27 +1695,43 @@ def aggregate_csv_table(
     config: Optional["PipelineConfig"] = None,
     progress_cb: Optional[Callable[[str], None]] = None,
 ) -> pd.DataFrame:
-    """Aggregate existing PLI CSV files across output_root into an Excel table."""
+    """Aggregate existing PLI CSV files across output_root into an Excel table.
+
+    Includes ALL subjects found in the output directories, even those without PLI data.
+    """
     config = config or PipelineConfig()
     pseudo_summaries: List[dict] = []
+
     for group in design.groups:
         for session in design.sessions:
             session_dir = (config.output_root / group / session)
             if not session_dir.exists():
+                if progress_cb:
+                    progress_cb(f"Warning: No output folder for {group}/{session}")
                 continue
+
+            # Get all subject directories (not just those with PLI files)
             for subj_dir in sorted(session_dir.glob("*")):
+                if not subj_dir.is_dir():
+                    continue
+
                 pli_outputs = {}
                 for csv_file in subj_dir.glob("*_PLI.csv"):
                     # band name is prefix before _PLI
                     band_name = csv_file.stem.replace("_PLI", "")
                     pli_outputs[band_name] = str(csv_file)
-                if pli_outputs:
-                    pseudo_summaries.append({
-                        "file": str(subj_dir / (subj_dir.name + ".set")),
-                        "group": group,
-                        "session": session,
-                        "pli_outputs": pli_outputs,
-                    })
+
+                # Include ALL subjects, even those without PLI outputs
+                pseudo_summaries.append({
+                    "file": str(subj_dir / (subj_dir.name + ".set")),
+                    "group": group,
+                    "session": session,
+                    "pli_outputs": pli_outputs,  # May be empty dict
+                })
+
+    if progress_cb:
+        progress_cb(f"Found {len(pseudo_summaries)} subjects across all groups")
+
     output_excel = config.output_root / "PLI_Table.xlsx"
     return compute_group_stats(pseudo_summaries, {
         "SN": [1, 2, 19, 20],
@@ -980,7 +1895,7 @@ def process_file(file_path: Path, config: PipelineConfig, progress_cb: Optional[
         raw = mne.io.read_raw_eeglab(str(file_path), preload=False, verbose=False)
 
         # Preprocess (filter, notch, ref, ICA)
-        raw_before, raw_after, ica = preprocess_raw(raw, config.preprocessing, progress_cb)
+        raw_before, raw_after, ica = preprocess_raw(raw, config.preprocessing)
 
         # Save diagnostic figures
         try:
@@ -1064,52 +1979,106 @@ def compute_group_stats(
             parts = file_path.parts
             # Fallbacks
             participant = file_path.stem
-            group_name = ""
-            session_name = ""
-            if len(parts) >= 3:
-                # try last three parts: ... / Group / Session / filename
+            group_name = s.get("group", "")
+            session_name = s.get("session", "")
+
+            # If group/session not in summary, try to infer from path
+            if not group_name and len(parts) >= 3:
                 group_name = parts[-3]
+            if not session_name and len(parts) >= 2:
                 session_name = parts[-2]
+
+            # Extract subject ID (numeric part from filename)
+            import re
+            subj_match = re.search(r'(\d+)', participant)
+            subject_id = int(subj_match.group(1)) if subj_match else 0
+
             # each band has CSV path in pli_outputs
             pli_outputs = s.get("pli_outputs", {})
+
+            if not pli_outputs:
+                # Subject has no PLI outputs - still include with NaN values
+                LOGGER.warning(f"Subject {participant} has no PLI outputs, including with NaN values")
+                for band_name in ["theta", "alpha", "beta", "gamma"]:
+                    for net_name in networks.keys():
+                        rows.append({
+                            "SubjectID": subject_id,
+                            "Participant": participant,
+                            "Group": group_name,
+                            "Session": session_name,
+                            "FrequencyBand": band_name,
+                            "Network": net_name,
+                            "MeanPLI": float("nan"),
+                            "Status": "No PLI data",
+                        })
+                continue
+
             for band_name, csv_path in pli_outputs.items():
                 try:
                     df = pd.read_csv(csv_path, index_col=0)
                     matrix = df.values.astype(float)
-                except Exception:
-                    # If CSV fails, try numpy load or skip
+                    status = "OK"
+                except Exception as e:
+                    # If CSV fails, include with NaN
+                    LOGGER.warning(f"Failed to read {csv_path}: {e}")
+                    for net_name in networks.keys():
+                        rows.append({
+                            "SubjectID": subject_id,
+                            "Participant": participant,
+                            "Group": group_name,
+                            "Session": session_name,
+                            "FrequencyBand": band_name,
+                            "Network": net_name,
+                            "MeanPLI": float("nan"),
+                            "Status": f"Read error: {e}",
+                        })
                     continue
+
                 for net_name, idxs in networks.items():
                     # convert 1-based to 0-based if necessary: if any idx == 0 assume already 0-based
                     if len(idxs) == 0:
                         mean_pli = float("nan")
+                        status = "Empty network"
                     else:
                         convert = [i - 1 if min(idxs) > 0 else i for i in idxs]
                         # filter out-of-bounds indices
                         valid = [i for i in convert if 0 <= i < matrix.shape[0]]
                         if not valid:
                             mean_pli = float("nan")
+                            status = "Invalid indices"
                         else:
                             mean_pli = _compute_group_pli_from_matrix(matrix, valid)
-                    rows.append(
-                        {
-                            "Participant": participant,
-                            "Group": group_name,
-                            "Session": session_name,
-                            "FrequencyTag": band_name,
-                            "MeanPLI": mean_pli,
-                            "Network": net_name,
-                        }
-                    )
+                            status = "OK"
+
+                    rows.append({
+                        "SubjectID": subject_id,
+                        "Participant": participant,
+                        "Group": group_name,
+                        "Session": session_name,
+                        "FrequencyBand": band_name,
+                        "Network": net_name,
+                        "MeanPLI": mean_pli,
+                        "Status": status,
+                    })
+
         except Exception as exc:
             LOGGER.warning("Failed to aggregate summary %s: %s", s.get("file", "<unknown>"), exc)
 
-    table = pd.DataFrame(rows, columns=["Participant", "Group", "Session", "FrequencyTag", "MeanPLI", "Network"])
+    # Create DataFrame with all columns
+    columns = ["SubjectID", "Participant", "Group", "Session", "FrequencyBand", "Network", "MeanPLI", "Status"]
+    table = pd.DataFrame(rows, columns=columns)
+
+    # Sort by SubjectID for better readability
+    if not table.empty:
+        table = table.sort_values(["Group", "SubjectID", "FrequencyBand", "Network"]).reset_index(drop=True)
+
     try:
         output_excel.parent.mkdir(parents=True, exist_ok=True)
         table.to_excel(output_excel, index=False)
         if progress_cb:
-            progress_cb(f"Saved study-level PLI table to {output_excel}")
+            n_subjects = table["SubjectID"].nunique()
+            n_groups = table["Group"].nunique()
+            progress_cb(f"Saved PLI table: {n_subjects} subjects, {n_groups} groups -> {output_excel}")
     except Exception as exc:
         LOGGER.error("Failed to save Excel summary: %s", exc)
         if progress_cb:

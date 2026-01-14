@@ -1,29 +1,35 @@
+"""
+NeuroStat Pipeline GUI - PyQt5 Version
+A modern, user-friendly interface for EEG preprocessing, source localization,
+connectivity analysis, and statistical testing.
+"""
+
 from __future__ import annotations
 
 import logging
+import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Callable, Any
 
-try:
-    import tkinter as tk
-    from tkinter import filedialog, messagebox
-except Exception:  # pragma: no cover
-    tk = None
-    filedialog = None
-    messagebox = None
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QGroupBox, QLabel, QLineEdit, QPushButton, QCheckBox, QTextEdit,
+    QFileDialog, QMessageBox, QProgressBar, QFrame, QSplitter,
+    QScrollArea, QSpinBox, QDoubleSpinBox, QTabWidget, QGridLayout,
+    QSizePolicy, QToolTip, QStatusBar, QRadioButton, QButtonGroup,
+    QStackedWidget
+)
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QSize
+from PyQt5.QtGui import QPixmap, QFont, QIcon, QPalette, QColor
 
-# Optional image preview support
-try:
-    from PIL import Image, ImageTk  # type: ignore
-except Exception:  # pragma: no cover
-    Image = None
-    ImageTk = None
+import json
 
 from pli_pipeline import (
     LOGGER,
     LOG_FORMAT,
     StudyDesign,
     PipelineConfig,
+    StatsConfig,
     run_preprocessing_for_design,
     run_source_and_connectivity_for_design,
     aggregate_csv_table,
@@ -31,562 +37,1559 @@ from pli_pipeline import (
 )
 
 
-class PLIPipelineApp:
-    def __init__(self) -> None:
-        if tk is None:
-            raise RuntimeError("tkinter is not available in this environment")
+# ============================================================================
+# STYLESHEET - Modern Dark Theme
+# ============================================================================
+STYLESHEET = """
+QMainWindow {
+    background-color: #1e1e2e;
+}
 
-        self.root = tk.Tk()
-        self.root.title("NeuroStat_Pipeline for RCTs")
-        self.root.geometry("1200x720")
-        self.root.resizable(True, True)
+QWidget {
+    background-color: #1e1e2e;
+    color: #cdd6f4;
+    font-family: 'Segoe UI', 'Arial', sans-serif;
+    font-size: 13px;
+}
 
-        # State
-        self.base_var = tk.StringVar()
-        self.groups_var = tk.StringVar(value="GroupA,GroupB")
-        self.sessions_var = tk.StringVar(value="pre,post")
-        self.out_var = tk.StringVar(value=str(Path.cwd() / "processed"))
+QGroupBox {
+    background-color: #313244;
+    border: 1px solid #45475a;
+    border-radius: 8px;
+    margin-top: 12px;
+    padding: 12px;
+    font-weight: bold;
+}
 
-        self.l_freq_var = tk.StringVar(value="1.0")
-        self.h_freq_var = tk.StringVar(value="40.0")
-        self.notch_var = tk.StringVar(value="50,100")
-        self.asr_var = tk.BooleanVar(value=True)
-        self.iclabel_var = tk.BooleanVar(value=True)
-        self.iclabel_thr_var = tk.StringVar(value="0.85")
-        # Stage 3 options
-        self.use_gpu_var = tk.BooleanVar(value=True)  # True=auto GPU if available; False=CPU only
-        self.n_perm_var = tk.StringVar(value="1000")
-        self.cluster_thr_var = tk.StringVar(value="")  # empty => default
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 12px;
+    padding: 0 8px;
+    color: #89b4fa;
+    font-size: 14px;
+}
 
-        self.preview_img = None  # keep a reference
-        self.preview_img_orig = None  # PIL image for dynamic resize
-        self.preview_path = None
-        self.brain_img = None
-        self.brain_img_orig = None
-        self.brain_img_label = None
+QLabel {
+    color: #cdd6f4;
+    padding: 2px;
+}
 
-        # Run All step selection flags
-        self.run_preprocessing_var = tk.BooleanVar(value=True)
-        self.run_source_var = tk.BooleanVar(value=True)
-        self.run_csv_var = tk.BooleanVar(value=True)
-        self.run_stats_var = tk.BooleanVar(value=True)
+QLabel[class="hint"] {
+    color: #6c7086;
+    font-style: italic;
+    font-size: 11px;
+}
 
-        self._build_layout()
+QLineEdit, QSpinBox, QDoubleSpinBox {
+    background-color: #45475a;
+    border: 1px solid #585b70;
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: #cdd6f4;
+    selection-background-color: #89b4fa;
+}
 
-    # ---------- UI Builders ----------
-    def _build_layout(self) -> None:
-        tk.Label(self.root, text="NeuroStat_Pipeline for RCTs: design → preprocessing → source/connectivity/statistics").pack(pady=(6, 4))
-        container = tk.Frame(self.root)
-        container.pack(fill="both", expand=True, padx=8, pady=6)
+QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus {
+    border: 2px solid #89b4fa;
+}
 
-        # Column 1: Study design
-        col1 = tk.LabelFrame(container, text="1) Study Design", width=380)
-        col1.pack(side="left", fill="both", expand=True, padx=(0, 6), pady=4)
-        self._build_col1(col1)
+QLineEdit:disabled {
+    background-color: #313244;
+    color: #6c7086;
+}
 
-        # Column 2: Preprocessing
-        col2 = tk.LabelFrame(container, text="2) Preprocessing", width=420)
-        col2.pack(side="left", fill="both", expand=True, padx=6, pady=4)
-        self._build_col2(col2)
+QPushButton {
+    background-color: #45475a;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 20px;
+    color: #cdd6f4;
+    font-weight: bold;
+}
 
-        # Column 3: Source/Connectivity/Stats
-        col3 = tk.LabelFrame(container, text="3) Source / Connectivity / Stats", width=380)
-        col3.pack(side="left", fill="both", expand=True, padx=(6, 0), pady=4)
-        self._build_col3(col3)
+QPushButton:hover {
+    background-color: #585b70;
+}
 
-        # Bottom panel: Run All
-        self._build_run_all_panel()
+QPushButton:pressed {
+    background-color: #313244;
+}
 
-    def _build_col1(self, frame: tk.Frame) -> None:
-        # Base folder
-        tk.Label(frame, text="Base folder (contains group folders)").pack(anchor="w", padx=6, pady=(8, 0))
-        entry = tk.Entry(frame, textvariable=self.base_var)
-        entry.pack(fill="x", padx=6, pady=4)
-        tk.Button(frame, text="Browse…", command=self._browse_base).pack(anchor="e", padx=6, pady=(0, 8))
+QPushButton:disabled {
+    background-color: #313244;
+    color: #6c7086;
+}
 
-        # Groups & sessions
-        tk.Label(frame, text="Groups (comma-separated)").pack(anchor="w", padx=6, pady=(6, 0))
-        tk.Entry(frame, textvariable=self.groups_var).pack(fill="x", padx=6, pady=4)
+QPushButton[class="primary"] {
+    background-color: #89b4fa;
+    color: #1e1e2e;
+}
 
-        tk.Label(frame, text="Sessions (comma-separated)").pack(anchor="w", padx=6, pady=(6, 0))
-        tk.Entry(frame, textvariable=self.sessions_var).pack(fill="x", padx=6, pady=4)
+QPushButton[class="primary"]:hover {
+    background-color: #b4befe;
+}
 
-        # Output
-        tk.Label(frame, text="Output root folder").pack(anchor="w", padx=6, pady=(6, 0))
-        tk.Entry(frame, textvariable=self.out_var).pack(fill="x", padx=6, pady=4)
-        tk.Button(frame, text="Browse…", command=self._browse_out).pack(anchor="e", padx=6, pady=(0, 6))
+QPushButton[class="primary"]:disabled {
+    background-color: #45475a;
+    color: #6c7086;
+}
 
-        # Hint
-        tk.Label(
-            frame,
-            text="Expected layout: base / <Group> / <Session> / *.set",
-            anchor="w",
-            justify="left",
-            fg="gray",
-        ).pack(fill="x", padx=6, pady=(4, 8))
+QPushButton[class="success"] {
+    background-color: #a6e3a1;
+    color: #1e1e2e;
+}
 
-        # Aesthetic: brain image if available, else draw logo (resizable)
-        holder = tk.Frame(frame, height=260)
-        holder.pack_propagate(False)
-        holder.pack(padx=6, pady=(4, 10), fill="both", expand=True)
-        self._set_brain_image(holder)
-        # Also listen to root resizes to refresh scaling
-        self.root.bind("<Configure>", lambda e: self._render_brain_scaled())
+QPushButton[class="success"]:hover {
+    background-color: #94e2d5;
+}
 
-    def _build_col2(self, frame: tk.Frame) -> None:
-        # Filter settings
-        row1 = tk.Frame(frame)
-        row1.pack(fill="x", padx=6, pady=(8, 0))
-        tk.Label(row1, text="Band-pass (Hz):").pack(side="left")
-        tk.Entry(row1, width=7, textvariable=self.l_freq_var).pack(side="left", padx=(6, 4))
-        tk.Label(row1, text="to").pack(side="left")
-        tk.Entry(row1, width=7, textvariable=self.h_freq_var).pack(side="left", padx=(4, 0))
+QPushButton[class="browse"] {
+    padding: 8px 16px;
+    min-width: 80px;
+}
 
-        row2 = tk.Frame(frame)
-        row2.pack(fill="x", padx=6, pady=(8, 0))
-        tk.Label(row2, text="Notch freqs (Hz, comma)").pack(side="left")
-        tk.Entry(row2, width=20, textvariable=self.notch_var).pack(side="left", padx=(6, 0))
+QCheckBox {
+    spacing: 8px;
+    color: #cdd6f4;
+}
 
-        # Options row: ASR and ICLabel
-        row3 = tk.Frame(frame)
-        row3.pack(fill="x", padx=6, pady=(8, 0))
-        tk.Checkbutton(row3, text="Enable ASR", variable=self.asr_var).pack(side="left")
-        tk.Checkbutton(row3, text="Enable ICLabel", variable=self.iclabel_var).pack(side="left", padx=(12, 0))
+QCheckBox::indicator {
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    border: 2px solid #585b70;
+    background-color: #45475a;
+}
 
-        row4 = tk.Frame(frame)
-        row4.pack(fill="x", padx=6, pady=(8, 0))
-        tk.Label(row4, text="ICLabel brain threshold").pack(side="left")
-        tk.Entry(row4, width=6, textvariable=self.iclabel_thr_var).pack(side="left", padx=(6, 0))
+QCheckBox::indicator:checked {
+    background-color: #89b4fa;
+    border-color: #89b4fa;
+}
 
-        tk.Button(frame, text="Run Preprocessing", command=self._run_preprocessing_clicked).pack(padx=6, pady=(10, 6), anchor="w")
+QCheckBox::indicator:hover {
+    border-color: #89b4fa;
+}
 
-        # Status
-        tk.Label(frame, text="Status").pack(anchor="w", padx=6)
-        self.pre_log = tk.Text(frame, height=8, wrap="word", state="disabled")
-        self.pre_log.pack(fill="x", padx=6, pady=(0, 6), expand=False)
+QTextEdit {
+    background-color: #11111b;
+    border: 1px solid #45475a;
+    border-radius: 6px;
+    padding: 8px;
+    color: #a6adc8;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 12px;
+}
 
-        # Preview area (resizable)
-        tk.Label(frame, text="Sample Pre/Post EEG traces").pack(anchor="w", padx=6)
-        self.preview_holder = tk.Frame(frame, height=260)
-        self.preview_holder.pack(fill="both", padx=6, pady=(0, 8), expand=True)
-        self.preview_label = tk.Label(self.preview_holder, bd=0, anchor="center")
-        self.preview_label.pack(fill="both", expand=True)
-        self.preview_holder.bind("<Configure>", self._on_preview_resize)
+QProgressBar {
+    background-color: #45475a;
+    border: none;
+    border-radius: 6px;
+    height: 24px;
+    text-align: center;
+    color: #1e1e2e;
+    font-weight: bold;
+}
 
-    def _build_col3(self, frame: tk.Frame) -> None:
-        # Options row: GPU + Stats
-        opt = tk.Frame(frame)
-        opt.pack(fill="x", padx=6, pady=(10, 4))
-        tk.Checkbutton(opt, text="Use GPU if available", variable=self.use_gpu_var).pack(side="left")
+QProgressBar::chunk {
+    background-color: #89b4fa;
+    border-radius: 6px;
+}
 
-        row_stats = tk.Frame(frame)
-        row_stats.pack(fill="x", padx=6, pady=(4, 0))
-        tk.Label(row_stats, text="Permutations").pack(side="left")
-        tk.Entry(row_stats, width=8, textvariable=self.n_perm_var).pack(side="left", padx=(6, 12))
-        tk.Label(row_stats, text="Cluster threshold (t)").pack(side="left")
-        tk.Entry(row_stats, width=8, textvariable=self.cluster_thr_var).pack(side="left", padx=(6, 0))
+QTabWidget::pane {
+    border: 1px solid #45475a;
+    border-radius: 8px;
+    background-color: #1e1e2e;
+}
 
-        tk.Button(frame, text="Run Source Localization + Connectivity", command=self._run_source_clicked).pack(fill="x", padx=6, pady=(10, 6))
-        tk.Button(frame, text="Get CSV for network analysis", command=self._export_csv_clicked).pack(fill="x", padx=6, pady=(0, 6))
-        tk.Button(frame, text="Run Cluster-based permutation", command=self._run_stats_clicked).pack(fill="x", padx=6, pady=(0, 6))
+QTabBar::tab {
+    background-color: #313244;
+    border: 1px solid #45475a;
+    border-bottom: none;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    padding: 10px 20px;
+    margin-right: 2px;
+    color: #6c7086;
+}
 
-        tk.Label(frame, text="Status").pack(anchor="w", padx=6)
-        self.stage3_log = tk.Text(frame, height=16, wrap="word", state="disabled")
-        self.stage3_log.pack(fill="both", padx=6, pady=(0, 8), expand=True)
+QTabBar::tab:selected {
+    background-color: #1e1e2e;
+    color: #89b4fa;
+    font-weight: bold;
+}
 
-    def _build_run_all_panel(self) -> None:
-        """Build the Run All panel at the bottom of the window."""
-        panel = tk.LabelFrame(self.root, text="Run All Pipeline Steps", fg="blue")
-        panel.pack(fill="x", padx=8, pady=(0, 8))
+QTabBar::tab:hover:!selected {
+    background-color: #45475a;
+}
 
-        # Step selection checkboxes
-        steps_frame = tk.Frame(panel)
-        steps_frame.pack(fill="x", padx=6, pady=(6, 4))
+QScrollArea {
+    border: none;
+    background-color: transparent;
+}
 
-        tk.Label(steps_frame, text="Select steps to run:").pack(side="left", padx=(0, 10))
-        tk.Checkbutton(steps_frame, text="1. Preprocessing", variable=self.run_preprocessing_var).pack(side="left", padx=4)
-        tk.Checkbutton(steps_frame, text="2. Source + Connectivity", variable=self.run_source_var).pack(side="left", padx=4)
-        tk.Checkbutton(steps_frame, text="3. CSV Export", variable=self.run_csv_var).pack(side="left", padx=4)
-        tk.Checkbutton(steps_frame, text="4. Statistics", variable=self.run_stats_var).pack(side="left", padx=4)
+QSplitter::handle {
+    background-color: #45475a;
+    width: 2px;
+}
 
-        # Run All button (prominent)
-        btn_frame = tk.Frame(panel)
-        btn_frame.pack(fill="x", padx=6, pady=(4, 8))
+QStatusBar {
+    background-color: #11111b;
+    color: #6c7086;
+    border-top: 1px solid #45475a;
+}
 
-        self.run_all_btn = tk.Button(
-            btn_frame,
-            text="▶ RUN ALL SELECTED STEPS",
-            command=self._run_all_clicked,
-            bg="#4CAF50",
-            fg="white",
-            font=("TkDefaultFont", 10, "bold"),
-            padx=20,
-            pady=6,
-        )
-        self.run_all_btn.pack(side="left", padx=(0, 12))
+QToolTip {
+    background-color: #313244;
+    color: #cdd6f4;
+    border: 1px solid #45475a;
+    border-radius: 4px;
+    padding: 6px;
+}
+"""
 
-        # Progress label
-        self.run_all_progress = tk.Label(btn_frame, text="", fg="gray")
-        self.run_all_progress.pack(side="left", fill="x", expand=True)
 
-    # ---------- Actions ----------
-    def _browse_base(self) -> None:
-        d = filedialog.askdirectory(title="Select base folder (groups)")
-        if d:
-            self.base_var.set(d)
+# ============================================================================
+# WORKER THREAD - Keeps UI responsive during long operations
+# ============================================================================
+class PipelineWorker(QThread):
+    """Worker thread for running pipeline operations without blocking UI."""
 
-    def _browse_out(self) -> None:
-        d = filedialog.askdirectory(title="Select output root")
-        if d:
-            self.out_var.set(d)
+    progress = pyqtSignal(str)  # Log messages
+    step_progress = pyqtSignal(int, int, str)  # current, total, description
+    finished = pyqtSignal(bool, str)  # success, message
 
-    def _design(self) -> StudyDesign:
-        groups = [g.strip() for g in self.groups_var.get().split(",") if g.strip()]
-        sessions = [s.strip() for s in self.sessions_var.get().split(",") if s.strip()]
-        return StudyDesign(groups=groups, sessions=sessions)
+    def __init__(
+        self,
+        operation: str,
+        base_path: Path,
+        design: StudyDesign,
+        config: PipelineConfig,
+        steps: Optional[dict] = None
+    ):
+        super().__init__()
+        self.operation = operation
+        self.base_path = base_path
+        self.design = design
+        self.config = config
+        self.steps = steps or {}
+        self._abort = False
+        self._is_running = False
 
-    def _config(self) -> PipelineConfig:
-        cfg = PipelineConfig()
-        # Read preprocessing settings
+    def abort(self):
+        self._abort = True
+
+    def is_running(self) -> bool:
+        return self._is_running
+
+    def run(self):
+        self._is_running = True
         try:
-            cfg.preprocessing.l_freq = float(self.l_freq_var.get())
-            cfg.preprocessing.h_freq = float(self.h_freq_var.get())
-        except Exception:
-            pass
-        try:
-            txt = self.notch_var.get().strip()
-            if txt:
-                cfg.preprocessing.notch_freqs = tuple(float(x) for x in txt.split(",") if x.strip())
-        except Exception:
-            pass
-        # Feature flags and thresholds
-        cfg.preprocessing.use_asr = bool(self.asr_var.get())
-        cfg.preprocessing.use_iclabel = bool(self.iclabel_var.get())
-        try:
-            cfg.preprocessing.iclabel_brain_threshold = float(self.iclabel_thr_var.get())
-        except Exception:
-            pass
-        # Connectivity/compute options
-        try:
-            # Use GPU if available when True; CPU-only when False
-            cfg.connectivity.use_gpu = None if bool(self.use_gpu_var.get()) else False
-        except Exception:
-            pass
-        # Stats options
-        try:
-            # Ensure per-instance stats config exists
-            if not hasattr(cfg, "stats") or getattr(cfg, "stats") is None:
-                from pli_pipeline import StatsConfig  # local import to avoid cycles
-                cfg.stats = StatsConfig()  # type: ignore[attr-defined]
-        except Exception:
-            pass
-        try:
-            txt = self.n_perm_var.get().strip()
-            if txt:
-                n_perm = int(float(txt))
-                if n_perm > 0:
-                    cfg.stats.n_permutations = n_perm  # type: ignore[attr-defined]
-        except Exception:
-            pass
-        try:
-            txt = self.cluster_thr_var.get().strip()
-            if txt:
-                cfg.stats.cluster_threshold = float(txt)  # type: ignore[attr-defined]
-            else:
-                cfg.stats.cluster_threshold = None  # type: ignore[attr-defined]
-        except Exception:
-            pass
-        try:
-            cfg.output_root = Path(self.out_var.get()).expanduser()
-            cfg.output_root.mkdir(parents=True, exist_ok=True)
-        except Exception as exc:
-            messagebox.showerror("Output folder error", str(exc))
-        return cfg
-
-    def _log_pre(self, msg: str) -> None:
-        self.pre_log.configure(state="normal")
-        self.pre_log.insert(tk.END, f"{msg}\n")
-        self.pre_log.see(tk.END)
-        self.pre_log.configure(state="disabled")
-        self.root.update_idletasks()
-
-    def _log_stage3(self, msg: str) -> None:
-        self.stage3_log.configure(state="normal")
-        self.stage3_log.insert(tk.END, f"{msg}\n")
-        self.stage3_log.see(tk.END)
-        self.stage3_log.configure(state="disabled")
-        self.root.update_idletasks()
-
-    def _validate_design_and_base(self) -> Optional[tuple[Path, StudyDesign, PipelineConfig]]:
-        base = self.base_var.get().strip()
-        if not base:
-            messagebox.showwarning("Missing path", "Select a base folder first.")
-            return None
-        design = self._design()
-        if not design.groups or not design.sessions:
-            messagebox.showwarning("Design error", "Provide at least one group and one session.")
-            return None
-        cfg = self._config()
-        return Path(base), design, cfg
-
-    def _run_preprocessing_clicked(self) -> None:
-        ok = self._validate_design_and_base()
-        if not ok:
-            return
-        base, design, cfg = ok
-        self._log_pre("Starting preprocessing …")
-        summaries = run_preprocessing_for_design(base, design, cfg, progress_cb=self._log_pre)
-        n = sum(1 for s in summaries if s.get("preprocessed_fif"))
-        self._log_pre(f"Preprocessing complete. {n} files ready for source localization.")
-        # Update preview if any PSD exists
-        self._update_preview_image(cfg.output_root, design)
-
-    def _run_source_clicked(self) -> None:
-        ok = self._validate_design_and_base()
-        if not ok:
-            return
-        base, design, cfg = ok
-        self._log_stage3("Running source localization + connectivity …")
-        summaries = run_source_and_connectivity_for_design(base, design, cfg, progress_cb=self._log_stage3)
-        m = sum(len(s.get("pli_outputs", {})) for s in summaries)
-        self._log_stage3(f"Source/Connectivity complete. Saved {m} band CSVs.")
-
-    def _export_csv_clicked(self) -> None:
-        ok = self._validate_design_and_base()
-        if not ok:
-            return
-        _base, design, cfg = ok
-        self._log_stage3("Aggregating PLI into Excel …")
-        table = aggregate_csv_table(design, cfg, progress_cb=self._log_stage3)
-        self._log_stage3(f"Saved study-level table to {cfg.output_root / 'PLI_Table.xlsx'} ({len(table)} rows)")
-        messagebox.showinfo("Network table", f"Saved Excel to {cfg.output_root / 'PLI_Table.xlsx'}")
-
-    def _run_stats_clicked(self) -> None:
-        ok = self._validate_design_and_base()
-        if not ok:
-            return
-        _base, design, cfg = ok
-        self._log_stage3("Running cluster-based permutation (t-tests per edge) …")
-        run_stats_for_design(design, cfg, progress_cb=self._log_stage3)
-        self._log_stage3(f"Stats saved under {cfg.output_root / 'stats'}")
-        messagebox.showinfo("Stats", f"Saved stats under {cfg.output_root / 'stats'}")
-
-    def _run_all_clicked(self) -> None:
-        """Run all selected pipeline steps sequentially."""
-        # Validate inputs first
-        ok = self._validate_design_and_base()
-        if not ok:
-            return
-        base, design, cfg = ok
-
-        # Check at least one step is selected
-        steps_selected = (
-            self.run_preprocessing_var.get()
-            or self.run_source_var.get()
-            or self.run_csv_var.get()
-            or self.run_stats_var.get()
-        )
-        if not steps_selected:
-            messagebox.showwarning("No steps selected", "Please select at least one step to run.")
-            return
-
-        # Disable the Run All button during execution
-        self.run_all_btn.configure(state="disabled")
-        self.run_all_progress.configure(text="Starting pipeline...", fg="blue")
-        self.root.update_idletasks()
-
-        errors = []
-        total_steps = sum([
-            self.run_preprocessing_var.get(),
-            self.run_source_var.get(),
-            self.run_csv_var.get(),
-            self.run_stats_var.get(),
-        ])
-        current_step = 0
-
-        try:
-            # Step 1: Preprocessing
-            if self.run_preprocessing_var.get():
-                current_step += 1
-                self.run_all_progress.configure(text=f"Step {current_step}/{total_steps}: Preprocessing...")
-                self.root.update_idletasks()
-                try:
-                    self._log_pre("=" * 50)
-                    self._log_pre("[RUN ALL] Starting preprocessing …")
-                    summaries = run_preprocessing_for_design(base, design, cfg, progress_cb=self._log_pre)
-                    n = sum(1 for s in summaries if s.get("preprocessed_fif"))
-                    self._log_pre(f"[RUN ALL] Preprocessing complete. {n} files ready.")
-                    self._update_preview_image(cfg.output_root, design)
-                except Exception as e:
-                    errors.append(f"Preprocessing: {e}")
-                    self._log_pre(f"[RUN ALL] Preprocessing error: {e}")
-
-            # Step 2: Source Localization + Connectivity
-            if self.run_source_var.get():
-                current_step += 1
-                self.run_all_progress.configure(text=f"Step {current_step}/{total_steps}: Source + Connectivity...")
-                self.root.update_idletasks()
-                try:
-                    self._log_stage3("=" * 50)
-                    self._log_stage3("[RUN ALL] Running source localization + connectivity …")
-                    summaries = run_source_and_connectivity_for_design(base, design, cfg, progress_cb=self._log_stage3)
-                    m = sum(len(s.get("pli_outputs", {})) for s in summaries)
-                    self._log_stage3(f"[RUN ALL] Source/Connectivity complete. Saved {m} band CSVs.")
-                except Exception as e:
-                    errors.append(f"Source/Connectivity: {e}")
-                    self._log_stage3(f"[RUN ALL] Source/Connectivity error: {e}")
-
-            # Step 3: CSV Export
-            if self.run_csv_var.get():
-                current_step += 1
-                self.run_all_progress.configure(text=f"Step {current_step}/{total_steps}: CSV Export...")
-                self.root.update_idletasks()
-                try:
-                    self._log_stage3("[RUN ALL] Aggregating PLI into Excel …")
-                    table = aggregate_csv_table(design, cfg, progress_cb=self._log_stage3)
-                    self._log_stage3(f"[RUN ALL] Saved table to {cfg.output_root / 'PLI_Table.xlsx'} ({len(table)} rows)")
-                except Exception as e:
-                    errors.append(f"CSV Export: {e}")
-                    self._log_stage3(f"[RUN ALL] CSV Export error: {e}")
-
-            # Step 4: Statistics
-            if self.run_stats_var.get():
-                current_step += 1
-                self.run_all_progress.configure(text=f"Step {current_step}/{total_steps}: Statistics...")
-                self.root.update_idletasks()
-                try:
-                    self._log_stage3("[RUN ALL] Running cluster-based permutation …")
-                    run_stats_for_design(design, cfg, progress_cb=self._log_stage3)
-                    self._log_stage3(f"[RUN ALL] Stats saved under {cfg.output_root / 'stats'}")
-                except Exception as e:
-                    errors.append(f"Statistics: {e}")
-                    self._log_stage3(f"[RUN ALL] Statistics error: {e}")
-
+            if self.operation == "preprocessing":
+                self._run_preprocessing()
+            elif self.operation == "source":
+                self._run_source()
+            elif self.operation == "csv":
+                self._run_csv()
+            elif self.operation == "stats":
+                self._run_stats()
+            elif self.operation == "all":
+                self._run_all()
+        except Exception as e:
+            import traceback
+            error_msg = f"{str(e)}\n{traceback.format_exc()}"
+            self.progress.emit(f"[ERROR] {error_msg}")
+            self.finished.emit(False, str(e))
         finally:
-            # Re-enable the button
-            self.run_all_btn.configure(state="normal")
+            self._is_running = False
+            # Clean up GPU memory if available
+            try:
+                import cupy as cp
+                cp.get_default_memory_pool().free_all_blocks()
+                cp.cuda.Stream.null.synchronize()
+            except Exception:
+                pass
 
-        # Show completion status
-        if errors:
-            self.run_all_progress.configure(
-                text=f"Completed with {len(errors)} error(s). Check logs for details.",
-                fg="red"
-            )
-            error_msg = "\n".join(errors)
-            messagebox.showwarning("Pipeline completed with errors", f"Errors encountered:\n{error_msg}")
-        else:
-            self.run_all_progress.configure(text="All steps completed successfully!", fg="green")
-            messagebox.showinfo(
-                "Pipeline Complete",
-                f"All selected steps completed successfully!\n\nOutput saved to:\n{cfg.output_root}"
-            )
+    def _emit_progress(self, msg: str):
+        self.progress.emit(msg)
 
-    def _update_preview_image(self, output_root: Path, design: StudyDesign) -> None:
-        # find a traces image from first available subject
-        psd_path = None
-        for g in design.groups:
-            for s in design.sessions:
-                d = output_root / g / s
-                if not d.exists():
-                    continue
-                for subj in sorted(d.glob("*")):
-                    cand = subj / "traces_before_after.png"
-                    if cand.exists():
-                        psd_path = cand
-                        break
-                if psd_path:
-                    break
-            if psd_path:
-                break
-        if not psd_path:
-            return
-        self.preview_path = psd_path
+    def _run_preprocessing(self):
+        self.step_progress.emit(0, 1, "Preprocessing...")
+        summaries = run_preprocessing_for_design(
+            self.base_path, self.design, self.config,
+            progress_cb=self._emit_progress
+        )
+        n = sum(1 for s in summaries if s.get("preprocessed_fif"))
+        self.finished.emit(True, f"Preprocessing complete. {n} files ready.")
+
+    def _run_source(self):
+        self.step_progress.emit(0, 1, "Source localization + connectivity...")
         try:
-            if Image and ImageTk:
-                self.preview_img_orig = Image.open(psd_path)
-                self._render_preview_scaled()
+            summaries = run_source_and_connectivity_for_design(
+                self.base_path, self.design, self.config,
+                progress_cb=self._emit_progress
+            )
+            m = sum(len(s.get("pli_outputs", {})) for s in summaries)
+            self.finished.emit(True, f"Source/Connectivity complete. Saved {m} band CSVs.")
+        except Exception as e:
+            import traceback
+            self._emit_progress(f"[ERROR] Source/Connectivity failed: {e}")
+            self._emit_progress(traceback.format_exc())
+            self.finished.emit(False, f"Source/Connectivity failed: {e}")
+
+    def _run_csv(self):
+        self.step_progress.emit(0, 1, "Aggregating PLI data...")
+        table = aggregate_csv_table(self.design, self.config, progress_cb=self._emit_progress)
+        self.finished.emit(True, f"Saved table ({len(table)} rows)")
+
+    def _run_stats(self):
+        self.step_progress.emit(0, 1, "Running statistical tests...")
+        run_stats_for_design(self.design, self.config, progress_cb=self._emit_progress)
+        self.finished.emit(True, "Statistics complete.")
+
+    def _run_all(self):
+        steps = []
+        if self.steps.get("preprocessing"):
+            steps.append(("preprocessing", "Preprocessing"))
+        if self.steps.get("source"):
+            steps.append(("source", "Source + Connectivity"))
+        if self.steps.get("csv"):
+            steps.append(("csv", "CSV Export"))
+        if self.steps.get("stats"):
+            steps.append(("stats", "Statistics"))
+
+        total = len(steps)
+        errors = []
+
+        for i, (step_id, step_name) in enumerate(steps):
+            if self._abort:
+                self.finished.emit(False, "Operation aborted by user.")
+                return
+
+            self.step_progress.emit(i, total, f"Step {i+1}/{total}: {step_name}")
+            self._emit_progress(f"\n{'='*50}")
+            self._emit_progress(f"[RUN ALL] Starting {step_name}...")
+
+            try:
+                if step_id == "preprocessing":
+                    summaries = run_preprocessing_for_design(
+                        self.base_path, self.design, self.config,
+                        progress_cb=self._emit_progress
+                    )
+                    n = sum(1 for s in summaries if s.get("preprocessed_fif"))
+                    self._emit_progress(f"[RUN ALL] Preprocessing complete. {n} files ready.")
+
+                elif step_id == "source":
+                    summaries = run_source_and_connectivity_for_design(
+                        self.base_path, self.design, self.config,
+                        progress_cb=self._emit_progress
+                    )
+                    m = sum(len(s.get("pli_outputs", {})) for s in summaries)
+                    self._emit_progress(f"[RUN ALL] Source/Connectivity complete. {m} band CSVs.")
+
+                elif step_id == "csv":
+                    table = aggregate_csv_table(
+                        self.design, self.config, progress_cb=self._emit_progress
+                    )
+                    self._emit_progress(f"[RUN ALL] Saved table ({len(table)} rows)")
+
+                elif step_id == "stats":
+                    run_stats_for_design(
+                        self.design, self.config, progress_cb=self._emit_progress
+                    )
+                    self._emit_progress("[RUN ALL] Statistics complete.")
+
+            except Exception as e:
+                errors.append(f"{step_name}: {e}")
+                self._emit_progress(f"[ERROR] {step_name}: {e}")
+
+        self.step_progress.emit(total, total, "Complete")
+
+        if errors:
+            self.finished.emit(False, f"Completed with {len(errors)} error(s):\n" + "\n".join(errors))
+        else:
+            self.finished.emit(True, "All steps completed successfully!")
+
+
+# ============================================================================
+# MAIN WINDOW
+# ============================================================================
+class NeuroStatApp(QMainWindow):
+    """Main application window for NeuroStat Pipeline."""
+
+    def __init__(self):
+        super().__init__()
+        self.worker: Optional[PipelineWorker] = None
+        self.preview_pixmap: Optional[QPixmap] = None
+        self.brain_pixmap: Optional[QPixmap] = None
+        self._init_ui()
+
+    def closeEvent(self, event):
+        """Handle window close - ensure worker thread is properly terminated."""
+        if self.worker is not None and self.worker.isRunning():
+            reply = QMessageBox.question(
+                self,
+                "Operation Running",
+                "A pipeline operation is still running. Do you want to abort and close?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            if reply == QMessageBox.Yes:
+                self.worker.abort()
+                self.worker.quit()
+                # Wait up to 5 seconds for the thread to finish
+                if not self.worker.wait(5000):
+                    self.worker.terminate()
+                    self.worker.wait(2000)
+                event.accept()
             else:
-                self.preview_label.configure(text=str(psd_path))
+                event.ignore()
+                return
+        else:
+            event.accept()
+
+        # Clean up GPU memory
+        try:
+            import cupy as cp
+            cp.get_default_memory_pool().free_all_blocks()
         except Exception:
-            self.preview_label.configure(text=str(psd_path))
+            pass
 
-    def _draw_brain_logo(self, canvas: "tk.Canvas") -> None:
-        # Simple stylized brain using ovals and arcs
-        w = int(canvas["width"]) if str(canvas["width"]).isdigit() else 320
-        h = int(canvas["height"]) if str(canvas["height"]).isdigit() else 180
-        cx, cy = w // 2, h // 2
-        # Outer lobes
-        canvas.create_oval(cx - 120, cy - 60, cx - 10, cy + 60, fill="#f3c1d7", outline="#c98bb1")
-        canvas.create_oval(cx + 10, cy - 60, cx + 120, cy + 60, fill="#f3c1d7", outline="#c98bb1")
-        # Central seam
-        canvas.create_line(cx, cy - 55, cx, cy + 55, fill="#b36a94", width=2, smooth=True)
-        # Folds (gyri) as arcs
-        for i, yy in enumerate(range(-40, 50, 20)):
-            canvas.create_arc(cx - 115, cy + yy - 20, cx + 115, cy + yy + 20, start=0, extent=180, style=tk.ARC, outline="#b36a94", width=2)
-        # Subtle shadow
-        canvas.create_oval(cx - 130, cy - 70, cx + 130, cy + 70, outline="#e7a9c8")
+    def _init_ui(self):
+        self.setWindowTitle("NeuroStat Pipeline for RCTs")
+        self.setMinimumSize(1300, 800)
+        self.resize(1400, 900)
 
-    def _set_brain_image(self, parent: "tk.Widget") -> None:
-        # Try to show BrainImage.png; fallback to drawing
-        self.brain_holder = parent
+        # Central widget with main layout
+        central = QWidget()
+        self.setCentralWidget(central)
+        main_layout = QVBoxLayout(central)
+        main_layout.setContentsMargins(16, 16, 16, 16)
+        main_layout.setSpacing(12)
+
+        # Header
+        header = self._create_header()
+        main_layout.addWidget(header)
+
+        # Main content area with tabs
+        tabs = QTabWidget()
+        tabs.addTab(self._create_setup_tab(), "Study Setup")
+        tabs.addTab(self._create_pipeline_tab(), "Pipeline")
+        tabs.addTab(self._create_logs_tab(), "Logs & Output")
+        main_layout.addWidget(tabs, 1)
+
+        # Bottom action bar
+        action_bar = self._create_action_bar()
+        main_layout.addWidget(action_bar)
+
+        # Status bar
+        self.status_bar = QStatusBar()
+        self.setStatusBar(self.status_bar)
+        self.status_bar.showMessage("Ready")
+
+        # Apply stylesheet
+        self.setStyleSheet(STYLESHEET)
+
+    def _create_header(self) -> QWidget:
+        """Create the application header."""
+        header = QFrame()
+        layout = QHBoxLayout(header)
+        layout.setContentsMargins(0, 0, 0, 8)
+
+        # Title and subtitle
+        title_layout = QVBoxLayout()
+        title_layout.setSpacing(4)
+
+        title = QLabel("NeuroStat Pipeline")
+        title.setFont(QFont("Segoe UI", 24, QFont.Bold))
+        title.setStyleSheet("color: #89b4fa;")
+        title_layout.addWidget(title)
+
+        subtitle = QLabel("EEG Preprocessing, Source Localization, Connectivity & Statistics for RCTs")
+        subtitle.setStyleSheet("color: #6c7086; font-size: 13px;")
+        title_layout.addWidget(subtitle)
+
+        layout.addLayout(title_layout)
+        layout.addStretch()
+
+        # Brain image (if available)
+        self.brain_label = QLabel()
+        self.brain_label.setFixedSize(100, 60)
+        self._load_brain_image()
+        layout.addWidget(self.brain_label)
+
+        return header
+
+    def _load_brain_image(self):
+        """Load and display the brain image."""
         paths = [Path(__file__).parent / "BrainImage.png", Path.cwd() / "BrainImage.png"]
         for p in paths:
-            try:
-                if Image and ImageTk and p.exists():
-                    self.brain_img_orig = Image.open(p)
-                    self.brain_img_label = tk.Label(parent, bd=0)
-                    self.brain_img_label.pack(fill="both", expand=True)
-                    parent.bind("<Configure>", self._on_brain_resize)
-                    self._render_brain_scaled()
+            if p.exists():
+                pixmap = QPixmap(str(p))
+                if not pixmap.isNull():
+                    self.brain_pixmap = pixmap
+                    scaled = pixmap.scaled(100, 60, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                    self.brain_label.setPixmap(scaled)
                     return
-            except Exception:
-                continue
-        # Fallback: draw stylized brain on resizable canvas
-        self.brain_canvas = tk.Canvas(parent, width=320, height=180, bg="white", highlightthickness=1, highlightbackground="#ddd")
-        self.brain_canvas.pack(fill="both", expand=True)
-        self._draw_brain_logo(self.brain_canvas)
-        self.brain_canvas.bind("<Configure>", lambda e: (self.brain_canvas.delete("all"), self._draw_brain_logo(self.brain_canvas)))
 
-    # ---------- Dynamic resizers ----------
-    def _on_brain_resize(self, event) -> None:
-        self._render_brain_scaled()
+    def _create_setup_tab(self) -> QWidget:
+        """Create the Study Setup tab."""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setSpacing(16)
 
-    def _render_brain_scaled(self) -> None:
-        if not (self.brain_img_orig and Image and ImageTk and self.brain_img_label):
-            return
-        w = max(50, int(self.brain_holder.winfo_width()))
-        h = max(50, int(self.brain_holder.winfo_height()))
+        # Scroll area for settings
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        content_layout.setSpacing(16)
+
+        # Study Design section
+        design_group = QGroupBox("Study Design")
+        design_layout = QGridLayout(design_group)
+        design_layout.setSpacing(12)
+
+        # Base folder
+        design_layout.addWidget(QLabel("Base Folder:"), 0, 0)
+        self.base_input = QLineEdit()
+        self.base_input.setPlaceholderText("Select folder containing group subfolders...")
+        self.base_input.setToolTip("Root folder containing your study data organized as: base/Group/Session/*.set")
+        design_layout.addWidget(self.base_input, 0, 1)
+
+        browse_base = QPushButton("Browse...")
+        browse_base.setProperty("class", "browse")
+        browse_base.clicked.connect(self._browse_base)
+        design_layout.addWidget(browse_base, 0, 2)
+
+        # Groups
+        design_layout.addWidget(QLabel("Groups:"), 1, 0)
+        self.groups_input = QLineEdit("GroupA, GroupB")
+        self.groups_input.setToolTip("Comma-separated list of group names (e.g., Treatment, Control)")
+        design_layout.addWidget(self.groups_input, 1, 1, 1, 2)
+
+        # Sessions
+        design_layout.addWidget(QLabel("Sessions:"), 2, 0)
+        self.sessions_input = QLineEdit("pre, post")
+        self.sessions_input.setToolTip("Comma-separated list of session names (e.g., baseline, followup)")
+        design_layout.addWidget(self.sessions_input, 2, 1, 1, 2)
+
+        # Output folder
+        design_layout.addWidget(QLabel("Output Folder:"), 3, 0)
+        self.output_input = QLineEdit(str(Path.cwd() / "processed"))
+        self.output_input.setToolTip("Where to save processed data and results")
+        design_layout.addWidget(self.output_input, 3, 1)
+
+        browse_out = QPushButton("Browse...")
+        browse_out.setProperty("class", "browse")
+        browse_out.clicked.connect(self._browse_output)
+        design_layout.addWidget(browse_out, 3, 2)
+
+        # Hint
+        hint = QLabel("Expected data layout: base / GroupName / SessionName / subject.set")
+        hint.setProperty("class", "hint")
+        design_layout.addWidget(hint, 4, 0, 1, 3)
+
+        content_layout.addWidget(design_group)
+
+        # Preprocessing Settings
+        preproc_group = QGroupBox("Preprocessing Settings")
+        preproc_layout = QGridLayout(preproc_group)
+        preproc_layout.setSpacing(12)
+
+        # Bandpass filter
+        preproc_layout.addWidget(QLabel("Bandpass Filter (Hz):"), 0, 0)
+        filter_layout = QHBoxLayout()
+
+        self.l_freq_input = QDoubleSpinBox()
+        self.l_freq_input.setRange(0.1, 100)
+        self.l_freq_input.setValue(1.0)
+        self.l_freq_input.setDecimals(1)
+        self.l_freq_input.setToolTip("Low-frequency cutoff for bandpass filter")
+        filter_layout.addWidget(self.l_freq_input)
+
+        filter_layout.addWidget(QLabel("to"))
+
+        self.h_freq_input = QDoubleSpinBox()
+        self.h_freq_input.setRange(1, 500)
+        self.h_freq_input.setValue(40.0)
+        self.h_freq_input.setDecimals(1)
+        self.h_freq_input.setToolTip("High-frequency cutoff for bandpass filter")
+        filter_layout.addWidget(self.h_freq_input)
+
+        filter_layout.addStretch()
+        preproc_layout.addLayout(filter_layout, 0, 1)
+
+        # Notch filter
+        preproc_layout.addWidget(QLabel("Notch Filter (Hz):"), 1, 0)
+        self.notch_input = QLineEdit("50, 100")
+        self.notch_input.setToolTip("Comma-separated frequencies to notch out (powerline noise)")
+        preproc_layout.addWidget(self.notch_input, 1, 1)
+
+        content_layout.addWidget(preproc_group)
+
+        # Preprocessing Pipeline Selection (Mutually Exclusive)
+        pipeline_group = QGroupBox("Preprocessing Pipeline")
+        pipeline_layout = QVBoxLayout(pipeline_group)
+        pipeline_layout.setSpacing(12)
+
+        # Radio button group for mutually exclusive selection
+        self.pipeline_button_group = QButtonGroup(self)
+
+        # GEDAI Pipeline Option
+        gedai_frame = QFrame()
+        gedai_frame.setStyleSheet("""
+            QFrame {
+                background-color: #252536;
+                border: 2px solid #45475a;
+                border-radius: 8px;
+                padding: 8px;
+            }
+            QFrame[selected="true"] {
+                border-color: #89b4fa;
+            }
+        """)
+        gedai_frame_layout = QVBoxLayout(gedai_frame)
+        gedai_frame_layout.setSpacing(8)
+
+        # GEDAI radio button and description
+        self.gedai_radio = QRadioButton("GEDAI Pipeline")
+        self.gedai_radio.setStyleSheet("font-weight: bold; font-size: 14px; color: #89b4fa;")
+        self.gedai_radio.setToolTip(
+            "GEDAI (Generalized Eigenvalue De-Artifacting Instrument) is a complete\n"
+            "preprocessing pipeline that uses leadfield-based denoising to separate\n"
+            "brain signals from artifacts. Recommended for heavily contaminated data."
+        )
+        self.pipeline_button_group.addButton(self.gedai_radio, 0)
+        gedai_frame_layout.addWidget(self.gedai_radio)
+
+        gedai_desc = QLabel(
+            "Complete pipeline using Generalized Eigenvalue Decomposition with EEG forward model.\n"
+            "Separates brain signals from artifacts using leadfield-derived spatial patterns."
+        )
+        gedai_desc.setWordWrap(True)
+        gedai_desc.setStyleSheet("color: #6c7086; font-size: 11px; margin-left: 20px;")
+        gedai_frame_layout.addWidget(gedai_desc)
+
+        # GEDAI parameters
+        gedai_params = QHBoxLayout()
+        gedai_params.setContentsMargins(20, 0, 0, 0)
+        gedai_params.addWidget(QLabel("Threshold:"))
+        self.gedai_thresh_input = QDoubleSpinBox()
+        self.gedai_thresh_input.setRange(1.0, 5.0)
+        self.gedai_thresh_input.setValue(3.0)
+        self.gedai_thresh_input.setDecimals(1)
+        self.gedai_thresh_input.setSingleStep(0.5)
+        self.gedai_thresh_input.setToolTip("Artifact rejection threshold (2=aggressive, 3=balanced, 4=conservative)")
+        self.gedai_thresh_input.setFixedWidth(80)
+        gedai_params.addWidget(self.gedai_thresh_input)
+        gedai_params.addStretch()
+        gedai_frame_layout.addLayout(gedai_params)
+
+        pipeline_layout.addWidget(gedai_frame)
+
+        # Traditional Pipeline Option
+        traditional_frame = QFrame()
+        traditional_frame.setStyleSheet("""
+            QFrame {
+                background-color: #252536;
+                border: 2px solid #45475a;
+                border-radius: 8px;
+                padding: 8px;
+            }
+            QFrame[selected="true"] {
+                border-color: #a6e3a1;
+            }
+        """)
+        traditional_frame_layout = QVBoxLayout(traditional_frame)
+        traditional_frame_layout.setSpacing(8)
+
+        # Traditional radio button and description
+        self.traditional_radio = QRadioButton("Traditional Pipeline")
+        self.traditional_radio.setChecked(True)  # Default selection
+        self.traditional_radio.setStyleSheet("font-weight: bold; font-size: 14px; color: #a6e3a1;")
+        self.traditional_radio.setToolTip(
+            "Traditional preprocessing using ASR for transient artifact removal\n"
+            "and ICLabel for ICA component classification. Well-established methods."
+        )
+        self.pipeline_button_group.addButton(self.traditional_radio, 1)
+        traditional_frame_layout.addWidget(self.traditional_radio)
+
+        traditional_desc = QLabel(
+            "Combines ASR (Artifact Subspace Reconstruction) and ICLabel (ICA Component Classification).\n"
+            "ASR removes transient artifacts, ICLabel uses deep learning to identify artifact components."
+        )
+        traditional_desc.setWordWrap(True)
+        traditional_desc.setStyleSheet("color: #6c7086; font-size: 11px; margin-left: 20px;")
+        traditional_frame_layout.addWidget(traditional_desc)
+
+        # Traditional parameters - ASR
+        asr_row = QHBoxLayout()
+        asr_row.setContentsMargins(20, 0, 0, 0)
+        self.asr_checkbox = QCheckBox("ASR (Artifact Subspace Reconstruction)")
+        self.asr_checkbox.setChecked(True)
+        self.asr_checkbox.setToolTip("Removes large transient artifacts using principal component analysis")
+        asr_row.addWidget(self.asr_checkbox)
+        asr_row.addStretch()
+        traditional_frame_layout.addLayout(asr_row)
+
+        # Traditional parameters - ICLabel
+        iclabel_row = QHBoxLayout()
+        iclabel_row.setContentsMargins(20, 0, 0, 0)
+        self.iclabel_checkbox = QCheckBox("ICLabel (ICA Classification)")
+        self.iclabel_checkbox.setChecked(True)
+        self.iclabel_checkbox.setToolTip("Uses deep learning to classify ICA components as brain/artifact")
+        iclabel_row.addWidget(self.iclabel_checkbox)
+
+        iclabel_row.addWidget(QLabel("Brain Threshold:"))
+        self.iclabel_thresh_input = QDoubleSpinBox()
+        self.iclabel_thresh_input.setRange(0.0, 1.0)
+        self.iclabel_thresh_input.setValue(0.85)
+        self.iclabel_thresh_input.setDecimals(2)
+        self.iclabel_thresh_input.setSingleStep(0.05)
+        self.iclabel_thresh_input.setToolTip("Components with brain probability above this are kept")
+        self.iclabel_thresh_input.setFixedWidth(80)
+        iclabel_row.addWidget(self.iclabel_thresh_input)
+        iclabel_row.addStretch()
+        traditional_frame_layout.addLayout(iclabel_row)
+
+        pipeline_layout.addWidget(traditional_frame)
+
+        # Connect radio buttons to update UI state
+        self.gedai_radio.toggled.connect(self._on_pipeline_changed)
+        self.traditional_radio.toggled.connect(self._on_pipeline_changed)
+
+        content_layout.addWidget(pipeline_group)
+
+        # Advanced Preprocessing Options
+        advanced_group = QGroupBox("Advanced Options")
+        advanced_layout = QGridLayout(advanced_group)
+        advanced_layout.setSpacing(12)
+
+        # Bad channel detection
+        self.bad_channel_checkbox = QCheckBox("Auto-detect & Interpolate Bad Channels")
+        self.bad_channel_checkbox.setChecked(True)
+        self.bad_channel_checkbox.setToolTip("Automatically detect and interpolate bad channels based on variance")
+        advanced_layout.addWidget(self.bad_channel_checkbox, 0, 0)
+
+        advanced_layout.addWidget(QLabel("Z-score threshold:"), 0, 1)
+        self.bad_channel_thresh = QDoubleSpinBox()
+        self.bad_channel_thresh.setRange(2.0, 10.0)
+        self.bad_channel_thresh.setValue(4.0)
+        self.bad_channel_thresh.setDecimals(1)
+        self.bad_channel_thresh.setToolTip("Channels with variance z-score above this are marked bad")
+        advanced_layout.addWidget(self.bad_channel_thresh, 0, 2)
+
+        # ICA method
+        advanced_layout.addWidget(QLabel("ICA Method:"), 1, 0)
+        self.ica_method_input = QLineEdit("fastica")
+        self.ica_method_input.setToolTip("ICA algorithm: fastica, infomax, or picard")
+        advanced_layout.addWidget(self.ica_method_input, 1, 1, 1, 2)
+
+        # ICA components
+        advanced_layout.addWidget(QLabel("ICA Components:"), 2, 0)
+        self.ica_components_input = QSpinBox()
+        self.ica_components_input.setRange(0, 100)
+        self.ica_components_input.setValue(0)
+        self.ica_components_input.setSpecialValueText("Auto")
+        self.ica_components_input.setToolTip("Number of ICA components (0 = auto, typically 25)")
+        advanced_layout.addWidget(self.ica_components_input, 2, 1, 1, 2)
+
+        content_layout.addWidget(advanced_group)
+
+        # Statistics Settings
+        stats_group = QGroupBox("Statistics Settings")
+        stats_layout = QGridLayout(stats_group)
+        stats_layout.setSpacing(12)
+
+        # GPU option
+        self.gpu_checkbox = QCheckBox("Use GPU Acceleration (Experimental)")
+        self.gpu_checkbox.setChecked(False)  # Disabled by default for stability
+        self.gpu_checkbox.setToolTip(
+            "Enable GPU acceleration for PLI computation using CUDA/CuPy.\n"
+            "WARNING: GPU mode may be unstable on some systems.\n"
+            "Leave unchecked for reliable CPU computation."
+        )
+        self.gpu_checkbox.setStyleSheet("color: #f9e2af;")  # Yellow warning color
+        stats_layout.addWidget(self.gpu_checkbox, 0, 0, 1, 2)
+
+        # Permutations
+        stats_layout.addWidget(QLabel("Permutations:"), 1, 0)
+        self.perms_input = QSpinBox()
+        self.perms_input.setRange(100, 100000)
+        self.perms_input.setValue(1000)
+        self.perms_input.setSingleStep(100)
+        self.perms_input.setToolTip("Number of permutations for cluster-based testing")
+        stats_layout.addWidget(self.perms_input, 1, 1)
+
+        # Cluster threshold
+        stats_layout.addWidget(QLabel("Cluster Threshold (t):"), 2, 0)
+        self.cluster_thresh_input = QLineEdit()
+        self.cluster_thresh_input.setPlaceholderText("Auto (leave empty)")
+        self.cluster_thresh_input.setToolTip("T-value threshold for cluster formation (empty = automatic)")
+        stats_layout.addWidget(self.cluster_thresh_input, 2, 1)
+
+        content_layout.addWidget(stats_group)
+        content_layout.addStretch()
+
+        scroll.setWidget(content)
+        layout.addWidget(scroll)
+
+        return tab
+
+    def _create_pipeline_tab(self) -> QWidget:
+        """Create the Pipeline execution tab."""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setSpacing(16)
+
+        # Step selection
+        steps_group = QGroupBox("Pipeline Steps")
+        steps_layout = QVBoxLayout(steps_group)
+
+        info_label = QLabel("Select which steps to run. Each step can be run individually or as part of the full pipeline.")
+        info_label.setWordWrap(True)
+        info_label.setStyleSheet("color: #6c7086;")
+        steps_layout.addWidget(info_label)
+
+        # Step checkboxes with descriptions
+        steps_grid = QGridLayout()
+        steps_grid.setSpacing(16)
+
+        # Step 1: Preprocessing
+        self.step1_check = QCheckBox("1. Preprocessing")
+        self.step1_check.setChecked(True)
+        self.step1_check.setStyleSheet("font-weight: bold; font-size: 14px;")
+        steps_grid.addWidget(self.step1_check, 0, 0)
+        step1_desc = QLabel("Filter, reference, ICA artifact removal")
+        step1_desc.setStyleSheet("color: #6c7086; margin-left: 24px;")
+        steps_grid.addWidget(step1_desc, 0, 1)
+        step1_btn = QPushButton("Run Step 1")
+        step1_btn.clicked.connect(self._run_preprocessing)
+        steps_grid.addWidget(step1_btn, 0, 2)
+
+        # Step 2: Source + Connectivity
+        self.step2_check = QCheckBox("2. Source Localization + Connectivity")
+        self.step2_check.setChecked(True)
+        self.step2_check.setStyleSheet("font-weight: bold; font-size: 14px;")
+        steps_grid.addWidget(self.step2_check, 1, 0)
+        step2_desc = QLabel("MNE inverse, PLI connectivity matrices")
+        step2_desc.setStyleSheet("color: #6c7086; margin-left: 24px;")
+        steps_grid.addWidget(step2_desc, 1, 1)
+        step2_btn = QPushButton("Run Step 2")
+        step2_btn.clicked.connect(self._run_source)
+        steps_grid.addWidget(step2_btn, 1, 2)
+
+        # Step 3: CSV Export
+        self.step3_check = QCheckBox("3. CSV/Excel Export")
+        self.step3_check.setChecked(True)
+        self.step3_check.setStyleSheet("font-weight: bold; font-size: 14px;")
+        steps_grid.addWidget(self.step3_check, 2, 0)
+        step3_desc = QLabel("Aggregate PLI values for network analysis")
+        step3_desc.setStyleSheet("color: #6c7086; margin-left: 24px;")
+        steps_grid.addWidget(step3_desc, 2, 1)
+        step3_btn = QPushButton("Run Step 3")
+        step3_btn.clicked.connect(self._run_csv)
+        steps_grid.addWidget(step3_btn, 2, 2)
+
+        # Step 4: Statistics
+        self.step4_check = QCheckBox("4. Statistical Analysis")
+        self.step4_check.setChecked(True)
+        self.step4_check.setStyleSheet("font-weight: bold; font-size: 14px;")
+        steps_grid.addWidget(self.step4_check, 3, 0)
+        step4_desc = QLabel("Cluster-based permutation tests")
+        step4_desc.setStyleSheet("color: #6c7086; margin-left: 24px;")
+        steps_grid.addWidget(step4_desc, 3, 1)
+        step4_btn = QPushButton("Run Step 4")
+        step4_btn.clicked.connect(self._run_stats)
+        steps_grid.addWidget(step4_btn, 3, 2)
+
+        steps_layout.addLayout(steps_grid)
+        layout.addWidget(steps_group)
+
+        # Progress section
+        progress_group = QGroupBox("Progress")
+        progress_layout = QVBoxLayout(progress_group)
+
+        # Overall progress bar
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setTextVisible(True)
+        self.progress_bar.setFormat("Ready")
+        self.progress_bar.setValue(0)
+        progress_layout.addWidget(self.progress_bar)
+
+        # Current operation label
+        self.operation_label = QLabel("No operation running")
+        self.operation_label.setStyleSheet("color: #6c7086;")
+        progress_layout.addWidget(self.operation_label)
+
+        layout.addWidget(progress_group)
+
+        # Results section with before/after and metrics
+        results_group = QGroupBox("Preprocessing Results")
+        results_layout = QHBoxLayout(results_group)
+        results_layout.setSpacing(16)
+
+        # Left side: Visualization tabs
+        viz_widget = QWidget()
+        viz_layout = QVBoxLayout(viz_widget)
+        viz_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.viz_tabs = QTabWidget()
+        self.viz_tabs.setStyleSheet("""
+            QTabBar::tab {
+                padding: 6px 12px;
+                font-size: 11px;
+            }
+        """)
+
+        # Tab 1: EEG Traces
+        traces_tab = QWidget()
+        traces_layout = QVBoxLayout(traces_tab)
+        self.traces_label = QLabel("Run preprocessing to see EEG traces comparison")
+        self.traces_label.setAlignment(Qt.AlignCenter)
+        self.traces_label.setStyleSheet("color: #6c7086;")
+        self.traces_label.setMinimumHeight(180)
+        self.traces_label.setScaledContents(False)
+        traces_layout.addWidget(self.traces_label)
+        self.viz_tabs.addTab(traces_tab, "EEG Traces")
+
+        # Tab 2: Power Spectrum
+        psd_tab = QWidget()
+        psd_layout = QVBoxLayout(psd_tab)
+        self.psd_label = QLabel("Power spectrum comparison will appear here")
+        self.psd_label.setAlignment(Qt.AlignCenter)
+        self.psd_label.setStyleSheet("color: #6c7086;")
+        self.psd_label.setMinimumHeight(180)
+        psd_layout.addWidget(self.psd_label)
+        self.viz_tabs.addTab(psd_tab, "Power Spectrum")
+
+        # Tab 3: Topography
+        topo_tab = QWidget()
+        topo_layout = QVBoxLayout(topo_tab)
+        self.topo_label = QLabel("Scalp topography comparison will appear here")
+        self.topo_label.setAlignment(Qt.AlignCenter)
+        self.topo_label.setStyleSheet("color: #6c7086;")
+        self.topo_label.setMinimumHeight(180)
+        topo_layout.addWidget(self.topo_label)
+        self.viz_tabs.addTab(topo_tab, "Topography")
+
+        # Tab 4: Global Field Power
+        gfp_tab = QWidget()
+        gfp_layout = QVBoxLayout(gfp_tab)
+        self.gfp_label = QLabel("Global field power comparison will appear here")
+        self.gfp_label.setAlignment(Qt.AlignCenter)
+        self.gfp_label.setStyleSheet("color: #6c7086;")
+        self.gfp_label.setMinimumHeight(180)
+        gfp_layout.addWidget(self.gfp_label)
+        self.viz_tabs.addTab(gfp_tab, "GFP")
+
+        # Tab 5: Alpha PLI Connectivity Circle
+        pli_tab = QWidget()
+        pli_layout = QVBoxLayout(pli_tab)
+        self.pli_circle_label = QLabel("Run Source/Connectivity to see Alpha band PLI circle plot")
+        self.pli_circle_label.setAlignment(Qt.AlignCenter)
+        self.pli_circle_label.setStyleSheet("color: #6c7086;")
+        self.pli_circle_label.setMinimumHeight(180)
+        pli_layout.addWidget(self.pli_circle_label)
+        self.viz_tabs.addTab(pli_tab, "Alpha PLI")
+
+        viz_layout.addWidget(self.viz_tabs)
+        results_layout.addWidget(viz_widget, stretch=2)
+
+        # Right side: Cleaning Metrics Panel
+        metrics_widget = QFrame()
+        metrics_widget.setStyleSheet("""
+            QFrame {
+                background-color: #252536;
+                border: 1px solid #45475a;
+                border-radius: 8px;
+                padding: 12px;
+            }
+        """)
+        metrics_widget.setFixedWidth(280)
+        metrics_layout = QVBoxLayout(metrics_widget)
+        metrics_layout.setSpacing(8)
+
+        metrics_title = QLabel("Cleaning Metrics")
+        metrics_title.setStyleSheet("font-weight: bold; font-size: 14px; color: #89b4fa; border: none;")
+        metrics_layout.addWidget(metrics_title)
+
+        # Separator
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setStyleSheet("background-color: #45475a;")
+        metrics_layout.addWidget(sep)
+
+        # Pipeline used
+        self.metric_pipeline = QLabel("Pipeline: --")
+        self.metric_pipeline.setStyleSheet("color: #cdd6f4; border: none;")
+        metrics_layout.addWidget(self.metric_pipeline)
+
+        # Signal quality score (SENSAI for GEDAI)
+        self.metric_quality = QLabel("Signal Quality: --")
+        self.metric_quality.setStyleSheet("color: #cdd6f4; border: none;")
+        metrics_layout.addWidget(self.metric_quality)
+
+        # Variance reduction
+        self.metric_variance = QLabel("Variance Reduction: --")
+        self.metric_variance.setStyleSheet("color: #cdd6f4; border: none;")
+        metrics_layout.addWidget(self.metric_variance)
+
+        # SNR improvement
+        self.metric_snr = QLabel("SNR Improvement: --")
+        self.metric_snr.setStyleSheet("color: #cdd6f4; border: none;")
+        metrics_layout.addWidget(self.metric_snr)
+
+        # Separator
+        sep2 = QFrame()
+        sep2.setFrameShape(QFrame.HLine)
+        sep2.setStyleSheet("background-color: #45475a;")
+        metrics_layout.addWidget(sep2)
+
+        # Components section
+        comp_title = QLabel("Component Analysis")
+        comp_title.setStyleSheet("font-weight: bold; font-size: 12px; color: #a6e3a1; border: none;")
+        metrics_layout.addWidget(comp_title)
+
+        self.metric_ica_rejected = QLabel("ICA Components Rejected: --")
+        self.metric_ica_rejected.setStyleSheet("color: #cdd6f4; border: none;")
+        metrics_layout.addWidget(self.metric_ica_rejected)
+
+        self.metric_bad_channels = QLabel("Bad Channels Interpolated: --")
+        self.metric_bad_channels.setStyleSheet("color: #cdd6f4; border: none;")
+        metrics_layout.addWidget(self.metric_bad_channels)
+
+        # Separator
+        sep3 = QFrame()
+        sep3.setFrameShape(QFrame.HLine)
+        sep3.setStyleSheet("background-color: #45475a;")
+        metrics_layout.addWidget(sep3)
+
+        # Frequency band power
+        band_title = QLabel("Band Power Changes")
+        band_title.setStyleSheet("font-weight: bold; font-size: 12px; color: #f9e2af; border: none;")
+        metrics_layout.addWidget(band_title)
+
+        self.metric_delta = QLabel("Delta (1-4 Hz): --")
+        self.metric_delta.setStyleSheet("color: #cdd6f4; font-size: 11px; border: none;")
+        metrics_layout.addWidget(self.metric_delta)
+
+        self.metric_theta = QLabel("Theta (4-8 Hz): --")
+        self.metric_theta.setStyleSheet("color: #cdd6f4; font-size: 11px; border: none;")
+        metrics_layout.addWidget(self.metric_theta)
+
+        self.metric_alpha = QLabel("Alpha (8-13 Hz): --")
+        self.metric_alpha.setStyleSheet("color: #cdd6f4; font-size: 11px; border: none;")
+        metrics_layout.addWidget(self.metric_alpha)
+
+        self.metric_beta = QLabel("Beta (13-30 Hz): --")
+        self.metric_beta.setStyleSheet("color: #cdd6f4; font-size: 11px; border: none;")
+        metrics_layout.addWidget(self.metric_beta)
+
+        metrics_layout.addStretch()
+
+        results_layout.addWidget(metrics_widget)
+
+        layout.addWidget(results_group, 1)
+
+        # Keep reference to preview_label for backward compatibility
+        self.preview_label = self.traces_label
+
+        return tab
+
+    def _create_logs_tab(self) -> QWidget:
+        """Create the Logs tab."""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setSpacing(12)
+
+        # Log display
+        log_group = QGroupBox("Pipeline Log")
+        log_layout = QVBoxLayout(log_group)
+
+        self.log_display = QTextEdit()
+        self.log_display.setReadOnly(True)
+        self.log_display.setPlaceholderText("Pipeline output will appear here...")
+        log_layout.addWidget(self.log_display)
+
+        # Log controls
+        controls = QHBoxLayout()
+
+        clear_btn = QPushButton("Clear Log")
+        clear_btn.clicked.connect(self.log_display.clear)
+        controls.addWidget(clear_btn)
+
+        save_btn = QPushButton("Save Log...")
+        save_btn.clicked.connect(self._save_log)
+        controls.addWidget(save_btn)
+
+        controls.addStretch()
+        log_layout.addLayout(controls)
+
+        layout.addWidget(log_group)
+
+        return tab
+
+    def _create_action_bar(self) -> QWidget:
+        """Create the bottom action bar."""
+        bar = QFrame()
+        bar.setStyleSheet("""
+            QFrame {
+                background-color: #313244;
+                border-radius: 8px;
+                padding: 12px;
+            }
+        """)
+        layout = QHBoxLayout(bar)
+        layout.setContentsMargins(16, 12, 16, 12)
+
+        # Run All button
+        self.run_all_btn = QPushButton("Run Selected Steps")
+        self.run_all_btn.setProperty("class", "success")
+        self.run_all_btn.setMinimumWidth(200)
+        self.run_all_btn.setMinimumHeight(44)
+        self.run_all_btn.setFont(QFont("Segoe UI", 12, QFont.Bold))
+        self.run_all_btn.clicked.connect(self._run_all)
+        layout.addWidget(self.run_all_btn)
+
+        layout.addStretch()
+
+        # Abort button (initially hidden)
+        self.abort_btn = QPushButton("Abort")
+        self.abort_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f38ba8;
+                color: #1e1e2e;
+            }
+            QPushButton:hover {
+                background-color: #eba0ac;
+            }
+        """)
+        self.abort_btn.setMinimumHeight(44)
+        self.abort_btn.clicked.connect(self._abort_operation)
+        self.abort_btn.hide()
+        layout.addWidget(self.abort_btn)
+
+        # Status indicator
+        self.status_label = QLabel("Ready to run")
+        self.status_label.setStyleSheet("color: #a6e3a1; font-weight: bold;")
+        layout.addWidget(self.status_label)
+
+        return bar
+
+    # ========================================================================
+    # ACTIONS
+    # ========================================================================
+
+    def _browse_base(self):
+        folder = QFileDialog.getExistingDirectory(self, "Select Base Folder")
+        if folder:
+            self.base_input.setText(folder)
+
+    def _browse_output(self):
+        folder = QFileDialog.getExistingDirectory(self, "Select Output Folder")
+        if folder:
+            self.output_input.setText(folder)
+
+    def _get_design(self) -> StudyDesign:
+        groups = [g.strip() for g in self.groups_input.text().split(",") if g.strip()]
+        sessions = [s.strip() for s in self.sessions_input.text().split(",") if s.strip()]
+        return StudyDesign(groups=groups, sessions=sessions)
+
+    def _on_pipeline_changed(self):
+        """Handle pipeline selection change - enable/disable relevant controls."""
+        is_gedai = self.gedai_radio.isChecked()
+
+        # Enable/disable GEDAI controls
+        self.gedai_thresh_input.setEnabled(is_gedai)
+
+        # Enable/disable Traditional controls
+        self.asr_checkbox.setEnabled(not is_gedai)
+        self.iclabel_checkbox.setEnabled(not is_gedai)
+        self.iclabel_thresh_input.setEnabled(not is_gedai and self.iclabel_checkbox.isChecked())
+
+    def _get_config(self) -> PipelineConfig:
+        cfg = PipelineConfig()
+
+        # Preprocessing - Basic filtering
+        cfg.preprocessing.l_freq = self.l_freq_input.value()
+        cfg.preprocessing.h_freq = self.h_freq_input.value()
+
+        notch_text = self.notch_input.text().strip()
+        if notch_text:
+            try:
+                cfg.preprocessing.notch_freqs = tuple(
+                    float(x) for x in notch_text.split(",") if x.strip()
+                )
+            except ValueError:
+                pass
+
+        # Artifact removal methods based on pipeline selection
+        if self.gedai_radio.isChecked():
+            # GEDAI Pipeline - use GEDAI only, disable ASR/ICLabel
+            cfg.preprocessing.use_ged = True
+            cfg.preprocessing.ged_threshold = self.gedai_thresh_input.value()
+            cfg.preprocessing.use_asr = False
+            cfg.preprocessing.use_iclabel = False
+        else:
+            # Traditional Pipeline - use ASR and/or ICLabel
+            cfg.preprocessing.use_ged = False
+            cfg.preprocessing.use_asr = self.asr_checkbox.isChecked()
+            cfg.preprocessing.use_iclabel = self.iclabel_checkbox.isChecked()
+            cfg.preprocessing.iclabel_brain_threshold = self.iclabel_thresh_input.value()
+
+        # Advanced options
+        cfg.preprocessing.interpolate_bad_channels = self.bad_channel_checkbox.isChecked()
+        cfg.preprocessing.bad_channel_threshold = self.bad_channel_thresh.value()
+
+        # ICA settings
+        ica_method = self.ica_method_input.text().strip()
+        if ica_method:
+            cfg.preprocessing.ica_method = ica_method
+
+        ica_components = self.ica_components_input.value()
+        cfg.preprocessing.ica_n_components = ica_components if ica_components > 0 else None
+
+        # Connectivity
+        cfg.connectivity.use_gpu = self.gpu_checkbox.isChecked()
+
+        # Stats
+        if not hasattr(cfg, "stats") or cfg.stats is None:
+            cfg.stats = StatsConfig()
+        cfg.stats.n_permutations = self.perms_input.value()
+
+        cluster_text = self.cluster_thresh_input.text().strip()
+        if cluster_text:
+            try:
+                cfg.stats.cluster_threshold = float(cluster_text)
+            except ValueError:
+                cfg.stats.cluster_threshold = None
+        else:
+            cfg.stats.cluster_threshold = None
+
+        # Output
         try:
-            img = self.brain_img_orig.copy()
-            img.thumbnail((w, h))
-            self.brain_img = ImageTk.PhotoImage(img)
-            self.brain_img_label.configure(image=self.brain_img)
-        except Exception:
-            pass
+            cfg.output_root = Path(self.output_input.text()).expanduser()
+            cfg.output_root.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Output folder error: {e}")
 
-    def _on_preview_resize(self, event) -> None:
-        self._render_preview_scaled()
+        return cfg
 
-    def _render_preview_scaled(self) -> None:
-        if not (self.preview_img_orig and Image and ImageTk and self.preview_label):
+    def _validate_inputs(self) -> Optional[tuple]:
+        base = self.base_input.text().strip()
+        if not base:
+            QMessageBox.warning(self, "Missing Input", "Please select a base folder first.")
+            return None
+
+        if not Path(base).exists():
+            QMessageBox.warning(self, "Invalid Path", "The base folder does not exist.")
+            return None
+
+        design = self._get_design()
+        if not design.groups or not design.sessions:
+            QMessageBox.warning(
+                self, "Design Error",
+                "Please provide at least one group and one session."
+            )
+            return None
+
+        config = self._get_config()
+        return Path(base), design, config
+
+    def _log(self, msg: str):
+        """Append message to log display."""
+        self.log_display.append(msg)
+        # Auto-scroll to bottom
+        scrollbar = self.log_display.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
+
+    def _set_running(self, running: bool, operation: str = ""):
+        """Update UI state for running/stopped."""
+        self.run_all_btn.setEnabled(not running)
+        self.abort_btn.setVisible(running)
+
+        if running:
+            self.status_label.setText(f"Running: {operation}")
+            self.status_label.setStyleSheet("color: #89b4fa; font-weight: bold;")
+            self.progress_bar.setFormat(operation)
+        else:
+            self.status_label.setText("Ready")
+            self.status_label.setStyleSheet("color: #a6e3a1; font-weight: bold;")
+            self.progress_bar.setFormat("Complete")
+
+    def _on_progress(self, msg: str):
+        """Handle progress message from worker."""
+        self._log(msg)
+
+    def _on_step_progress(self, current: int, total: int, description: str):
+        """Handle step progress from worker."""
+        if total > 0:
+            self.progress_bar.setValue(int((current / total) * 100))
+        self.operation_label.setText(description)
+        self.progress_bar.setFormat(description)
+
+    def _on_finished(self, success: bool, message: str):
+        """Handle worker completion."""
+        self._set_running(False)
+        self.worker = None
+
+        if success:
+            self.progress_bar.setValue(100)
+            self._log(f"\n[SUCCESS] {message}")
+            QMessageBox.information(self, "Complete", message)
+            self._update_preview()
+        else:
+            self._log(f"\n[ERROR] {message}")
+            QMessageBox.warning(self, "Error", message)
+
+        self.status_bar.showMessage("Ready")
+
+    def _run_operation(self, operation: str, steps: Optional[dict] = None):
+        """Start a pipeline operation in a worker thread."""
+        validated = self._validate_inputs()
+        if not validated:
             return
-        w = max(100, int(self.preview_holder.winfo_width()))
-        h = max(100, int(self.preview_holder.winfo_height()))
-        try:
-            img = self.preview_img_orig.copy()
-            img.thumbnail((w, h))
-            self.preview_img = ImageTk.PhotoImage(img)
-            self.preview_label.configure(image=self.preview_img)
-        except Exception:
-            pass
+
+        base_path, design, config = validated
+
+        self._set_running(True, operation)
+        self.progress_bar.setValue(0)
+
+        self.worker = PipelineWorker(operation, base_path, design, config, steps)
+        self.worker.progress.connect(self._on_progress)
+        self.worker.step_progress.connect(self._on_step_progress)
+        self.worker.finished.connect(self._on_finished)
+        self.worker.start()
+
+    def _run_preprocessing(self):
+        self._run_operation("preprocessing")
+
+    def _run_source(self):
+        self._run_operation("source")
+
+    def _run_csv(self):
+        self._run_operation("csv")
+
+    def _run_stats(self):
+        self._run_operation("stats")
+
+    def _run_all(self):
+        """Run all selected steps."""
+        steps = {
+            "preprocessing": self.step1_check.isChecked(),
+            "source": self.step2_check.isChecked(),
+            "csv": self.step3_check.isChecked(),
+            "stats": self.step4_check.isChecked(),
+        }
+
+        if not any(steps.values()):
+            QMessageBox.warning(
+                self, "No Steps Selected",
+                "Please select at least one step to run."
+            )
+            return
+
+        self._run_operation("all", steps)
+
+    def _abort_operation(self):
+        """Abort the running operation."""
+        if self.worker and self.worker.isRunning():
+            self.worker.abort()
+            self._log("\n[ABORT] Aborting operation...")
+            self.status_label.setText("Aborting...")
+            self.status_label.setStyleSheet("color: #f38ba8; font-weight: bold;")
+
+    def _update_preview(self):
+        """Update all visualizations and metrics after preprocessing."""
+        design = self._get_design()
+        config = self._get_config()
+
+        # Find the first subject's output folder
+        subj_folder = None
+        for g in design.groups:
+            for s in design.sessions:
+                folder = config.output_root / g / s
+                if not folder.exists():
+                    continue
+                for subj in sorted(folder.glob("*")):
+                    if subj.is_dir():
+                        subj_folder = subj
+                        break
+                if subj_folder:
+                    break
+            if subj_folder:
+                break
+
+        if not subj_folder:
+            self.traces_label.setText("No preview available")
+            return
+
+        # Load and display visualizations
+        self._load_visualization(subj_folder / "traces_before_after.png", self.traces_label)
+        self._load_visualization(subj_folder / "psd_before_after.png", self.psd_label)
+        self._load_visualization(subj_folder / "topomap_before_after.png", self.topo_label)
+        self._load_visualization(subj_folder / "gfp_before_after.png", self.gfp_label)
+
+        # Load Alpha PLI circle plot if available
+        self._load_visualization(subj_folder / "alpha_circle.png", self.pli_circle_label)
+
+        # Load and display metrics
+        self._load_metrics(subj_folder)
+
+    def _load_visualization(self, img_path: Path, label: QLabel):
+        """Load an image into a label widget."""
+        if img_path.exists():
+            pixmap = QPixmap(str(img_path))
+            if not pixmap.isNull():
+                scaled = pixmap.scaled(
+                    label.width() - 20 if label.width() > 40 else 600,
+                    label.height() - 20 if label.height() > 40 else 250,
+                    Qt.KeepAspectRatio,
+                    Qt.SmoothTransformation
+                )
+                label.setPixmap(scaled)
+                return
+        label.setText("Image not available")
+
+    def _load_metrics(self, subj_folder: Path):
+        """Load preprocessing metrics from JSON file."""
+        metrics_path = subj_folder / "preprocessing_metrics.json"
+
+        # Determine pipeline type from config
+        if self.gedai_radio.isChecked():
+            self.metric_pipeline.setText("Pipeline: GEDAI")
+            self.metric_pipeline.setStyleSheet("color: #89b4fa; font-weight: bold; border: none;")
+        else:
+            self.metric_pipeline.setText("Pipeline: Traditional (ASR + ICLabel)")
+            self.metric_pipeline.setStyleSheet("color: #a6e3a1; font-weight: bold; border: none;")
+
+        if metrics_path.exists():
+            try:
+                with open(metrics_path, 'r') as f:
+                    metrics = json.load(f)
+
+                # Signal quality (SENSAI score for GEDAI or computed SNR)
+                quality = metrics.get('signal_quality', metrics.get('sensai_score', None))
+                if quality is not None:
+                    color = "#a6e3a1" if quality > 70 else "#f9e2af" if quality > 40 else "#f38ba8"
+                    self.metric_quality.setText(f"Signal Quality: {quality:.1f}%")
+                    self.metric_quality.setStyleSheet(f"color: {color}; font-weight: bold; border: none;")
+                else:
+                    self.metric_quality.setText("Signal Quality: --")
+
+                # Variance reduction
+                var_reduction = metrics.get('variance_reduction', None)
+                if var_reduction is not None:
+                    self.metric_variance.setText(f"Variance Reduction: {var_reduction:.1f}%")
+                else:
+                    self.metric_variance.setText("Variance Reduction: --")
+
+                # SNR improvement
+                snr_improvement = metrics.get('snr_improvement_db', None)
+                if snr_improvement is not None:
+                    sign = "+" if snr_improvement > 0 else ""
+                    self.metric_snr.setText(f"SNR Improvement: {sign}{snr_improvement:.1f} dB")
+                else:
+                    self.metric_snr.setText("SNR Improvement: --")
+
+                # ICA components
+                ica_rejected = metrics.get('ica_components_rejected', None)
+                ica_total = metrics.get('ica_components_total', None)
+                if ica_rejected is not None:
+                    if ica_total:
+                        self.metric_ica_rejected.setText(f"ICA Components Rejected: {ica_rejected}/{ica_total}")
+                    else:
+                        self.metric_ica_rejected.setText(f"ICA Components Rejected: {ica_rejected}")
+                else:
+                    self.metric_ica_rejected.setText("ICA Components Rejected: --")
+
+                # Bad channels
+                bad_channels = metrics.get('bad_channels', [])
+                if isinstance(bad_channels, list):
+                    n_bad = len(bad_channels)
+                    self.metric_bad_channels.setText(f"Bad Channels Interpolated: {n_bad}")
+                else:
+                    self.metric_bad_channels.setText(f"Bad Channels Interpolated: {bad_channels}")
+
+                # Band power changes
+                band_changes = metrics.get('band_power_changes', {})
+                self._update_band_metric(self.metric_delta, "Delta (1-4 Hz)", band_changes.get('delta'))
+                self._update_band_metric(self.metric_theta, "Theta (4-8 Hz)", band_changes.get('theta'))
+                self._update_band_metric(self.metric_alpha, "Alpha (8-13 Hz)", band_changes.get('alpha'))
+                self._update_band_metric(self.metric_beta, "Beta (13-30 Hz)", band_changes.get('beta'))
+
+            except Exception as e:
+                self._log(f"Error loading metrics: {e}")
+                self._reset_metrics()
+        else:
+            self._reset_metrics()
+
+    def _update_band_metric(self, label: QLabel, band_name: str, change_value):
+        """Update a band power change metric label."""
+        if change_value is not None:
+            sign = "+" if change_value > 0 else ""
+            # Green for reduction (negative), yellow for small increase, red for large increase
+            if change_value < -10:
+                color = "#a6e3a1"  # Good - noise reduction
+            elif change_value < 10:
+                color = "#cdd6f4"  # Neutral
+            else:
+                color = "#f9e2af"  # Warning - might be losing signal
+            label.setText(f"{band_name}: {sign}{change_value:.1f}%")
+            label.setStyleSheet(f"color: {color}; font-size: 11px; border: none;")
+        else:
+            label.setText(f"{band_name}: --")
+            label.setStyleSheet("color: #cdd6f4; font-size: 11px; border: none;")
+
+    def _reset_metrics(self):
+        """Reset all metric labels to default state."""
+        self.metric_quality.setText("Signal Quality: --")
+        self.metric_quality.setStyleSheet("color: #cdd6f4; border: none;")
+        self.metric_variance.setText("Variance Reduction: --")
+        self.metric_snr.setText("SNR Improvement: --")
+        self.metric_ica_rejected.setText("ICA Components Rejected: --")
+        self.metric_bad_channels.setText("Bad Channels Interpolated: --")
+        self.metric_delta.setText("Delta (1-4 Hz): --")
+        self.metric_theta.setText("Theta (4-8 Hz): --")
+        self.metric_alpha.setText("Alpha (8-13 Hz): --")
+        self.metric_beta.setText("Beta (13-30 Hz): --")
+
+    def _save_log(self):
+        """Save the log to a file."""
+        filename, _ = QFileDialog.getSaveFileName(
+            self, "Save Log", "pipeline_log.txt", "Text Files (*.txt)"
+        )
+        if filename:
+            try:
+                with open(filename, "w") as f:
+                    f.write(self.log_display.toPlainText())
+                QMessageBox.information(self, "Saved", f"Log saved to {filename}")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to save log: {e}")
 
 
+# ============================================================================
+# ENTRY POINT
+# ============================================================================
 def launch_app() -> None:
+    """Launch the NeuroStat Pipeline application."""
     logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
-    app = PLIPipelineApp()
-    app.root.mainloop()
+
+    app = QApplication(sys.argv)
+    app.setStyle("Fusion")
+
+    # Set application-wide font
+    font = QFont("Segoe UI", 10)
+    app.setFont(font)
+
+    window = NeuroStatApp()
+    window.show()
+
+    sys.exit(app.exec_())
 
 
 if __name__ == "__main__":
     launch_app()
-

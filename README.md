@@ -1,12 +1,13 @@
 # NeuroStat_Pipeline for RCTs
 
-End-to-end EEG pipeline with a three-column GUI for:
+End-to-end EEG pipeline with a modern PyQt5 GUI featuring:
 - Study design selection by groups/sessions
 - Preprocessing with ASR and ICA+ICLabel (auto artifact removal)
 - Source localization on fsaverage, Desikan–Killiany label time courses
 - PLI connectivity per band, CSV + figures
 - Network table export to Excel
 - Cluster-based permutation statistics and classic edge-wise tests
+- Modern dark theme with non-blocking UI during processing
 
 Run the GUI: `python run_study_app.py`
 
@@ -22,12 +23,12 @@ Run the GUI: `python run_study_app.py`
 - Recommended packages:
   - Core: `mne`, `numpy`, `scipy`, `pandas`, `matplotlib`, `openpyxl`
   - Connectivity: `mne-connectivity` (or MNE 1.3+ with `mne.connectivity`)
+  - GUI: `PyQt5` (modern dark-themed interface)
   - Optional speedups: `cupy` (GPU)
   - Optional preprocessing: `mne-icalabel` (ICLabel), `asrpy` or `mne-asr` (ASR)
-  - GUI previews: `Pillow`
 
 Install example:
-- `pip install mne numpy scipy pandas matplotlib openpyxl mne-connectivity Pillow`
+- `pip install mne numpy scipy pandas matplotlib openpyxl mne-connectivity PyQt5`
 - Optional: `pip install mne-icalabel asrpy` (or `pip install mne-asr`)
 - Optional (GPU): `pip install cupy-cuda12x` (match your CUDA version)
 
@@ -47,6 +48,8 @@ You choose the base folder and comma-separated group/session names in the GUI.
 
 ## GUI Overview
 
+The application features a modern PyQt5 interface with a dark theme (Catppuccin-inspired colors) and threaded execution for responsive UI during long-running operations.
+
 Column 1 — Study Design
 - Pick base folder (contains group folders)
 - Enter `Groups` and `Sessions` (comma-separated)
@@ -58,7 +61,8 @@ Column 2 — Preprocessing
 - Enable optional `ASR` denoising
 - Enable `ICLabel` with `Brain threshold` (default 0.85)
 - Click `Run Preprocessing`
-- See live status and a large “before/after EEG traces” preview
+- See live status and a large "before/after EEG traces" preview
+- UI remains responsive during processing with real-time log updates
 
 Column 3 — Source / Connectivity / Stats
 - `Run Source Localization + Connectivity` — computes label time courses and PLI per band
@@ -68,7 +72,7 @@ Column 3 — Source / Connectivity / Stats
 Run All Panel (Bottom)
 - Select which pipeline steps to include: Preprocessing, Source + Connectivity, CSV Export, Statistics
 - Click `RUN ALL SELECTED STEPS` to execute the full pipeline sequentially
-- Progress indicator shows current step and completion status
+- Progress bar shows current step and completion status
 - Errors are logged and reported at the end without stopping the entire pipeline
 
 Start the app via `run_study_app.py`. The GUI code is in `app_gui.py`; the pipeline code lives in `pli_pipeline.py`.
