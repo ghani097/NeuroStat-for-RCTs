@@ -15,7 +15,8 @@ Run the GUI: `python run_study_app.py`
 ![](FigsREAD/Fig1.png)
 
 
-
+### Some Outputs and Features
+![](FigsREAD/Fig2.png)
 
 ## Quick Start
 
