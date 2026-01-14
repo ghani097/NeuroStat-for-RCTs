@@ -12,7 +12,7 @@ End-to-end EEG pipeline with a modern PyQt5 GUI featuring:
 Run the GUI: `python run_study_app.py`
 
 ### MAIN GUI
-![](FigsREAD/NeuroStatPipeline_GUI.png)
+![](FigsREAD/Fig1.png)
 
 
 
