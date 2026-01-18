@@ -122,6 +122,7 @@ class ConnectivityConfig:
     epoch_length: float = 4.0
     frequency_bands: Dict[str, Tuple[float, float]] = field(
         default_factory=lambda: {
+            "delta": (0.5, 4.0),
             "theta": (4.0, 8.0),
             "alpha": (8.0, 13.0),
             "beta": (13.0, 30.0),
