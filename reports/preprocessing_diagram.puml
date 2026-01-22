@@ -1,0 +1,60 @@
+@startuml Preprocessing_Pipeline
+!theme plain
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontSize 10
+skinparam ArrowThickness 1.5
+
+title EEG Preprocessing Pipeline
+
+start
+
+:Load Raw EEG (.set);
+:Apply 10-20 Montage;
+
+partition "**Quality Control**" #Orange {
+  :Detect Bad Channels\n(Z-score > 4.0);
+  :Interpolate Bad Channels;
+}
+
+if (Artifact Removal Method?) then (GEDAI)
+  partition "**GEDAI Pipeline**" #LightGreen {
+    :Compute Alpha Reference Covariance;
+    :Generalized Eigenvalue Decomposition;
+    :Multi-Criteria Component Scoring;
+    note right
+      - Eigenvalue ratio (35%)
+      - Kurtosis (25%)
+      - Variance ratio (15%)
+      - Temporal discontinuity (10%)
+      - High-freq content (15%)
+    end note
+    :Reject Artifact Components\n(threshold=3.0);
+    :Reconstruct Clean Signal;
+  }
+else (Traditional)
+  partition "**Traditional Pipeline**" #LightYellow {
+    :ASR (cutoff=20);
+    :ICLabel Classification\n(brain threshold=0.85);
+  }
+endif
+
+partition "**Filtering**" #LightBlue {
+  :Bandpass Filter (1-40 Hz);
+  :Notch Filter (50, 100 Hz);
+}
+
+:Set Average Reference;
+
+partition "**ICA**" #LightPink {
+  :FastICA (n=25);
+  :Reject Artifact Components;
+}
+
+:Save Preprocessed FIF;
+:Generate QC Plots;
+:Save Metrics JSON;
+
+stop
+
+@enduml

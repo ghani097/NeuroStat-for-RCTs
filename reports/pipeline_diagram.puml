@@ -1,0 +1,47 @@
+@startuml NeuroStat_Full_Pipeline
+!theme plain
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontSize 10
+skinparam ArrowThickness 1.5
+
+title NeuroStat EEG Analysis Pipeline
+
+start
+partition "**Data Input**" {
+  :Load .set files;
+}
+
+partition "**Preprocessing**" #LightGreen {
+  :Montage & Bad Channel Detection;
+  if (Pipeline?) then (GEDAI)
+    :GEDAI Denoising;
+  else (Traditional)
+    :ASR + ICLabel;
+  endif
+  :Filter (1-40 Hz) + Notch;
+  :Average Reference;
+  :ICA Processing;
+}
+
+partition "**Source Localization**" #LightYellow {
+  :fsaverage Forward Model;
+  :MNE Inverse Solution;
+  :Extract 68 ROI Time Courses;
+}
+
+partition "**Connectivity**" #LightPink {
+  :Create 4s Epochs;
+  :Compute PLI (5 bands);
+  :Save Matrices & Plots;
+}
+
+partition "**Statistics**" #LightCyan {
+  :Aggregate PLI Tables;
+  :Between/Within Group Tests;
+  :Cluster Permutation;
+}
+
+stop
+
+@enduml
