@@ -10,7 +10,14 @@ This document describes the comprehensive EEG preprocessing, source localization
 
 ## 1. Pipeline Architecture
 
-### 1.1 Complete Pipeline Diagram (PlantUML)
+### 1.1 Complete Pipeline Diagram
+
+**Rendered Diagram:**
+
+![Complete Pipeline Diagram](pipeline_diagram.png)
+
+<details>
+<summary>PlantUML Source Code</summary>
 
 ```plantuml
 @startuml NeuroStat_Pipeline
@@ -91,7 +98,16 @@ stop
 @enduml
 ```
 
-### 1.2 Preprocessing Pipeline Diagram (PlantUML)
+</details>
+
+### 1.2 Preprocessing Pipeline Diagram
+
+**Rendered Diagram:**
+
+![Preprocessing Pipeline Diagram](preprocessing_diagram.png)
+
+<details>
+<summary>PlantUML Source Code</summary>
 
 ```plantuml
 @startuml Preprocessing_Pipeline
@@ -152,6 +168,8 @@ end note
 
 @enduml
 ```
+
+</details>
 
 ---
 
