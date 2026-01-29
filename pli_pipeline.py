@@ -182,14 +182,75 @@ def find_set_files(folder: Path) -> List[Path]:
     return files
 
 
-def _apply_montage(raw: mne.io.BaseRaw) -> None:
-    """Assign a standard 10-20 montage if the recording lacks channel positions."""
-    if raw.get_montage() is None:
+def _apply_montage(raw: mne.io.BaseRaw) -> bool:
+    """
+    Assign a standard montage if the recording lacks channel positions.
+
+    Tries multiple montages in order of preference to maximize channel coverage.
+    Returns True if a montage was successfully applied with good coverage.
+    """
+    # Check if montage already exists with positions
+    current_montage = raw.get_montage()
+    if current_montage is not None:
+        n_with_pos = sum(1 for ch in raw.info['chs'] if any(ch['loc'][:3]))
+        if n_with_pos >= len(raw.ch_names) * 0.8:
+            LOGGER.info(f"Montage already set: {n_with_pos}/{len(raw.ch_names)} channels have positions")
+            return True
+
+    # List of montages to try, in order of preference
+    # BioSemi and extended 10-20 systems first, then basic
+    montages_to_try = [
+        'biosemi64',      # BioSemi 64-channel system
+        'biosemi32',      # BioSemi 32-channel system
+        'biosemi128',     # BioSemi 128-channel system
+        'biosemi256',     # BioSemi 256-channel system
+        'standard_1005',  # Extended 10-20 system (343 channels)
+        'standard_1020',  # Standard 10-20 system
+        'easycap-M1',     # EasyCap montage
+        'GSN-HydroCel-64_1.0',  # EGI 64-channel
+        'GSN-HydroCel-128',     # EGI 128-channel
+    ]
+
+    best_montage = None
+    best_coverage = 0
+
+    for montage_name in montages_to_try:
         try:
-            montage = make_standard_montage("standard_1020")
-            raw.set_montage(montage, on_missing="warn")
+            montage = make_standard_montage(montage_name)
+
+            # Try to apply and count how many channels get positions
+            raw_test = raw.copy()
+            raw_test.set_montage(montage, on_missing='ignore', verbose=False)
+
+            n_with_pos = sum(1 for ch in raw_test.info['chs'] if any(ch['loc'][:3]))
+            coverage = n_with_pos / len(raw.ch_names)
+
+            if coverage > best_coverage:
+                best_coverage = coverage
+                best_montage = montage_name
+
+            # If we get 80%+ coverage, use this montage
+            if coverage >= 0.8:
+                raw.set_montage(montage, on_missing='ignore', verbose=False)
+                LOGGER.info(f"Applied montage '{montage_name}': {n_with_pos}/{len(raw.ch_names)} channels ({coverage*100:.0f}%)")
+                return True
+
+        except Exception:
+            continue
+
+    # Use best montage found even if coverage is lower
+    if best_montage and best_coverage > 0:
+        try:
+            montage = make_standard_montage(best_montage)
+            raw.set_montage(montage, on_missing='ignore', verbose=False)
+            n_with_pos = sum(1 for ch in raw.info['chs'] if any(ch['loc'][:3]))
+            LOGGER.warning(f"Applied montage '{best_montage}' with limited coverage: {n_with_pos}/{len(raw.ch_names)} ({best_coverage*100:.0f}%)")
+            return best_coverage >= 0.5
         except Exception as exc:
-            LOGGER.warning("Could not set montage automatically: %s", exc)
+            LOGGER.warning(f"Could not apply best montage '{best_montage}': {exc}")
+
+    LOGGER.warning("Could not find suitable montage for channel names")
+    return False
 
 
 def _detect_bad_channels(raw: mne.io.BaseRaw, threshold: float = 4.0) -> List[str]:
@@ -242,9 +303,20 @@ def _gedai_denoise(
     n_channels, n_times = data_original.shape
     sfreq = raw.info["sfreq"]
 
+    # Get GEDAI version
+    gedai_version = "unknown"
+    if HAS_OFFICIAL_GEDAI:
+        try:
+            import gedai
+            gedai_version = getattr(gedai, "__version__", "0.1.0")
+        except Exception:
+            gedai_version = "0.1.0"
+
     info_dict = {
         "method": "Official_GEDAI",
-        "gedai_version": "0.1.0",
+        "gedai_version": gedai_version,
+        "gedai_package": "neurotuning/gedai",
+        "gedai_repository": "https://github.com/neurotuning/gedai",
         "threshold": threshold,
         "n_channels": n_channels,
         "n_samples": n_times,
@@ -254,12 +326,30 @@ def _gedai_denoise(
         "variance_removed_pct": 0.0,
         "snr_improvement_db": 0.0,
         "reference_type": "leadfield",
+        "official_gedai_used": False,
     }
 
-    LOGGER.info(f"GEDAI: Starting official denoising ({n_channels} channels, {n_times/sfreq:.1f}s, threshold={threshold})")
+    # Print prominent banner for verification
+    print("\n" + "=" * 70)
+    print("OFFICIAL GEDAI DENOISING")
+    print("=" * 70)
+    print(f"  Package: gedai v{gedai_version}")
+    print(f"  Repository: https://github.com/neurotuning/gedai")
+    print(f"  Citation: Ros et al. (2025) bioRxiv 10.1101/2025.10.04.680449")
+    print(f"  Channels: {n_channels}, Duration: {n_times/sfreq:.1f}s")
+    print(f"  Threshold (noise_multiplier): {threshold}")
+    print(f"  Reference covariance: leadfield (physics-based)")
+    print("=" * 70)
+
+    LOGGER.info(f"GEDAI: Starting OFFICIAL denoising (v{gedai_version})")
+    LOGGER.info(f"GEDAI: {n_channels} channels, {n_times/sfreq:.1f}s, threshold={threshold}")
+    LOGGER.info(f"GEDAI: Using leadfield-based reference covariance")
 
     if not HAS_OFFICIAL_GEDAI:
-        LOGGER.error("Official GEDAI package not installed! Install with: pip install gedai")
+        error_msg = "Official GEDAI package not installed! Install with: pip install gedai"
+        print(f"\n*** ERROR: {error_msg}")
+        print("*** Repository: https://github.com/neurotuning/gedai\n")
+        LOGGER.error(error_msg)
         LOGGER.error("Repository: https://github.com/neurotuning/gedai")
         info_dict["error"] = "Official GEDAI package not installed"
         return raw, info_dict
@@ -271,36 +361,213 @@ def _gedai_denoise(
         # threshold 4 = conservative (noise_multiplier=4.0)
         noise_multiplier = float(threshold)
 
-        # Ensure average reference (required by GEDAI)
+        # Ensure proper montage for leadfield computation
+        print("  [1/5] Checking/setting electrode montage...")
+        LOGGER.info("GEDAI: Checking electrode positions for leadfield computation")
         raw_for_gedai = raw.copy()
+
+        # Standard channel names that GEDAI's leadfield matrix supports
+        # (10-20, 10-10, 10-05 systems and common variants)
+        GEDAI_SUPPORTED_CHANNELS = {
+            # 10-20 system
+            'Fp1', 'Fp2', 'F7', 'F3', 'Fz', 'F4', 'F8', 'T3', 'C3', 'Cz', 'C4', 'T4',
+            'T5', 'P3', 'Pz', 'P4', 'T6', 'O1', 'O2', 'A1', 'A2',
+            # Extended 10-20 / 10-10 names
+            'AF7', 'AF3', 'AFz', 'AF4', 'AF8', 'F5', 'F1', 'F2', 'F6',
+            'FT7', 'FC5', 'FC3', 'FC1', 'FCz', 'FC2', 'FC4', 'FC6', 'FT8',
+            'T7', 'C5', 'C1', 'C2', 'C6', 'T8',
+            'TP7', 'CP5', 'CP3', 'CP1', 'CPz', 'CP2', 'CP4', 'CP6', 'TP8',
+            'P7', 'P5', 'P1', 'P2', 'P6', 'P8', 'P9', 'P10',
+            'PO7', 'PO3', 'POz', 'PO4', 'PO8',
+            'Oz', 'Iz', 'Fpz',
+            # BioSemi specific (alternative naming)
+            'EXG1', 'EXG2', 'EXG3', 'EXG4', 'EXG5', 'EXG6', 'EXG7', 'EXG8',
+        }
+
+        # Check how many channels match GEDAI's supported names
+        eeg_picks = mne.pick_types(raw_for_gedai.info, eeg=True, meg=False)
+        eeg_ch_names = [raw_for_gedai.ch_names[i] for i in eeg_picks]
+        n_eeg = len(eeg_ch_names)
+
+        # Count channels with standard names (case-insensitive match)
+        n_standard = sum(1 for ch in eeg_ch_names if ch in GEDAI_SUPPORTED_CHANNELS or ch.upper() in GEDAI_SUPPORTED_CHANNELS)
+        standard_coverage = n_standard / n_eeg if n_eeg > 0 else 0
+
+        # Also check position coverage
+        n_with_pos = sum(1 for ch in raw_for_gedai.info['chs'] if any(ch['loc'][:3]))
+        pos_coverage = n_with_pos / n_eeg if n_eeg > 0 else 0
+
+        print(f"       Standard channel names: {n_standard}/{n_eeg} ({standard_coverage*100:.0f}%)")
+        print(f"       Channels with positions: {n_with_pos}/{n_eeg} ({pos_coverage*100:.0f}%)")
+
+        # Try to set montage if needed
+        if pos_coverage < 0.8:
+            print(f"       Attempting to set standard montage...")
+            LOGGER.info(f"GEDAI: Low position coverage ({pos_coverage*100:.0f}%), attempting to set standard montage")
+            _apply_montage(raw_for_gedai)
+            n_with_pos = sum(1 for ch in raw_for_gedai.info['chs'] if any(ch['loc'][:3]))
+            pos_coverage = n_with_pos / n_eeg if n_eeg > 0 else 0
+
+        # GEDAI requires standard channel names for leadfield lookup
+        if standard_coverage < 0.5:
+            error_msg = (
+                f"Insufficient standard channel names for GEDAI leadfield computation. "
+                f"Only {n_standard}/{n_eeg} channels have standard names ({standard_coverage*100:.0f}%). "
+                f"GEDAI requires standard 10-20/10-10 channel names (e.g., Fp1, F3, C3, P3, O1). "
+                f"Your channels: {eeg_ch_names[:5]}{'...' if len(eeg_ch_names) > 5 else ''}"
+            )
+            print(f"       WARNING: {error_msg}")
+            LOGGER.warning(f"GEDAI: {error_msg}")
+            info_dict["warning"] = error_msg
+            info_dict["standard_coverage"] = standard_coverage
+            # Don't return - let GEDAI try and fail with a clear error
+
+        LOGGER.info(f"GEDAI: Standard names: {n_standard}/{n_eeg} ({standard_coverage*100:.0f}%), Positions: {n_with_pos}/{n_eeg} ({pos_coverage*100:.0f}%)")
+        info_dict["montage_coverage"] = pos_coverage
+        info_dict["standard_name_coverage"] = standard_coverage
+
+        # Handle dimension mismatch: exclude non-standard channels before GEDAI processing
+        # GEDAI's leadfield only covers standard 10-20/10-10 channels
+        non_standard_channels = [ch for ch in eeg_ch_names
+                                  if ch not in GEDAI_SUPPORTED_CHANNELS and ch.upper() not in GEDAI_SUPPORTED_CHANNELS]
+        standard_channels = [ch for ch in eeg_ch_names
+                             if ch in GEDAI_SUPPORTED_CHANNELS or ch.upper() in GEDAI_SUPPORTED_CHANNELS]
+
+        excluded_channels = []
+        if non_standard_channels and n_standard >= 19:
+            # Have enough standard channels to proceed - exclude non-standard ones
+            print(f"       Excluding {len(non_standard_channels)} non-standard channels for GEDAI: {non_standard_channels}")
+            LOGGER.info(f"GEDAI: Excluding non-standard channels: {non_standard_channels}")
+            excluded_channels = non_standard_channels
+            raw_for_gedai = raw_for_gedai.copy().pick(standard_channels)
+            info_dict["excluded_channels"] = excluded_channels
+            info_dict["n_channels_for_gedai"] = len(standard_channels)
+            print(f"       Processing {len(standard_channels)} standard channels")
+        elif non_standard_channels:
+            print(f"       WARNING: Found non-standard channels but only {n_standard} standard channels (need >=19)")
+            LOGGER.warning(f"GEDAI: Non-standard channels present but insufficient standard channels ({n_standard}<19)")
+
+        # Ensure average reference (required by GEDAI)
+        print("  [2/5] Applying average reference...")
+        LOGGER.info("GEDAI: Applying average reference (required by official GEDAI)")
         raw_for_gedai.set_eeg_reference("average", projection=False, verbose=False)
 
         # Initialize official GEDAI
+        print("  [3/5] Initializing official Gedai() class...")
+        LOGGER.info("GEDAI: Initializing official Gedai() from neurotuning/gedai")
         gedai = Gedai()
 
-        # Fit the model using leadfield-based reference covariance
-        LOGGER.info(f"GEDAI: Fitting with reference_cov='leadfield', noise_multiplier={noise_multiplier}")
-        gedai.fit_raw(
-            raw_for_gedai,
-            duration=2.0,                    # Epoch duration (seconds)
-            overlap=0.5,                     # 50% overlap
-            reject_by_annotation=False,      # Don't reject annotated segments
-            reference_cov="leadfield",       # Use leadfield-based reference (core GEDAI feature)
-            sensai_method="gridsearch",      # Grid search for optimal threshold
-            noise_multiplier=noise_multiplier,
-            verbose=False,
-        )
+        # Fit the model - try leadfield first, fall back to identity if needed
+        reference_cov_used = "leadfield"
+        fit_success = False
+
+        # First attempt: Try with leadfield-based reference covariance
+        print(f"  [4/5] Fitting GEDAI model (attempting reference_cov='leadfield')...")
+        LOGGER.info(f"GEDAI: Attempting fit with reference_cov='leadfield', noise_multiplier={noise_multiplier}")
+
+        try:
+            gedai.fit_raw(
+                raw_for_gedai,
+                duration=2.0,                    # Epoch duration (seconds)
+                overlap=0.5,                     # 50% overlap
+                reject_by_annotation=False,      # Don't reject annotated segments
+                reference_cov="leadfield",       # Use leadfield-based reference (core GEDAI feature)
+                sensai_method="gridsearch",      # Grid search for optimal threshold
+                noise_multiplier=noise_multiplier,
+                verbose=True,
+            )
+            fit_success = True
+            reference_cov_used = "leadfield"
+            print("       Leadfield-based model fitted successfully!")
+            LOGGER.info("GEDAI: Leadfield-based model fitting complete")
+
+        except (ValueError, RuntimeError) as e:
+            # Leadfield failed - try with identity reference
+            print(f"       Leadfield failed ({e}), trying identity reference...")
+            LOGGER.warning(f"GEDAI: Leadfield reference failed: {e}")
+            LOGGER.info("GEDAI: Falling back to identity reference covariance")
+
+            try:
+                gedai = Gedai()  # Reset
+                gedai.fit_raw(
+                    raw_for_gedai,
+                    duration=2.0,
+                    overlap=0.5,
+                    reject_by_annotation=False,
+                    reference_cov="identity",    # Fallback to identity
+                    sensai_method="gridsearch",
+                    noise_multiplier=noise_multiplier,
+                    verbose=True,
+                )
+                fit_success = True
+                reference_cov_used = "identity"
+                print("       Identity-based model fitted successfully!")
+                LOGGER.info("GEDAI: Identity-based model fitting complete (fallback)")
+
+            except Exception as e2:
+                # Identity also failed - try with data-driven approach
+                print(f"       Identity failed ({e2}), trying data-driven reference...")
+                LOGGER.warning(f"GEDAI: Identity reference failed: {e2}")
+
+                try:
+                    gedai = Gedai()  # Reset
+                    gedai.fit_raw(
+                        raw_for_gedai,
+                        duration=2.0,
+                        overlap=0.5,
+                        reject_by_annotation=False,
+                        reference_cov="data",    # Data-driven reference
+                        sensai_method="gridsearch",
+                        noise_multiplier=noise_multiplier,
+                        verbose=True,
+                    )
+                    fit_success = True
+                    reference_cov_used = "data"
+                    print("       Data-driven model fitted successfully!")
+                    LOGGER.info("GEDAI: Data-driven model fitting complete (fallback)")
+
+                except Exception as e3:
+                    raise RuntimeError(f"All GEDAI reference types failed: leadfield={e}, identity={e2}, data={e3}")
+
+        info_dict["reference_type"] = reference_cov_used
+        print(f"       Reference covariance used: {reference_cov_used}")
+        LOGGER.info(f"GEDAI: Reference covariance used: {reference_cov_used}")
 
         # Transform/denoise the data
+        print("  [5/5] Transforming/denoising data...")
+        LOGGER.info("GEDAI: Transforming data (applying denoising)")
         raw_cleaned = gedai.transform_raw(
             raw_for_gedai,
             duration=2.0,
             overlap=0.5,
-            verbose=False
+            verbose=True
         )
+        print("       Transform complete!")
+        LOGGER.info("GEDAI: Transform complete")
 
-        # Get cleaned data
-        data_clean = raw_cleaned.get_data(picks=picks)
+        # Mark that official GEDAI was successfully used
+        info_dict["official_gedai_used"] = True
+
+        # Get cleaned data - handle case where channels were excluded
+        if excluded_channels:
+            # Get cleaned data for processed channels only
+            processed_picks = mne.pick_types(raw_cleaned.info, eeg=True, meg=False)
+            data_clean_partial = raw_cleaned.get_data(picks=processed_picks)
+
+            # Create full data array with original data for excluded channels
+            data_clean = data_original.copy()
+
+            # Map processed channel data back to original indices
+            for i, ch_name in enumerate(standard_channels):
+                # Find the index in the original channel list
+                original_idx = eeg_ch_names.index(ch_name)
+                data_clean[original_idx, :] = data_clean_partial[i, :]
+
+            print(f"       Merged {len(standard_channels)} processed channels with {len(excluded_channels)} excluded channels")
+            LOGGER.info(f"GEDAI: Merged processed ({len(standard_channels)}) and excluded ({len(excluded_channels)}) channels")
+        else:
+            # All channels were processed
+            data_clean = raw_cleaned.get_data(picks=mne.pick_types(raw_cleaned.info, eeg=True, meg=False))
 
         # Compute quality metrics
         # Variance removed
@@ -308,6 +575,8 @@ def _gedai_denoise(
         var_clean = np.var(data_clean)
         var_removed = np.var(data_original - data_clean)
         info_dict["variance_removed_pct"] = float(100 * var_removed / (var_original + 1e-10))
+        info_dict["variance_original"] = float(var_original)
+        info_dict["variance_clean"] = float(var_clean)
 
         # SNR improvement estimate (using high-freq as noise proxy)
         try:
@@ -328,30 +597,63 @@ def _gedai_denoise(
         if hasattr(gedai, 'sensai_score_') and gedai.sensai_score_ is not None:
             # Official GEDAI SENSAI score (typically 0-1, convert to 0-100)
             info_dict["sensai_score"] = float(gedai.sensai_score_ * 100)
+            info_dict["sensai_score_raw"] = float(gedai.sensai_score_)
+            print(f"       Official SENSAI score: {gedai.sensai_score_:.4f}")
+            LOGGER.info(f"GEDAI: Official SENSAI score from model: {gedai.sensai_score_:.4f}")
         else:
             # Compute approximate SENSAI score based on metrics
             var_score = np.clip(info_dict["variance_removed_pct"] / 50, 0, 1) * 30
             snr_score = np.clip((info_dict["snr_improvement_db"] + 5) / 15, 0, 1) * 40
             quality_score = 30  # Base score for successful processing
             info_dict["sensai_score"] = float(np.clip(var_score + snr_score + quality_score, 0, 100))
+            info_dict["sensai_score_computed"] = True
+            LOGGER.info("GEDAI: SENSAI score computed from metrics (not available from model)")
 
         # Get threshold from fitted model if available
         if hasattr(gedai, 'threshold_') and gedai.threshold_ is not None:
             info_dict["optimal_threshold"] = float(gedai.threshold_)
+            print(f"       Optimal threshold: {gedai.threshold_:.4f}")
+            LOGGER.info(f"GEDAI: Optimal threshold from model: {gedai.threshold_:.4f}")
+
+        # Check for other useful attributes from the fitted model
+        for attr in ['n_components_', 'n_rejected_', 'eigenvalues_', 'sensai_scores_']:
+            if hasattr(gedai, attr):
+                val = getattr(gedai, attr)
+                if val is not None:
+                    if isinstance(val, (int, float)):
+                        info_dict[attr] = val
+                        LOGGER.info(f"GEDAI: {attr} = {val}")
+                    elif isinstance(val, np.ndarray) and val.size < 10:
+                        info_dict[attr] = val.tolist()
 
         # Update raw data in place
         raw._data[picks] = data_clean
 
+        # Print summary
+        print("\n" + "-" * 70)
+        print("GEDAI DENOISING COMPLETE")
+        print("-" * 70)
+        print(f"  SENSAI Score: {info_dict['sensai_score']:.1f}%")
+        print(f"  Variance Removed: {info_dict['variance_removed_pct']:.1f}%")
+        print(f"  SNR Improvement: {info_dict['snr_improvement_db']:.1f} dB")
+        print(f"  Official GEDAI Used: {info_dict['official_gedai_used']}")
+        print("-" * 70 + "\n")
+
         LOGGER.info(
             f"GEDAI complete: SENSAI={info_dict['sensai_score']:.1f}%, "
             f"variance_removed={info_dict['variance_removed_pct']:.1f}%, "
-            f"SNR_improvement={info_dict['snr_improvement_db']:.1f}dB"
+            f"SNR_improvement={info_dict['snr_improvement_db']:.1f}dB, "
+            f"official_gedai_used=True"
         )
 
     except Exception as exc:
-        LOGGER.error(f"Official GEDAI denoising failed: {exc}")
+        error_msg = f"Official GEDAI denoising failed: {exc}"
+        print(f"\n*** ERROR: {error_msg}\n")
+        LOGGER.error(error_msg)
         import traceback
         traceback.print_exc()
+        info_dict["error"] = str(exc)
+        info_dict["official_gedai_used"] = False
         info_dict["error"] = str(exc)
 
     return raw, info_dict
