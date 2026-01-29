@@ -61,6 +61,14 @@ from mne.minimum_norm import (  # noqa: E402
 )
 from mne.preprocessing import ICA  # noqa: E402
 
+# Official GEDAI package from https://github.com/neurotuning/gedai
+try:
+    from gedai import Gedai
+    HAS_OFFICIAL_GEDAI = True
+except ImportError:
+    HAS_OFFICIAL_GEDAI = False
+    Gedai = None
+
 try:
     import tkinter as tk
     from tkinter import filedialog, messagebox
@@ -174,14 +182,75 @@ def find_set_files(folder: Path) -> List[Path]:
     return files
 
 
-def _apply_montage(raw: mne.io.BaseRaw) -> None:
-    """Assign a standard 10-20 montage if the recording lacks channel positions."""
-    if raw.get_montage() is None:
+def _apply_montage(raw: mne.io.BaseRaw) -> bool:
+    """
+    Assign a standard montage if the recording lacks channel positions.
+
+    Tries multiple montages in order of preference to maximize channel coverage.
+    Returns True if a montage was successfully applied with good coverage.
+    """
+    # Check if montage already exists with positions
+    current_montage = raw.get_montage()
+    if current_montage is not None:
+        n_with_pos = sum(1 for ch in raw.info['chs'] if any(ch['loc'][:3]))
+        if n_with_pos >= len(raw.ch_names) * 0.8:
+            LOGGER.info(f"Montage already set: {n_with_pos}/{len(raw.ch_names)} channels have positions")
+            return True
+
+    # List of montages to try, in order of preference
+    # BioSemi and extended 10-20 systems first, then basic
+    montages_to_try = [
+        'biosemi64',      # BioSemi 64-channel system
+        'biosemi32',      # BioSemi 32-channel system
+        'biosemi128',     # BioSemi 128-channel system
+        'biosemi256',     # BioSemi 256-channel system
+        'standard_1005',  # Extended 10-20 system (343 channels)
+        'standard_1020',  # Standard 10-20 system
+        'easycap-M1',     # EasyCap montage
+        'GSN-HydroCel-64_1.0',  # EGI 64-channel
+        'GSN-HydroCel-128',     # EGI 128-channel
+    ]
+
+    best_montage = None
+    best_coverage = 0
+
+    for montage_name in montages_to_try:
         try:
-            montage = make_standard_montage("standard_1020")
-            raw.set_montage(montage, on_missing="warn")
+            montage = make_standard_montage(montage_name)
+
+            # Try to apply and count how many channels get positions
+            raw_test = raw.copy()
+            raw_test.set_montage(montage, on_missing='ignore', verbose=False)
+
+            n_with_pos = sum(1 for ch in raw_test.info['chs'] if any(ch['loc'][:3]))
+            coverage = n_with_pos / len(raw.ch_names)
+
+            if coverage > best_coverage:
+                best_coverage = coverage
+                best_montage = montage_name
+
+            # If we get 80%+ coverage, use this montage
+            if coverage >= 0.8:
+                raw.set_montage(montage, on_missing='ignore', verbose=False)
+                LOGGER.info(f"Applied montage '{montage_name}': {n_with_pos}/{len(raw.ch_names)} channels ({coverage*100:.0f}%)")
+                return True
+
+        except Exception:
+            continue
+
+    # Use best montage found even if coverage is lower
+    if best_montage and best_coverage > 0:
+        try:
+            montage = make_standard_montage(best_montage)
+            raw.set_montage(montage, on_missing='ignore', verbose=False)
+            n_with_pos = sum(1 for ch in raw.info['chs'] if any(ch['loc'][:3]))
+            LOGGER.warning(f"Applied montage '{best_montage}' with limited coverage: {n_with_pos}/{len(raw.ch_names)} ({best_coverage*100:.0f}%)")
+            return best_coverage >= 0.5
         except Exception as exc:
-            LOGGER.warning("Could not set montage automatically: %s", exc)
+            LOGGER.warning(f"Could not apply best montage '{best_montage}': {exc}")
+
+    LOGGER.warning("Could not find suitable montage for channel names")
+    return False
 
 
 def _detect_bad_channels(raw: mne.io.BaseRaw, threshold: float = 4.0) -> List[str]:
@@ -208,36 +277,46 @@ def _gedai_denoise(
     trans_path: Optional[Path] = None,
 ) -> Tuple[mne.io.BaseRaw, dict]:
     """
-    GEDAI (Generalized Eigenvalue De-Artifacting Instrument) implementation.
+    GEDAI (Generalized Eigenvalue De-Artifacting Instrument) - Official Implementation.
 
-    This is a robust Python implementation of GEDAI for unsupervised EEG denoising.
-    The algorithm uses Generalized Eigenvalue Decomposition (GEVD) to separate
-    brain signals from artifacts based on spatial and temporal characteristics.
+    Uses the official GEDAI package from https://github.com/neurotuning/gedai
+    Based on: Ros et al. (2025) "Return of the GEDAI: Unsupervised EEG Denoising
+    based on Leadfield Filtering"
 
-    The key insight is that brain signals have specific spatial covariance patterns
-    (smooth, dipolar) while artifacts (muscle, eye, electrode) have different patterns.
+    The algorithm uses leadfield-based reference covariance and SENSAI
+    (Signal & Noise Subspace Alignment Index) for optimal threshold selection.
 
     Parameters:
         raw: MNE Raw object (will be modified in-place)
         threshold: Artifact rejection threshold (2=aggressive, 3=balanced, 4=conservative)
-        trans_path: Path to head-MRI transformation file (optional)
+                   Maps to noise_multiplier parameter in official GEDAI
+        trans_path: Path to head-MRI transformation file (optional, not used by official GEDAI)
 
     Returns:
         raw: Cleaned raw object
         info: Dictionary with diagnostic information
     """
-    from scipy.linalg import eigh
     from scipy.signal import butter, filtfilt
-    from scipy.stats import kurtosis as scipy_kurtosis
 
     picks = mne.pick_types(raw.info, eeg=True, meg=False)
-    ch_names = [raw.ch_names[i] for i in picks]
     data_original = raw.get_data(picks=picks).copy()
     n_channels, n_times = data_original.shape
     sfreq = raw.info["sfreq"]
 
+    # Get GEDAI version
+    gedai_version = "unknown"
+    if HAS_OFFICIAL_GEDAI:
+        try:
+            import gedai
+            gedai_version = getattr(gedai, "__version__", "0.1.0")
+        except Exception:
+            gedai_version = "0.1.0"
+
     info_dict = {
-        "method": "GEDAI",
+        "method": "Official_GEDAI",
+        "gedai_version": gedai_version,
+        "gedai_package": "neurotuning/gedai",
+        "gedai_repository": "https://github.com/neurotuning/gedai",
         "threshold": threshold,
         "n_channels": n_channels,
         "n_samples": n_times,
@@ -246,272 +325,338 @@ def _gedai_denoise(
         "n_components_rejected": 0,
         "variance_removed_pct": 0.0,
         "snr_improvement_db": 0.0,
-        "artifact_components": [],
+        "reference_type": "leadfield",
+        "official_gedai_used": False,
     }
 
-    LOGGER.info(f"GEDAI: Starting denoising ({n_channels} channels, {n_times/sfreq:.1f}s, threshold={threshold})")
+    # Print prominent banner for verification
+    print("\n" + "=" * 70)
+    print("OFFICIAL GEDAI DENOISING")
+    print("=" * 70)
+    print(f"  Package: gedai v{gedai_version}")
+    print(f"  Repository: https://github.com/neurotuning/gedai")
+    print(f"  Citation: Ros et al. (2025) bioRxiv 10.1101/2025.10.04.680449")
+    print(f"  Channels: {n_channels}, Duration: {n_times/sfreq:.1f}s")
+    print(f"  Threshold (noise_multiplier): {threshold}")
+    print(f"  Reference covariance: leadfield (physics-based)")
+    print("=" * 70)
+
+    LOGGER.info(f"GEDAI: Starting OFFICIAL denoising (v{gedai_version})")
+    LOGGER.info(f"GEDAI: {n_channels} channels, {n_times/sfreq:.1f}s, threshold={threshold}")
+    LOGGER.info(f"GEDAI: Using leadfield-based reference covariance")
+
+    if not HAS_OFFICIAL_GEDAI:
+        error_msg = "Official GEDAI package not installed! Install with: pip install gedai"
+        print(f"\n*** ERROR: {error_msg}")
+        print("*** Repository: https://github.com/neurotuning/gedai\n")
+        LOGGER.error(error_msg)
+        LOGGER.error("Repository: https://github.com/neurotuning/gedai")
+        info_dict["error"] = "Official GEDAI package not installed"
+        return raw, info_dict
 
     try:
-        # Step 1: Prepare data - remove mean and apply average reference
-        data = data_original - data_original.mean(axis=1, keepdims=True)
-        data = data - data.mean(axis=0, keepdims=True)
+        # Map threshold to official GEDAI parameters
+        # threshold 2 = aggressive (noise_multiplier=2.0)
+        # threshold 3 = balanced (noise_multiplier=3.0)
+        # threshold 4 = conservative (noise_multiplier=4.0)
+        noise_multiplier = float(threshold)
 
-        # Step 2: Compute brain-like reference covariance
-        # Use alpha-band filtered data as reference (8-13 Hz is mostly brain activity)
-        ref_cov = _compute_brain_reference_cov(data, sfreq, raw.info)
+        # Ensure proper montage for leadfield computation
+        print("  [1/5] Checking/setting electrode montage...")
+        LOGGER.info("GEDAI: Checking electrode positions for leadfield computation")
+        raw_for_gedai = raw.copy()
 
-        if ref_cov is None:
-            LOGGER.warning("GEDAI: Could not compute reference covariance, using spatial smoothness")
-            ref_cov = _compute_spatial_smoothness_cov(n_channels)
+        # Standard channel names that GEDAI's leadfield matrix supports
+        # (10-20, 10-10, 10-05 systems and common variants)
+        GEDAI_SUPPORTED_CHANNELS = {
+            # 10-20 system
+            'Fp1', 'Fp2', 'F7', 'F3', 'Fz', 'F4', 'F8', 'T3', 'C3', 'Cz', 'C4', 'T4',
+            'T5', 'P3', 'Pz', 'P4', 'T6', 'O1', 'O2', 'A1', 'A2',
+            # Extended 10-20 / 10-10 names
+            'AF7', 'AF3', 'AFz', 'AF4', 'AF8', 'F5', 'F1', 'F2', 'F6',
+            'FT7', 'FC5', 'FC3', 'FC1', 'FCz', 'FC2', 'FC4', 'FC6', 'FT8',
+            'T7', 'C5', 'C1', 'C2', 'C6', 'T8',
+            'TP7', 'CP5', 'CP3', 'CP1', 'CPz', 'CP2', 'CP4', 'CP6', 'TP8',
+            'P7', 'P5', 'P1', 'P2', 'P6', 'P8', 'P9', 'P10',
+            'PO7', 'PO3', 'POz', 'PO4', 'PO8',
+            'Oz', 'Iz', 'Fpz',
+            # BioSemi specific (alternative naming)
+            'EXG1', 'EXG2', 'EXG3', 'EXG4', 'EXG5', 'EXG6', 'EXG7', 'EXG8',
+        }
 
-        # Step 3: Compute data covariance
-        data_cov = np.cov(data)
+        # Check how many channels match GEDAI's supported names
+        eeg_picks = mne.pick_types(raw_for_gedai.info, eeg=True, meg=False)
+        eeg_ch_names = [raw_for_gedai.ch_names[i] for i in eeg_picks]
+        n_eeg = len(eeg_ch_names)
 
-        # Regularize both covariance matrices
-        reg = 1e-4 * np.trace(data_cov) / n_channels
-        data_cov += reg * np.eye(n_channels)
-        ref_cov += reg * np.eye(n_channels)
+        # Count channels with standard names (case-insensitive match)
+        n_standard = sum(1 for ch in eeg_ch_names if ch in GEDAI_SUPPORTED_CHANNELS or ch.upper() in GEDAI_SUPPORTED_CHANNELS)
+        standard_coverage = n_standard / n_eeg if n_eeg > 0 else 0
 
-        # Step 4: Generalized Eigenvalue Decomposition
-        # Solve: data_cov @ W = ref_cov @ W @ D
-        # Components with HIGH eigenvalues are brain-like
-        # Components with LOW eigenvalues are artifact-like
-        try:
-            eigenvalues, eigenvectors = eigh(data_cov, ref_cov)
-        except Exception as e:
-            LOGGER.warning(f"GEDAI: GEVD failed ({e}), using standard PCA")
-            eigenvalues, eigenvectors = np.linalg.eigh(data_cov)
+        # Also check position coverage
+        n_with_pos = sum(1 for ch in raw_for_gedai.info['chs'] if any(ch['loc'][:3]))
+        pos_coverage = n_with_pos / n_eeg if n_eeg > 0 else 0
 
-        # Sort by eigenvalue (ascending - we want to identify LOW eigenvalue components as artifacts)
-        idx = np.argsort(eigenvalues)
-        eigenvalues = eigenvalues[idx]
-        eigenvectors = eigenvectors[:, idx]
+        print(f"       Standard channel names: {n_standard}/{n_eeg} ({standard_coverage*100:.0f}%)")
+        print(f"       Channels with positions: {n_with_pos}/{n_eeg} ({pos_coverage*100:.0f}%)")
 
-        # Project data onto GEVD components
-        components = eigenvectors.T @ data
+        # Try to set montage if needed
+        if pos_coverage < 0.8:
+            print(f"       Attempting to set standard montage...")
+            LOGGER.info(f"GEDAI: Low position coverage ({pos_coverage*100:.0f}%), attempting to set standard montage")
+            _apply_montage(raw_for_gedai)
+            n_with_pos = sum(1 for ch in raw_for_gedai.info['chs'] if any(ch['loc'][:3]))
+            pos_coverage = n_with_pos / n_eeg if n_eeg > 0 else 0
 
-        # Step 5: Identify artifact components using multiple criteria
-        n_components = len(eigenvalues)
-        artifact_scores = np.zeros(n_components)
-        component_info = []
-
-        for i in range(n_components):
-            comp = components[i]
-
-            # Criterion 1: Low eigenvalue ratio (artifact has low brain-likeness)
-            # Normalize eigenvalues to 0-1 range
-            eig_normalized = (eigenvalues[i] - eigenvalues.min()) / (eigenvalues.max() - eigenvalues.min() + 1e-10)
-            eig_score = 1.0 - eig_normalized  # Low eigenvalue = high artifact score
-
-            # Criterion 2: High kurtosis (artifacts are spiky/non-Gaussian)
-            try:
-                kurt = scipy_kurtosis(comp, fisher=True)
-                kurt_score = np.clip(np.abs(kurt) / 10.0, 0, 1)  # Normalize to 0-1
-            except:
-                kurt_score = 0
-
-            # Criterion 3: High variance ratio (artifacts often dominate variance)
-            comp_var = np.var(comp)
-            mean_var = np.mean([np.var(components[j]) for j in range(n_components)])
-            var_ratio = comp_var / (mean_var + 1e-10)
-            var_score = np.clip((var_ratio - 1) / 5.0, 0, 1) if var_ratio > 1 else 0
-
-            # Criterion 4: Temporal discontinuities (artifacts have sudden jumps)
-            diff = np.diff(comp)
-            discontinuity = np.std(diff) / (np.std(comp) + 1e-10)
-            disc_score = np.clip((discontinuity - 1) / 2.0, 0, 1)
-
-            # Criterion 5: High-frequency content ratio (muscle artifacts are high-freq)
-            try:
-                # Compute power in high (>30Hz) vs low (<30Hz) frequencies
-                n_fft = min(2048, len(comp))
-                freqs = np.fft.rfftfreq(n_fft, 1/sfreq)
-                psd = np.abs(np.fft.rfft(comp[:n_fft]))**2
-                high_freq_mask = freqs > 30
-                low_freq_mask = (freqs > 1) & (freqs <= 30)
-                if np.sum(low_freq_mask) > 0 and np.sum(high_freq_mask) > 0:
-                    hf_ratio = np.mean(psd[high_freq_mask]) / (np.mean(psd[low_freq_mask]) + 1e-10)
-                    hf_score = np.clip(hf_ratio / 0.5, 0, 1)
-                else:
-                    hf_score = 0
-            except:
-                hf_score = 0
-
-            # Combined artifact score (weighted sum)
-            # Eigenvalue ratio is most important for GEDAI
-            artifact_scores[i] = (
-                0.35 * eig_score +      # Eigenvalue (brain-likeness)
-                0.25 * kurt_score +     # Kurtosis (non-Gaussianity)
-                0.15 * var_score +      # Variance ratio
-                0.10 * disc_score +     # Temporal discontinuity
-                0.15 * hf_score         # High-frequency content
+        # GEDAI requires standard channel names for leadfield lookup
+        if standard_coverage < 0.5:
+            error_msg = (
+                f"Insufficient standard channel names for GEDAI leadfield computation. "
+                f"Only {n_standard}/{n_eeg} channels have standard names ({standard_coverage*100:.0f}%). "
+                f"GEDAI requires standard 10-20/10-10 channel names (e.g., Fp1, F3, C3, P3, O1). "
+                f"Your channels: {eeg_ch_names[:5]}{'...' if len(eeg_ch_names) > 5 else ''}"
             )
+            print(f"       WARNING: {error_msg}")
+            LOGGER.warning(f"GEDAI: {error_msg}")
+            info_dict["warning"] = error_msg
+            info_dict["standard_coverage"] = standard_coverage
+            # Don't return - let GEDAI try and fail with a clear error
 
-            component_info.append({
-                "index": i,
-                "eigenvalue": float(eigenvalues[i]),
-                "eig_score": float(eig_score),
-                "kurtosis": float(kurt_score),
-                "variance_ratio": float(var_ratio),
-                "artifact_score": float(artifact_scores[i]),
-            })
+        LOGGER.info(f"GEDAI: Standard names: {n_standard}/{n_eeg} ({standard_coverage*100:.0f}%), Positions: {n_with_pos}/{n_eeg} ({pos_coverage*100:.0f}%)")
+        info_dict["montage_coverage"] = pos_coverage
+        info_dict["standard_name_coverage"] = standard_coverage
 
-        # Step 6: Threshold-based artifact detection
-        # Higher threshold = more conservative (reject less)
-        # threshold=2: aggressive, threshold=3: balanced, threshold=4: conservative
-        rejection_threshold = 0.3 + (threshold - 2) * 0.1  # Maps 2->0.3, 3->0.4, 4->0.5
+        # Handle dimension mismatch: exclude non-standard channels before GEDAI processing
+        # GEDAI's leadfield only covers standard 10-20/10-10 channels
+        non_standard_channels = [ch for ch in eeg_ch_names
+                                  if ch not in GEDAI_SUPPORTED_CHANNELS and ch.upper() not in GEDAI_SUPPORTED_CHANNELS]
+        standard_channels = [ch for ch in eeg_ch_names
+                             if ch in GEDAI_SUPPORTED_CHANNELS or ch.upper() in GEDAI_SUPPORTED_CHANNELS]
 
-        # Also use statistical threshold
-        median_score = np.median(artifact_scores)
-        mad = np.median(np.abs(artifact_scores - median_score))
-        if mad > 1e-10:
-            stat_threshold = median_score + (5 - threshold) * 1.4826 * mad
-        else:
-            stat_threshold = rejection_threshold
+        excluded_channels = []
+        if non_standard_channels and n_standard >= 19:
+            # Have enough standard channels to proceed - exclude non-standard ones
+            print(f"       Excluding {len(non_standard_channels)} non-standard channels for GEDAI: {non_standard_channels}")
+            LOGGER.info(f"GEDAI: Excluding non-standard channels: {non_standard_channels}")
+            excluded_channels = non_standard_channels
+            raw_for_gedai = raw_for_gedai.copy().pick(standard_channels)
+            info_dict["excluded_channels"] = excluded_channels
+            info_dict["n_channels_for_gedai"] = len(standard_channels)
+            print(f"       Processing {len(standard_channels)} standard channels")
+        elif non_standard_channels:
+            print(f"       WARNING: Found non-standard channels but only {n_standard} standard channels (need >=19)")
+            LOGGER.warning(f"GEDAI: Non-standard channels present but insufficient standard channels ({n_standard}<19)")
 
-        # Use the more conservative of the two thresholds
-        final_threshold = max(rejection_threshold, min(stat_threshold, 0.7))
+        # Ensure average reference (required by GEDAI)
+        print("  [2/5] Applying average reference...")
+        LOGGER.info("GEDAI: Applying average reference (required by official GEDAI)")
+        raw_for_gedai.set_eeg_reference("average", projection=False, verbose=False)
 
-        artifact_mask = artifact_scores > final_threshold
-        n_rejected = np.sum(artifact_mask)
+        # Initialize official GEDAI
+        print("  [3/5] Initializing official Gedai() class...")
+        LOGGER.info("GEDAI: Initializing official Gedai() from neurotuning/gedai")
+        gedai = Gedai()
 
-        # Limit rejection to at most 40% of components
-        max_reject = int(n_channels * 0.4)
-        if n_rejected > max_reject:
-            worst_indices = np.argsort(artifact_scores)[-max_reject:]
-            artifact_mask = np.zeros(n_components, dtype=bool)
-            artifact_mask[worst_indices] = True
-            n_rejected = max_reject
+        # Fit the model - try leadfield first, fall back to identity if needed
+        reference_cov_used = "leadfield"
+        fit_success = False
 
-        info_dict["n_components_rejected"] = int(n_rejected)
-        info_dict["artifact_components"] = [
-            component_info[i] for i in range(n_components) if artifact_mask[i]
-        ]
+        # First attempt: Try with leadfield-based reference covariance
+        print(f"  [4/5] Fitting GEDAI model (attempting reference_cov='leadfield')...")
+        LOGGER.info(f"GEDAI: Attempting fit with reference_cov='leadfield', noise_multiplier={noise_multiplier}")
 
-        LOGGER.info(f"GEDAI: Identified {n_rejected}/{n_components} artifact components (threshold={final_threshold:.2f})")
+        try:
+            gedai.fit_raw(
+                raw_for_gedai,
+                duration=2.0,                    # Epoch duration (seconds)
+                overlap=0.5,                     # 50% overlap
+                reject_by_annotation=False,      # Don't reject annotated segments
+                reference_cov="leadfield",       # Use leadfield-based reference (core GEDAI feature)
+                sensai_method="gridsearch",      # Grid search for optimal threshold
+                noise_multiplier=noise_multiplier,
+                verbose=True,
+            )
+            fit_success = True
+            reference_cov_used = "leadfield"
+            print("       Leadfield-based model fitted successfully!")
+            LOGGER.info("GEDAI: Leadfield-based model fitting complete")
 
-        # Step 7: Reconstruct clean signal
-        if n_rejected > 0:
-            # Zero out artifact components and reconstruct
-            components_clean = components.copy()
-            components_clean[artifact_mask] = 0
+        except (ValueError, RuntimeError) as e:
+            # Leadfield failed - try with identity reference
+            print(f"       Leadfield failed ({e}), trying identity reference...")
+            LOGGER.warning(f"GEDAI: Leadfield reference failed: {e}")
+            LOGGER.info("GEDAI: Falling back to identity reference covariance")
 
-            # Reconstruct using pseudo-inverse
-            W_inv = np.linalg.pinv(eigenvectors.T)
-            data_clean = W_inv @ components_clean
+            try:
+                gedai = Gedai()  # Reset
+                gedai.fit_raw(
+                    raw_for_gedai,
+                    duration=2.0,
+                    overlap=0.5,
+                    reject_by_annotation=False,
+                    reference_cov="identity",    # Fallback to identity
+                    sensai_method="gridsearch",
+                    noise_multiplier=noise_multiplier,
+                    verbose=True,
+                )
+                fit_success = True
+                reference_cov_used = "identity"
+                print("       Identity-based model fitted successfully!")
+                LOGGER.info("GEDAI: Identity-based model fitting complete (fallback)")
 
-            # Restore original mean
-            data_clean = data_clean + data_original.mean(axis=1, keepdims=True)
-        else:
-            LOGGER.info("GEDAI: No artifact components detected, data unchanged")
+            except Exception as e2:
+                # Identity also failed - try with data-driven approach
+                print(f"       Identity failed ({e2}), trying data-driven reference...")
+                LOGGER.warning(f"GEDAI: Identity reference failed: {e2}")
+
+                try:
+                    gedai = Gedai()  # Reset
+                    gedai.fit_raw(
+                        raw_for_gedai,
+                        duration=2.0,
+                        overlap=0.5,
+                        reject_by_annotation=False,
+                        reference_cov="data",    # Data-driven reference
+                        sensai_method="gridsearch",
+                        noise_multiplier=noise_multiplier,
+                        verbose=True,
+                    )
+                    fit_success = True
+                    reference_cov_used = "data"
+                    print("       Data-driven model fitted successfully!")
+                    LOGGER.info("GEDAI: Data-driven model fitting complete (fallback)")
+
+                except Exception as e3:
+                    raise RuntimeError(f"All GEDAI reference types failed: leadfield={e}, identity={e2}, data={e3}")
+
+        info_dict["reference_type"] = reference_cov_used
+        print(f"       Reference covariance used: {reference_cov_used}")
+        LOGGER.info(f"GEDAI: Reference covariance used: {reference_cov_used}")
+
+        # Transform/denoise the data
+        print("  [5/5] Transforming/denoising data...")
+        LOGGER.info("GEDAI: Transforming data (applying denoising)")
+        raw_cleaned = gedai.transform_raw(
+            raw_for_gedai,
+            duration=2.0,
+            overlap=0.5,
+            verbose=True
+        )
+        print("       Transform complete!")
+        LOGGER.info("GEDAI: Transform complete")
+
+        # Mark that official GEDAI was successfully used
+        info_dict["official_gedai_used"] = True
+
+        # Get cleaned data - handle case where channels were excluded
+        if excluded_channels:
+            # Get cleaned data for processed channels only
+            processed_picks = mne.pick_types(raw_cleaned.info, eeg=True, meg=False)
+            data_clean_partial = raw_cleaned.get_data(picks=processed_picks)
+
+            # Create full data array with original data for excluded channels
             data_clean = data_original.copy()
 
-        # Step 8: Compute quality metrics
+            # Map processed channel data back to original indices
+            for i, ch_name in enumerate(standard_channels):
+                # Find the index in the original channel list
+                original_idx = eeg_ch_names.index(ch_name)
+                data_clean[original_idx, :] = data_clean_partial[i, :]
+
+            print(f"       Merged {len(standard_channels)} processed channels with {len(excluded_channels)} excluded channels")
+            LOGGER.info(f"GEDAI: Merged processed ({len(standard_channels)}) and excluded ({len(excluded_channels)}) channels")
+        else:
+            # All channels were processed
+            data_clean = raw_cleaned.get_data(picks=mne.pick_types(raw_cleaned.info, eeg=True, meg=False))
+
+        # Compute quality metrics
         # Variance removed
         var_original = np.var(data_original)
+        var_clean = np.var(data_clean)
         var_removed = np.var(data_original - data_clean)
         info_dict["variance_removed_pct"] = float(100 * var_removed / (var_original + 1e-10))
+        info_dict["variance_original"] = float(var_original)
+        info_dict["variance_clean"] = float(var_clean)
 
         # SNR improvement estimate (using high-freq as noise proxy)
         try:
-            b_hf, a_hf = butter(4, 30 / (sfreq / 2), btype='high')
-            noise_before = np.std(filtfilt(b_hf, a_hf, data_original, axis=1))
-            noise_after = np.std(filtfilt(b_hf, a_hf, data_clean, axis=1))
-            signal_after = np.std(data_clean)
-            if noise_after > 0 and noise_before > 0:
-                snr_before = np.std(data_original) / noise_before
-                snr_after = signal_after / noise_after
-                info_dict["snr_improvement_db"] = float(20 * np.log10(snr_after / (snr_before + 1e-10)))
-            else:
-                info_dict["snr_improvement_db"] = 0.0
-        except:
-            info_dict["snr_improvement_db"] = 0.0
+            nyq = sfreq / 2
+            if nyq > 30:
+                b_hf, a_hf = butter(4, 30 / nyq, btype='high')
+                noise_before = np.std(filtfilt(b_hf, a_hf, data_original, axis=1))
+                noise_after = np.std(filtfilt(b_hf, a_hf, data_clean, axis=1))
+                signal_after = np.std(data_clean)
+                if noise_after > 0 and noise_before > 0:
+                    snr_before = np.std(data_original) / noise_before
+                    snr_after = signal_after / noise_after
+                    info_dict["snr_improvement_db"] = float(20 * np.log10(snr_after / (snr_before + 1e-10)))
+        except Exception:
+            pass
 
-        # SENSAI score: composite quality metric (0-100)
-        # Based on: variance reduction, SNR improvement, components rejected ratio
-        var_score = np.clip(info_dict["variance_removed_pct"] / 50, 0, 1) * 30  # Up to 30 points
-        snr_score = np.clip((info_dict["snr_improvement_db"] + 5) / 15, 0, 1) * 40  # Up to 40 points
-        reject_ratio = n_rejected / n_components if n_components > 0 else 0
-        reject_score = (1 - abs(reject_ratio - 0.2) / 0.2) * 30 if reject_ratio <= 0.4 else 15  # Optimal around 20%
+        # Extract SENSAI score from fitted model if available
+        if hasattr(gedai, 'sensai_score_') and gedai.sensai_score_ is not None:
+            # Official GEDAI SENSAI score (typically 0-1, convert to 0-100)
+            info_dict["sensai_score"] = float(gedai.sensai_score_ * 100)
+            info_dict["sensai_score_raw"] = float(gedai.sensai_score_)
+            print(f"       Official SENSAI score: {gedai.sensai_score_:.4f}")
+            LOGGER.info(f"GEDAI: Official SENSAI score from model: {gedai.sensai_score_:.4f}")
+        else:
+            # Compute approximate SENSAI score based on metrics
+            var_score = np.clip(info_dict["variance_removed_pct"] / 50, 0, 1) * 30
+            snr_score = np.clip((info_dict["snr_improvement_db"] + 5) / 15, 0, 1) * 40
+            quality_score = 30  # Base score for successful processing
+            info_dict["sensai_score"] = float(np.clip(var_score + snr_score + quality_score, 0, 100))
+            info_dict["sensai_score_computed"] = True
+            LOGGER.info("GEDAI: SENSAI score computed from metrics (not available from model)")
 
-        info_dict["sensai_score"] = float(np.clip(var_score + snr_score + reject_score, 0, 100))
+        # Get threshold from fitted model if available
+        if hasattr(gedai, 'threshold_') and gedai.threshold_ is not None:
+            info_dict["optimal_threshold"] = float(gedai.threshold_)
+            print(f"       Optimal threshold: {gedai.threshold_:.4f}")
+            LOGGER.info(f"GEDAI: Optimal threshold from model: {gedai.threshold_:.4f}")
 
-        # Update raw data
+        # Check for other useful attributes from the fitted model
+        for attr in ['n_components_', 'n_rejected_', 'eigenvalues_', 'sensai_scores_']:
+            if hasattr(gedai, attr):
+                val = getattr(gedai, attr)
+                if val is not None:
+                    if isinstance(val, (int, float)):
+                        info_dict[attr] = val
+                        LOGGER.info(f"GEDAI: {attr} = {val}")
+                    elif isinstance(val, np.ndarray) and val.size < 10:
+                        info_dict[attr] = val.tolist()
+
+        # Update raw data in place
         raw._data[picks] = data_clean
+
+        # Print summary
+        print("\n" + "-" * 70)
+        print("GEDAI DENOISING COMPLETE")
+        print("-" * 70)
+        print(f"  SENSAI Score: {info_dict['sensai_score']:.1f}%")
+        print(f"  Variance Removed: {info_dict['variance_removed_pct']:.1f}%")
+        print(f"  SNR Improvement: {info_dict['snr_improvement_db']:.1f} dB")
+        print(f"  Official GEDAI Used: {info_dict['official_gedai_used']}")
+        print("-" * 70 + "\n")
 
         LOGGER.info(
             f"GEDAI complete: SENSAI={info_dict['sensai_score']:.1f}%, "
             f"variance_removed={info_dict['variance_removed_pct']:.1f}%, "
             f"SNR_improvement={info_dict['snr_improvement_db']:.1f}dB, "
-            f"components_rejected={n_rejected}/{n_components}"
+            f"official_gedai_used=True"
         )
 
     except Exception as exc:
-        LOGGER.error(f"GEDAI denoising failed: {exc}")
+        error_msg = f"Official GEDAI denoising failed: {exc}"
+        print(f"\n*** ERROR: {error_msg}\n")
+        LOGGER.error(error_msg)
         import traceback
         traceback.print_exc()
+        info_dict["error"] = str(exc)
+        info_dict["official_gedai_used"] = False
+        info_dict["error"] = str(exc)
 
     return raw, info_dict
-
-
-def _compute_brain_reference_cov(
-    data: np.ndarray,
-    sfreq: float,
-    info: mne.Info,
-) -> Optional[np.ndarray]:
-    """
-    Compute brain-like reference covariance from alpha-band filtered data.
-
-    Alpha band (8-13 Hz) is predominantly neural activity with minimal artifact
-    contamination, making it a good reference for brain spatial patterns.
-    """
-    from scipy.signal import butter, filtfilt
-
-    n_channels, n_times = data.shape
-
-    try:
-        # Filter to alpha band (8-13 Hz) - predominantly brain activity
-        nyq = sfreq / 2
-        if nyq > 13:
-            b, a = butter(4, [8 / nyq, min(13, nyq - 1) / nyq], btype='band')
-            data_alpha = filtfilt(b, a, data, axis=1)
-
-            # Compute covariance of alpha-band data
-            ref_cov = np.cov(data_alpha)
-
-            # Normalize to unit trace
-            ref_cov = ref_cov / (np.trace(ref_cov) / n_channels + 1e-10)
-
-            LOGGER.info("GEDAI: Computed alpha-band reference covariance")
-            return ref_cov
-        else:
-            return None
-
-    except Exception as e:
-        LOGGER.warning(f"GEDAI: Alpha-band reference failed: {e}")
-        return None
-
-
-def _compute_spatial_smoothness_cov(n_channels: int) -> np.ndarray:
-    """
-    Compute a spatial smoothness prior covariance matrix.
-
-    This creates a covariance matrix that favors spatially smooth patterns,
-    which is characteristic of brain sources (due to volume conduction).
-    """
-    # Create a simple exponentially decaying covariance based on channel index
-    # This is a rough approximation - real implementation would use channel positions
-    cov = np.zeros((n_channels, n_channels))
-    for i in range(n_channels):
-        for j in range(n_channels):
-            # Exponential decay with distance (channel index difference)
-            dist = abs(i - j)
-            cov[i, j] = np.exp(-dist / (n_channels / 4))
-
-    # Normalize
-    cov = cov / (np.trace(cov) / n_channels)
-
-    return cov
 
 
 def preprocess_raw(
