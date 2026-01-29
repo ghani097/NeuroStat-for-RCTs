@@ -1,0 +1,22 @@
+{
+  "variance_reduction": 49.797188214876826,
+  "snr_improvement_db": 3.397504128129855,
+  "signal_quality": 80.39665727060571,
+  "band_power_changes": {
+    "delta": -68.86681166748812,
+    "theta": -58.37613427554951,
+    "alpha": -48.083325371275286,
+    "beta": -49.43966066135116
+  },
+  "ica_components_rejected": 0,
+  "bad_channels": [],
+  "asr_applied": false,
+  "iclabel_applied": false,
+  "gedai_applied": true,
+  "sensai_score": 80.39665727060571,
+  "gedai_components_rejected": 6,
+  "gedai_variance_removed": 49.797188214876826,
+  "gedai_snr_improvement": 3.397504128129855,
+  "gedai_threshold": 3.0,
+  "ica_components_total": 19
+}
