@@ -51,7 +51,7 @@ partition "**ICA**" #LightPink {
   :Reject Artifact Components;
 }
 
-:Save Preprocessed FIF;
+:Save Preprocessed SET;
 :Generate QC Plots;
 :Save Metrics JSON;
 

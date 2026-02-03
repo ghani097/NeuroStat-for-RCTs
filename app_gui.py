@@ -1,5 +1,5 @@
 """
-NeuroStat Pipeline GUI - PyQt5 Version
+NeuroStat Pipeline GUI - PyQt6 Version
 A modern, user-friendly interface for EEG preprocessing, source localization,
 connectivity analysis, and statistical testing.
 """
@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 from typing import Optional, Callable, Any
 
-from PyQt5.QtWidgets import (
+from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QGroupBox, QLabel, QLineEdit, QPushButton, QCheckBox, QTextEdit,
     QFileDialog, QMessageBox, QProgressBar, QFrame, QSplitter,
@@ -19,8 +19,8 @@ from PyQt5.QtWidgets import (
     QSizePolicy, QToolTip, QStatusBar, QRadioButton, QButtonGroup,
     QStackedWidget
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QSize
-from PyQt5.QtGui import QPixmap, QFont, QIcon, QPalette, QColor
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize
+from PyQt6.QtGui import QPixmap, QFont, QIcon, QPalette, QColor
 
 import json
 
@@ -500,7 +500,7 @@ class NeuroStatApp(QMainWindow):
         title_layout.setSpacing(4)
 
         title = QLabel("NeuroStat Pipeline")
-        title.setFont(QFont("Segoe UI", 24, QFont.Bold))
+        title.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
         title.setStyleSheet("color: #89b4fa;")
         title_layout.addWidget(title)
 
@@ -527,7 +527,7 @@ class NeuroStatApp(QMainWindow):
                 pixmap = QPixmap(str(p))
                 if not pixmap.isNull():
                     self.brain_pixmap = pixmap
-                    scaled = pixmap.scaled(100, 60, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                    scaled = pixmap.scaled(100, 60, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
                     self.brain_label.setPixmap(scaled)
                     return
 
@@ -540,7 +540,7 @@ class NeuroStatApp(QMainWindow):
         # Scroll area for settings
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
 
         content = QWidget()
         content_layout = QVBoxLayout(content)
@@ -948,7 +948,7 @@ class NeuroStatApp(QMainWindow):
         traces_tab = QWidget()
         traces_layout = QVBoxLayout(traces_tab)
         self.traces_label = QLabel("Run preprocessing to see EEG traces comparison")
-        self.traces_label.setAlignment(Qt.AlignCenter)
+        self.traces_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.traces_label.setStyleSheet("color: #6c7086;")
         self.traces_label.setMinimumHeight(180)
         self.traces_label.setScaledContents(False)
@@ -959,7 +959,7 @@ class NeuroStatApp(QMainWindow):
         psd_tab = QWidget()
         psd_layout = QVBoxLayout(psd_tab)
         self.psd_label = QLabel("Power spectrum comparison will appear here")
-        self.psd_label.setAlignment(Qt.AlignCenter)
+        self.psd_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.psd_label.setStyleSheet("color: #6c7086;")
         self.psd_label.setMinimumHeight(180)
         psd_layout.addWidget(self.psd_label)
@@ -969,7 +969,7 @@ class NeuroStatApp(QMainWindow):
         topo_tab = QWidget()
         topo_layout = QVBoxLayout(topo_tab)
         self.topo_label = QLabel("Scalp topography comparison will appear here")
-        self.topo_label.setAlignment(Qt.AlignCenter)
+        self.topo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.topo_label.setStyleSheet("color: #6c7086;")
         self.topo_label.setMinimumHeight(180)
         topo_layout.addWidget(self.topo_label)
@@ -979,7 +979,7 @@ class NeuroStatApp(QMainWindow):
         gfp_tab = QWidget()
         gfp_layout = QVBoxLayout(gfp_tab)
         self.gfp_label = QLabel("Global field power comparison will appear here")
-        self.gfp_label.setAlignment(Qt.AlignCenter)
+        self.gfp_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.gfp_label.setStyleSheet("color: #6c7086;")
         self.gfp_label.setMinimumHeight(180)
         gfp_layout.addWidget(self.gfp_label)
@@ -989,7 +989,7 @@ class NeuroStatApp(QMainWindow):
         pli_tab = QWidget()
         pli_layout = QVBoxLayout(pli_tab)
         self.pli_circle_label = QLabel("Run Source/Connectivity to see Alpha band PLI circle plot")
-        self.pli_circle_label.setAlignment(Qt.AlignCenter)
+        self.pli_circle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.pli_circle_label.setStyleSheet("color: #6c7086;")
         self.pli_circle_label.setMinimumHeight(180)
         pli_layout.addWidget(self.pli_circle_label)
@@ -1018,7 +1018,7 @@ class NeuroStatApp(QMainWindow):
 
         # Separator
         sep = QFrame()
-        sep.setFrameShape(QFrame.HLine)
+        sep.setFrameShape(QFrame.Shape.HLine)
         sep.setStyleSheet("background-color: #45475a;")
         metrics_layout.addWidget(sep)
 
@@ -1044,7 +1044,7 @@ class NeuroStatApp(QMainWindow):
 
         # Separator
         sep2 = QFrame()
-        sep2.setFrameShape(QFrame.HLine)
+        sep2.setFrameShape(QFrame.Shape.HLine)
         sep2.setStyleSheet("background-color: #45475a;")
         metrics_layout.addWidget(sep2)
 
@@ -1063,7 +1063,7 @@ class NeuroStatApp(QMainWindow):
 
         # Separator
         sep3 = QFrame()
-        sep3.setFrameShape(QFrame.HLine)
+        sep3.setFrameShape(QFrame.Shape.HLine)
         sep3.setStyleSheet("background-color: #45475a;")
         metrics_layout.addWidget(sep3)
 
@@ -1150,7 +1150,7 @@ class NeuroStatApp(QMainWindow):
         self.run_all_btn.setProperty("class", "success")
         self.run_all_btn.setMinimumWidth(200)
         self.run_all_btn.setMinimumHeight(44)
-        self.run_all_btn.setFont(QFont("Segoe UI", 12, QFont.Bold))
+        self.run_all_btn.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
         self.run_all_btn.clicked.connect(self._run_all)
         layout.addWidget(self.run_all_btn)
 
@@ -1447,8 +1447,8 @@ class NeuroStatApp(QMainWindow):
                 scaled = pixmap.scaled(
                     label.width() - 20 if label.width() > 40 else 600,
                     label.height() - 20 if label.height() > 40 else 250,
-                    Qt.KeepAspectRatio,
-                    Qt.SmoothTransformation
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation
                 )
                 label.setPixmap(scaled)
                 return
@@ -1588,7 +1588,7 @@ def launch_app() -> None:
     window = NeuroStatApp()
     window.show()
 
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":

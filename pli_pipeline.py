@@ -175,8 +175,13 @@ def ensure_subjects_dir(path: Optional[Path]) -> Path:
 
 
 def find_set_files(folder: Path) -> List[Path]:
-    """Return sorted list of EEGLAB .set files in folder (non-recursive)."""
-    files = sorted(Path(folder).glob("*.set"))
+    """Return sorted list of EEGLAB .set files in folder (non-recursive).
+
+    Excludes files ending with '_cleaned.set' to avoid reprocessing already cleaned data.
+    """
+    all_files = sorted(Path(folder).glob("*.set"))
+    # Exclude already cleaned files to prevent reprocessing
+    files = [f for f in all_files if not f.stem.endswith("_cleaned")]
     if not files:
         raise FileNotFoundError(f"No .set files found in {folder}")
     return files
@@ -1122,14 +1127,28 @@ def preprocess_file(
         except Exception as exc:
             LOGGER.warning("Diagnostics failed for %s: %s", file_path.name, exc)
 
-        # Save preprocessed raw
+        # Save preprocessed raw as FIF format (needed by downstream steps)
         fif_path = out_dir / "preprocessed_raw.fif"
         try:
             raw_after.save(fif_path, overwrite=True, verbose=False)
             summary["preprocessed_fif"] = str(fif_path)
+            if progress_cb:
+                progress_cb(f"Saved preprocessed FIF: {fif_path}")
         except Exception as exc:
             if progress_cb:
                 progress_cb(f"Failed to save preprocessed FIF for {file_path.name}: {exc}")
+
+        # Save preprocessed raw as EEGLAB .set format in the processed output folder
+        cleaned_set_name = f"{file_path.stem}_cleaned.set"
+        set_path = out_dir / cleaned_set_name
+        try:
+            raw_after.export(set_path, overwrite=True, verbose=False)
+            summary["preprocessed_set"] = str(set_path)
+            if progress_cb:
+                progress_cb(f"Saved cleaned SET: {set_path}")
+        except Exception as exc:
+            if progress_cb:
+                progress_cb(f"Failed to save preprocessed SET for {file_path.name}: {exc}")
 
         if progress_cb:
             progress_cb(f"Finished preprocessing {file_path.name}")

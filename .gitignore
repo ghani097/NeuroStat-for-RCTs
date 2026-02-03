@@ -1,1 +1,23 @@
+# Processed output folders
 processed/
+processed*/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environment
+venv/
+
+# Local/backup folders
+backup_local/
+LIFE_Data_UPD/
+
+# IDE/OS files
+.claude/
+desktop.ini
+*.DS_Store
+
+# Temporary files
+=2.6.0

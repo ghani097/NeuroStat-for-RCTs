@@ -10,6 +10,8 @@ matplotlib>=3.6.0
 # MNE-Python ecosystem
 mne>=1.9.0
 mne-connectivity>=0.5.0
+eeglabio>=0.1.0  # Required for exporting .set files
+nibabel>=5.0.0  # Required for source localization (reading FreeSurfer surfaces)
 
 # Official GEDAI package (leadfield-based EEG denoising)
 # Repository: https://github.com/neurotuning/gedai
