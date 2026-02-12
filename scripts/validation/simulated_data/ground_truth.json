@@ -1,0 +1,146 @@
+{
+  "description": "Ground truth for NeuroStat pipeline validation. Contains simulated EEG datasets with known connectivity patterns at different artifact severity levels.",
+  "generation_params": {
+    "sfreq": 250.0,
+    "duration_sec": 120.0,
+    "n_channels": 64,
+    "montage": "biosemi64",
+    "random_seed": 42
+  },
+  "frequency_bands": {
+    "delta": [
+      0.5,
+      4.0
+    ],
+    "theta": [
+      4.0,
+      8.0
+    ],
+    "alpha": [
+      8.0,
+      13.0
+    ],
+    "beta": [
+      13.0,
+      30.0
+    ],
+    "gamma": [
+      30.0,
+      45.0
+    ]
+  },
+  "connectivity_patterns": [
+    {
+      "name": "alpha_frontal_parietal",
+      "description": "Strong alpha coupling: frontal <-> parietal",
+      "region1_channels": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "region2_channels": [
+        19,
+        20,
+        21,
+        22
+      ],
+      "frequency_hz": 10.0,
+      "band": "alpha",
+      "expected_pli": 0.8,
+      "phase_lag_rad": 0.7853981633974483,
+      "coupling_strength": "strong"
+    },
+    {
+      "name": "beta_central_occipital",
+      "description": "Moderate beta coupling: central <-> occipital",
+      "region1_channels": [
+        11,
+        12,
+        48,
+        49
+      ],
+      "region2_channels": [
+        26,
+        28,
+        63
+      ],
+      "frequency_hz": 20.0,
+      "band": "beta",
+      "expected_pli": 0.5,
+      "phase_lag_rad": 1.0471975511965976,
+      "coupling_strength": "moderate"
+    },
+    {
+      "name": "theta_left_right_temporal",
+      "description": "Weak theta coupling: left temporal <-> right temporal",
+      "region1_channels": [
+        13,
+        14
+      ],
+      "region2_channels": [
+        50,
+        51
+      ],
+      "frequency_hz": 6.0,
+      "band": "theta",
+      "expected_pli": 0.3,
+      "phase_lag_rad": 0.5235987755982988,
+      "coupling_strength": "weak"
+    }
+  ],
+  "datasets": [
+    {
+      "filename": "clean_high_snr.set",
+      "artifact_level": "clean_high_snr",
+      "label": "Clean (SNR=10dB)",
+      "snr_db_target": 10.0,
+      "snr_db_actual": 10.0,
+      "snr_db_effective": 10.0,
+      "artifact_params": {
+        "blinks_per_min": 0,
+        "muscle_bursts_per_min": 0,
+        "line_noise_amplitude_uv": 0.0
+      }
+    },
+    {
+      "filename": "light_medium_snr.set",
+      "artifact_level": "light_medium_snr",
+      "label": "Light artifacts (SNR=5dB)",
+      "snr_db_target": 5.0,
+      "snr_db_actual": 5.0,
+      "snr_db_effective": 1.68,
+      "artifact_params": {
+        "blinks_per_min": 10,
+        "muscle_bursts_per_min": 5,
+        "line_noise_amplitude_uv": 2.0
+      }
+    },
+    {
+      "filename": "moderate_medium_snr.set",
+      "artifact_level": "moderate_medium_snr",
+      "label": "Moderate artifacts (SNR=5dB)",
+      "snr_db_target": 5.0,
+      "snr_db_actual": 5.0,
+      "snr_db_effective": -1.88,
+      "artifact_params": {
+        "blinks_per_min": 30,
+        "muscle_bursts_per_min": 15,
+        "line_noise_amplitude_uv": 5.0
+      }
+    },
+    {
+      "filename": "heavy_low_snr.set",
+      "artifact_level": "heavy_low_snr",
+      "label": "Heavy artifacts (SNR=2dB)",
+      "snr_db_target": 2.0,
+      "snr_db_actual": 2.0,
+      "snr_db_effective": -5.27,
+      "artifact_params": {
+        "blinks_per_min": 50,
+        "muscle_bursts_per_min": 30,
+        "line_noise_amplitude_uv": 10.0
+      }
+    }
+  ]
+}

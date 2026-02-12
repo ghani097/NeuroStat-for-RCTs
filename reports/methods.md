@@ -217,7 +217,7 @@ end note
 5. **Artifact Rejection:** Remove components exceeding threshold (max 40% of components)
 6. **Reconstruction:** Reconstruct clean signal using inverse projection
 
-**Parameters:**
+##### Parameters
 | Parameter | Default | Range | Description |
 |-----------|---------|-------|-------------|
 | Threshold | 3.0 | 2.0-4.0 | Artifact rejection sensitivity |

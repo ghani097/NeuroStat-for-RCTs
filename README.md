@@ -1,175 +1,196 @@
-# NeuroStat_Pipeline for RCTs
+# NeuroStat Pipeline for RCTs
 
-End-to-end EEG pipeline with a modern PyQt5 GUI featuring:
-- Study design selection by groups/sessions
-- Preprocessing with ASR and ICA+ICLabel (auto artifact removal)
-- Source localization on fsaverage, Desikan–Killiany label time courses
-- PLI connectivity per band, CSV + figures
-- Network table export to Excel
-- Cluster-based permutation statistics and classic edge-wise tests
-- Modern dark theme with non-blocking UI during processing
+End-to-end EEG processing pipeline for source-localised Phase Lag Index (PLI) connectivity analysis, designed for Randomised Controlled Trials. Features a modern PyQt5 GUI and two preprocessing pathways: **Traditional** (ASR + ICA/ICLabel) and **GEDAI** (Generalised Eigenvalue Decomposition-based Artifact Identification).
+
+### Key Features
+
+- Automated preprocessing with two selectable artifact removal methods
+- Source localisation on fsaverage with Desikan-Killiany atlas (68 regions)
+- PLI connectivity per band (delta, theta, alpha, beta, gamma) at sensor and source levels
+- CSV + Excel export, connectivity circle plots, heatmaps
+- Cluster-based permutation statistics and edge-wise tests
+- Validated on simulated EEG and PhysioNet public data
+- Modern dark-themed GUI with non-blocking processing
 
 Run the GUI: `python run_study_app.py`
 
-### MAIN GUI
+### Main GUI
 ![](FigsREAD/Fig1.png)
-
 
 ### Some Outputs and Features
 ![](FigsREAD/Fig2.png)
 
+
 ## Quick Start
 
-- Python 3.9+
-- Recommended packages:
-  - Core: `mne`, `numpy`, `scipy`, `pandas`, `matplotlib`, `openpyxl`
-  - Connectivity: `mne-connectivity` (or MNE 1.3+ with `mne.connectivity`)
-  - GUI: `PyQt5` (modern dark-themed interface)
-  - Optional speedups: `cupy` (GPU)
-  - Optional preprocessing: `mne-icalabel` (ICLabel), `asrpy` or `mne-asr` (ASR)
+**Requirements:** Python 3.9+
 
-Install example:
-- `pip install mne numpy scipy pandas matplotlib openpyxl mne-connectivity PyQt5`
-- Optional: `pip install mne-icalabel asrpy` (or `pip install mne-asr`)
-- Optional (GPU): `pip install cupy-cuda12x` (match your CUDA version)
+Core dependencies:
+```
+pip install mne numpy scipy pandas matplotlib openpyxl mne-connectivity PyQt5
+```
 
-Launch the app:
-- `python run_study_app.py`
+Optional (recommended):
+```
+pip install mne-icalabel asrpy gedai
+```
+
+Optional (GPU acceleration):
+```
+pip install cupy-cuda12x
+```
+
+Launch: `python run_study_app.py`
+
+
+## Preprocessing Pathways
+
+NeuroStat provides two artifact removal strategies. Users select the pathway best suited to their data:
+
+| Step | Traditional | GEDAI |
+|------|------------|-------|
+| Artifact removal | ASR (cutoff=20) + ICA/ICLabel | GEDAI (leadfield-based, noise_multiplier=3.0) |
+| Component classification | ICLabel CNN (7-class) | Not used (GEDAI handles spatial filtering) |
+| Best for | General-purpose, short recordings | Physics-informed cleaning, standard montages |
+
+Both pathways share: bad channel detection (z > 4.0), FIR bandpass (1-40 Hz), notch filter, average reference, and ICA fitting (FastICA).
+
+
+## Pipeline Architecture
+
+```
+Raw .set file
+    |
+    v
+[Montage assignment] --> auto-detect from 9 standard montages
+    |
+    v
+[Bad channel detection] --> z-score > 4.0, spherical spline interpolation
+    |
+    +--[GEDAI pathway]--------+--[Traditional pathway]---+
+    |  Leadfield-based GED    |  ASR + ICA/ICLabel       |
+    +-------------------------+-------------------------+
+    |
+    v
+[Bandpass 1-40 Hz] --> [Notch filter] --> [Average reference]
+    |
+    v
+[ICA fitting] --> FastICA, up to 25 components
+    |
+    v
+[Component rejection] --> ICLabel or EOG/muscle heuristic
+    |
+    +--[Sensor-level PLI]-----+--[Source-level PLI]------+
+    |  Epoch -> multitaper    |  MNE inverse -> 68 DK    |
+    |  PLI per band           |  regions -> PLI per band |
+    +-------------------------+-------------------------+
+    |
+    v
+[Statistics] --> Welch t-test, cluster permutation (1000 perms)
+```
+
+
+## Validation
+
+The pipeline was validated using two complementary strategies. Full details in [`docs/paper/methods.md`](docs/paper/methods.md) and [`docs/paper/results.md`](docs/paper/results.md).
+
+### Internal: Simulated EEG
+
+Simulated 64-channel EEG with three planted connectivity patterns (alpha, beta, theta) at four artifact severity levels. The Traditional pathway recovered planted PLI values with *r* = .77 (*p* = .004) and MAE = 0.15.
+
+### External: PhysioNet EEGBCI
+
+Replicated the well-established eyes-closed > eyes-open alpha connectivity effect using 20 subjects from the PhysioNet database. Both pathways detected the effect with large effect sizes (Traditional: *d* = 0.83; GEDAI: *d* = 0.89; both *p* < .002).
+
+### Run Validation
+
+```bash
+# Full internal validation (simulate + process + analyse)
+python scripts/validation/run_complete_validation.py
+
+# External validation (PhysioNet, downloads automatically)
+python scripts/validation/physionet_validation.py
+
+# GEDAI vs Traditional comparison on real data
+python scripts/validation/physionet_method_comparison.py
+```
 
 
 ## Expected Folder Layout
 
-Your raw EEGLAB recordings must be arranged as:
-- `base_folder/GroupA/Session1/*.set`
-- `base_folder/GroupB/Session1/*.set`
-- `base_folder/GroupA/Session2/*.set`
+Raw EEGLAB recordings must be arranged as:
+```
+base_folder/
+  GroupA/
+    Session1/*.set
+    Session2/*.set
+  GroupB/
+    Session1/*.set
+    Session2/*.set
+```
 
 You choose the base folder and comma-separated group/session names in the GUI.
 
 
-## GUI Overview
-
-The application features a modern PyQt5 interface with a dark theme (Catppuccin-inspired colors) and threaded execution for responsive UI during long-running operations.
-
-Column 1 — Study Design
-- Pick base folder (contains group folders)
-- Enter `Groups` and `Sessions` (comma-separated)
-- Choose `Output root` for generated files
-- Brain image scales with window size for a clear visual anchor
-
-Column 2 — Preprocessing
-- Set `Band-pass` (low/high) and `Notch` frequencies
-- Enable optional `ASR` denoising
-- Enable `ICLabel` with `Brain threshold` (default 0.85)
-- Click `Run Preprocessing`
-- See live status and a large "before/after EEG traces" preview
-- UI remains responsive during processing with real-time log updates
-
-Column 3 — Source / Connectivity / Stats
-- `Run Source Localization + Connectivity` — computes label time courses and PLI per band
-- `Get CSV for network analysis` — aggregates per-band CSVs into a single Excel file
-- `Run Cluster-based permutation` — runs edge-wise t-tests and cluster-based permutation using edge adjacency, saves figures and arrays
-
-Run All Panel (Bottom)
-- Select which pipeline steps to include: Preprocessing, Source + Connectivity, CSV Export, Statistics
-- Click `RUN ALL SELECTED STEPS` to execute the full pipeline sequentially
-- Progress bar shows current step and completion status
-- Errors are logged and reported at the end without stopping the entire pipeline
-
-Start the app via `run_study_app.py`. The GUI code is in `app_gui.py`; the pipeline code lives in `pli_pipeline.py`.
-
-
 ## Outputs
 
-For each recording (subject), outputs are saved under:
-- `output_root/<Group>/<Session>/<SubjectName>/`
+For each recording, outputs are saved under `output_root/<Group>/<Session>/<Subject>/`:
 
-Per-subject artifacts and diagnostics
-- `preprocessed_raw.fif` — preprocessed MNE Raw
-- `traces_before_after.png` — stacked EEG traces (before vs after)
-- `topomap_before_after.png` — RMS scalp maps (before/after)
-- `gfp_before_after.png` — Global Field Power (before/after)
-- `source_power.png` — DK atlas region-wise activity (RMS)
+**Per-subject:**
+- `preprocessed_raw.fif` -- preprocessed MNE Raw
+- `traces_before_after.png` -- EEG traces before vs after
+- `topomap_before_after.png` -- RMS scalp maps
+- `gfp_before_after.png` -- Global Field Power
+- `source_power.png` -- DK atlas region activity
 
-Connectivity per band (Desikan–Killiany labels)
-- `<band>_PLI.csv` — connectivity matrix
-- `<band>_PLI.png` — heatmap
-- `<band>_circle.png` — connectivity circle (if supported by your MNE install)
-- `mat files/<Subject>_<Group>_<Band>_PLI.mat` — MATLAB format export
+**Connectivity per band (Desikan-Killiany):**
+- `<band>_PLI.csv` -- connectivity matrix
+- `<band>_PLI.png` -- heatmap
+- `<band>_circle.png` -- connectivity circle
+- `mat files/<Subject>_<Group>_<Band>_PLI.mat` -- MATLAB export
 
-Study-level summary
-- `output_root/PLI_Table.xlsx` — rows: Participant, Group, Session, FrequencyTag, MeanPLI, Network
-
-Statistics
-- Classic edge-wise Welch t-tests (p<0.05, uncorrected):
-  - `output_root/stats/between_groups/<Session>_<Band>/...`
-  - `output_root/stats/within_groups/<Group>/<Band>/...`
-- Cluster-based permutation on edges (adjacency: edges share a node):
-  - `output_root/stats/cluster_perm/between_groups/<Session>_<Band>/...`
-  - `output_root/stats/cluster_perm/within_groups/<Group>/<Band>/...`
-  - Saves `.npz` arrays (t_matrix, significant_mask, p_values) and `.png` plots
+**Study-level:**
+- `output_root/PLI_Table.xlsx` -- summary table
+- `output_root/stats/` -- between/within group tests and cluster permutation results
 
 
-## Figures
+## GUI Overview
 
-The images in this section are illustrative screenshots stored in `FigsREAD/` solely for README documentation. The app does not save outputs there. Actual pipeline figures and files are written under `output_root/<Group>/<Session>/<Subject>/` and stats under `output_root/stats/...` as described above.
+The application features a modern PyQt5 interface with a dark theme and threaded execution.
 
-- App overview (3-column GUI)
-  ![GUI Overview](FigsREAD/NeuroStatPipeline_GUI.png)
+- **Column 1 -- Study Design:** Pick base folder, enter groups/sessions, choose output root
+- **Column 2 -- Preprocessing:** Set filter parameters, enable ASR/ICLabel/GEDAI, run preprocessing with live preview
+- **Column 3 -- Source/Connectivity/Stats:** Source localisation, CSV export, cluster permutation
 
-- Preprocessing — before/after EEG traces
-  ![Preprocessing Traces](FigsREAD/Preprocessing_Traces.png)
-
-- Connectivity — example circle or heatmap
-  ![Connectivity Figure](FigsREAD/Connectivity_Circle.png)
-
-- Excel network table
-  ![Excel Summary](FigsREAD/Excel_Summary.png)
-
-
-## Notes & Requirements
-
-- fsaverage and trans:
-  - The pipeline uses `fsaverage` for source localization. If `fsaverage` is not available locally and your machine is offline, set `PipelineConfig.source.subjects_dir` to a local FreeSurfer subjects directory containing `fsaverage`.
-  - Provide a valid head↔MRI transform in `PipelineConfig.source.trans_path` (e.g., `fsaverage-trans.fif`).
-
-- GPU (optional):
-  - If CuPy is detected and enabled, PLI can run on GPU for speed. Otherwise it falls back to CPU.
-
-- ICLabel and ASR (optional):
-  - ICLabel: `pip install mne-icalabel` (components not labeled as "brain" are rejected as artifacts)
-  - The pipeline uses extended infomax ICA for optimal ICLabel compatibility
-  - ASR: `pip install asrpy` (artifact subspace reconstruction for continuous data cleaning)
-
-
-## Troubleshooting
-
-- No stats saved:
-  - Make sure you ran “Run Source Localization + Connectivity” first and CSVs exist under `output_root/<Group>/<Session>/<Subject>/*_PLI.csv`.
-  - Verify you have at least two subjects per comparison condition.
-  - Check the app status messages; if no valid pairs/CSVs are found, the app logs this explicitly.
-
-- fsaverage fetch errors:
-  - Provide a local `subjects_dir` with `fsaverage` to avoid downloads.
-
-- Large files / memory:
-  - PLI is computed per band on label time courses. If memory is tight, consider fewer/shorter epochs (see `ConnectivityConfig.epoch_length`).
+**Run All Panel:** Select pipeline steps and execute sequentially with progress tracking.
 
 
 ## Development Layout
 
-- GUI: `app_gui.py`
-- App launcher: `run_study_app.py`
-- Pipeline core: `pli_pipeline.py`
-- Original script-based runner (if present): `run_study.py`
+| File | Purpose |
+|------|---------|
+| `pli_pipeline.py` | Pipeline core (preprocessing, source localisation, PLI, statistics) |
+| `app_gui.py` | PyQt5 GUI |
+| `run_study_app.py` | GUI launcher |
+| `run_study.py` | Script-based runner |
+| `scripts/validation/` | Validation scripts (simulated + PhysioNet) |
+| `docs/paper/` | Publication-ready Methods and Results sections |
 
-Key functions (pipeline stages):
-- Preprocessing: `preprocess_file()` and `run_preprocessing_for_design()`
-- Source + connectivity: `run_source_loc_and_connectivity()` and `run_source_and_connectivity_for_design()`
-- Table aggregation: `aggregate_csv_table()`
-- Statistics: `run_stats_for_design()` (classic + cluster-based permutation)
+
+## Notes
+
+- **fsaverage:** The pipeline uses `fsaverage` for source localisation. If offline, set `PipelineConfig.source.subjects_dir` to a local FreeSurfer subjects directory.
+- **GPU:** If CuPy is detected, PLI computation uses GPU. Otherwise falls back to CPU.
+- **GEDAI:** Requires `pip install gedai`. Uses leadfield-based reference covariance for physics-informed artifact removal (Ros et al., 2025).
+- **ICLabel:** Requires `pip install mne-icalabel`. Components classified as non-brain (probability < threshold) are rejected.
 
 
 ## Citation
 
-If you use this pipeline in publications, please cite MNE-Python and MNE-Connectivity, and any optional components you enable (ICLabel, ASR, CuPy).
+If you use this pipeline, please cite:
+
+- MNE-Python: Gramfort et al. (2013) *Frontiers in Neuroscience*
+- PLI: Stam et al. (2007) *Human Brain Mapping*
+- ICLabel: Pion-Tonachini et al. (2019) *NeuroImage*
+- GEDAI: Ros et al. (2025) *bioRxiv* 10.1101/2025.10.04.680449
+- PhysioNet: Goldberger et al. (2000) *Circulation*; Schalk et al. (2004) *IEEE TBME*

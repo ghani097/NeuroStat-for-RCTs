@@ -1,0 +1,13 @@
+Condition,Condition_Label,Pattern,Pattern_Label,Band,Expected_PLI,Raw_PLI,GEDAI_Sensor_PLI,GEDAI_Source_PLI,GEDAI_PLI,GEDAI_Error,Traditional_Sensor_PLI,Traditional_Source_PLI,Traditional_PLI,Traditional_Error,GEDAI_Better
+clean_high_snr,Clean,alpha_frontal_parietal,Strong Alpha (10 Hz),alpha,0.8000,0.8072,0.1537,0.1299,0.1537,0.6463,0.7440,0.1995,0.7440,0.0560,False
+clean_high_snr,Clean,beta_central_occipital,Moderate Beta (20 Hz),beta,0.5000,0.4661,0.1618,0.1377,0.1618,0.3382,0.3528,0.1959,0.3528,0.1472,False
+clean_high_snr,Clean,theta_left_right_temporal,Weak Theta (6 Hz),theta,0.3000,0.2258,0.1206,0.2117,0.1206,0.1794,0.2188,0.1938,0.2188,0.0812,False
+light_medium_snr,Light,alpha_frontal_parietal,Strong Alpha (10 Hz),alpha,0.8000,0.7036,0.1742,0.1260,0.1742,0.6258,0.2484,0.1136,0.2484,0.5516,False
+light_medium_snr,Light,beta_central_occipital,Moderate Beta (20 Hz),beta,0.5000,0.3696,0.1841,0.1412,0.1841,0.3159,0.3698,0.1758,0.3698,0.1302,False
+light_medium_snr,Light,theta_left_right_temporal,Weak Theta (6 Hz),theta,0.3000,0.2582,0.1216,0.1211,0.1216,0.1784,0.2303,0.2507,0.2303,0.0697,False
+moderate_medium_snr,Moderate,alpha_frontal_parietal,Strong Alpha (10 Hz),alpha,0.8000,0.7089,0.1792,0.1302,0.1792,0.6208,0.6790,0.2103,0.6790,0.1210,False
+moderate_medium_snr,Moderate,beta_central_occipital,Moderate Beta (20 Hz),beta,0.5000,0.3556,0.1584,0.1373,0.1584,0.3416,0.2979,0.1177,0.2979,0.2021,False
+moderate_medium_snr,Moderate,theta_left_right_temporal,Weak Theta (6 Hz),theta,0.3000,0.2672,0.1770,0.1084,0.1770,0.1230,0.2632,0.1433,0.2632,0.0368,False
+heavy_low_snr,Heavy,alpha_frontal_parietal,Strong Alpha (10 Hz),alpha,0.8000,0.5821,0.1660,0.1306,0.1660,0.6340,0.5858,0.2171,0.5858,0.2142,False
+heavy_low_snr,Heavy,beta_central_occipital,Moderate Beta (20 Hz),beta,0.5000,0.3442,0.1856,0.1237,0.1856,0.3144,0.3417,0.2425,0.3417,0.1583,False
+heavy_low_snr,Heavy,theta_left_right_temporal,Weak Theta (6 Hz),theta,0.3000,0.2637,0.1560,0.1123,0.1560,0.1440,0.2428,0.1892,0.2428,0.0572,False

@@ -1,0 +1,130 @@
+{
+  "analysis": "real_eeg_method_comparison",
+  "timestamp": "2026-02-12T17:26:34",
+  "subjects_requested": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20
+  ],
+  "methods": {
+    "Traditional": {
+      "n": 20,
+      "subjects": [
+        "S001",
+        "S002",
+        "S003",
+        "S004",
+        "S005",
+        "S006",
+        "S007",
+        "S008",
+        "S009",
+        "S010",
+        "S011",
+        "S012",
+        "S013",
+        "S014",
+        "S015",
+        "S016",
+        "S017",
+        "S018",
+        "S019",
+        "S020"
+      ],
+      "eo_mean": 0.22709171243069554,
+      "eo_std": 0.07081206120459509,
+      "ec_mean": 0.31956293706293704,
+      "ec_std": 0.09343593072912815,
+      "diff_mean": 0.09247122463224157,
+      "diff_std": 0.11145358082434051,
+      "t_stat": 3.7104585193405994,
+      "p_ttest": 0.0014839381688678084,
+      "w_stat": 25.0,
+      "p_wilcoxon": 0.001689910888671875,
+      "cohens_d": 0.8296837476938798,
+      "direction_ec_gt_eo": 17,
+      "direction_ec_lt_eo": 3,
+      "direction_ec_eq_eo": 0
+    },
+    "GEDAI": {
+      "n": 20,
+      "subjects": [
+        "S001",
+        "S002",
+        "S003",
+        "S004",
+        "S005",
+        "S006",
+        "S007",
+        "S008",
+        "S009",
+        "S010",
+        "S011",
+        "S012",
+        "S013",
+        "S014",
+        "S015",
+        "S016",
+        "S017",
+        "S018",
+        "S019",
+        "S020"
+      ],
+      "eo_mean": 0.22735609023744616,
+      "eo_std": 0.06066909855700853,
+      "ec_mean": 0.32605672105672107,
+      "ec_std": 0.09998536172803969,
+      "diff_mean": 0.09870063081927491,
+      "diff_std": 0.11066670206130565,
+      "t_stat": 3.988576795425752,
+      "p_ttest": 0.0007864483252290955,
+      "w_stat": 19.0,
+      "p_wilcoxon": 0.0005855560302734375,
+      "cohens_d": 0.8918728848050254,
+      "direction_ec_gt_eo": 17,
+      "direction_ec_lt_eo": 3,
+      "direction_ec_eq_eo": 0
+    }
+  },
+  "winner": {
+    "winner": "GEDAI",
+    "ranking": [
+      "GEDAI",
+      "Traditional"
+    ],
+    "criterion": "largest expected-direction paired effect (Cohen's d for EC-EO), tie-break by lower paired t-test p and more EC>EO subjects"
+  },
+  "endpoint": {
+    "band_hz": [
+      8.0,
+      13.0
+    ],
+    "epoch_length_s": 2.0,
+    "epoch_overlap": 0.5,
+    "contrast": "eyes_closed_minus_eyes_open",
+    "metric": "posterior_mean_sensor_PLI"
+  },
+  "artifacts": {
+    "csv": "E:\\GIT_HUB_MAIN\\NeuroStat-for-RCTs\\scripts\\validation\\physionet_data\\method_comparison\\physionet_method_subject_results.csv",
+    "json": "E:\\GIT_HUB_MAIN\\NeuroStat-for-RCTs\\scripts\\validation\\physionet_data\\method_comparison\\physionet_method_comparison_results.json",
+    "figure": "E:\\GIT_HUB_MAIN\\NeuroStat-for-RCTs\\scripts\\validation\\physionet_data\\method_comparison\\physionet_method_comparison.png"
+  },
+  "runtime_min": 19.52
+}

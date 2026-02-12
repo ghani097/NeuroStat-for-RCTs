@@ -9,6 +9,7 @@ __pycache__/
 
 # Virtual environment
 venv/
+.venv/
 
 # Local/backup folders
 backup_local/
@@ -21,3 +22,29 @@ desktop.ini
 
 # Temporary files
 =2.6.0
+
+# Generated documents and reports
+CLAUDE_OUTPUT_REPORT/
+PAPER_METHOD_RESULT.*
+convert_md_to_docx.py
+generate_diagrams.py
+methods_from_script.docx
+methods_report_converted.docx
+methods_report_final.docx
+reports/*.docx
+reports/*.pdf
+docs/paper/*.pdf
+
+# Validation generated data (large, regenerable via scripts)
+scripts/validation/simulated_data/*.set
+scripts/validation/simulated_data/*.fdt
+scripts/validation/validation_data/neurostat_outputs/
+scripts/validation/validation_data/raw_sensor_pli/
+scripts/validation/validation_data/batch_manifest.json
+scripts/validation/physionet_data/MNE-eegbci-data/
+scripts/validation/physionet_data/set_files/
+
+# Large EEG data files
+*.edf
+*.fif
+*.fdt
