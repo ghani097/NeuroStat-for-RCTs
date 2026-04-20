@@ -2060,7 +2060,7 @@ def process_file(file_path: Path, config: PipelineConfig, progress_cb: Optional[
         raw = mne.io.read_raw_eeglab(str(file_path), preload=False, verbose=False)
 
         # Preprocess (filter, notch, ref, ICA)
-        raw_before, raw_after, ica = preprocess_raw(raw, config.preprocessing)
+        raw_before, raw_after, ica, _ = preprocess_raw(raw, config.preprocessing)
 
         # Save diagnostic figures
         try:

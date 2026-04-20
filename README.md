@@ -11,6 +11,7 @@ End-to-end EEG processing pipeline for source-localised Phase Lag Index (PLI) co
 - Cluster-based permutation statistics and edge-wise tests
 - Validated on simulated EEG and PhysioNet public data
 - Modern dark-themed GUI with non-blocking processing
+- Script runner supports full pipeline mode or preprocessing-only export
 
 Run the GUI: `python run_study_app.py`
 
@@ -41,6 +42,16 @@ pip install cupy-cuda12x
 ```
 
 Launch: `python run_study_app.py`
+
+### Command-Line Runner
+
+`run_study.py` now supports both full-pipeline execution and a preprocessing-only mode for producing cleaned `.fif` / `.set` outputs without source localisation or PLI:
+
+```bash
+python run_study.py E:\path\to\base_folder
+python run_study.py E:\path\to\base_folder GroupA,GroupB pre,post processed gedai
+python run_study.py E:\path\to\base_folder GroupA,GroupB pre,post processed asr_ica --preprocessing-only
+```
 
 
 ## Preprocessing Pathways
@@ -172,7 +183,7 @@ The application features a modern PyQt5 interface with a dark theme and threaded
 | `pli_pipeline.py` | Pipeline core (preprocessing, source localisation, PLI, statistics) |
 | `app_gui.py` | PyQt5 GUI |
 | `run_study_app.py` | GUI launcher |
-| `run_study.py` | Script-based runner |
+| `run_study.py` | Script-based runner with `asr_ica` / `gedai` selection and `--preprocessing-only` mode |
 | `scripts/validation/` | Validation scripts (simulated + PhysioNet) |
 | `docs/paper/` | Publication-ready Methods and Results sections |
 
