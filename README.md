@@ -198,10 +198,4 @@ The application features a modern PyQt5 interface with a dark theme and threaded
 
 ## Citation
 
-If you use this pipeline, please cite:
-
-- MNE-Python: Gramfort et al. (2013) *Frontiers in Neuroscience*
-- PLI: Stam et al. (2007) *Human Brain Mapping*
-- ICLabel: Pion-Tonachini et al. (2019) *NeuroImage*
-- GEDAI: Ros et al. (2025) *bioRxiv* 10.1101/2025.10.04.680449
-- PhysioNet: Goldberger et al. (2000) *Circulation*; Schalk et al. (2004) *IEEE TBME*
+Publication is underprocess.
