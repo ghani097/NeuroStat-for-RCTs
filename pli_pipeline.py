@@ -867,6 +867,16 @@ def preprocess_raw(
             if ic_probs is not None:
                 ic_probs = np.array(ic_probs)
                 LOGGER.info(f"ICLabel: probabilities shape = {ic_probs.shape}")
+                if ic_labels is not None:
+                    ic_labels = [str(label) for label in ic_labels]
+                    class_counts = {
+                        label: int(ic_labels.count(label))
+                        for label in sorted(set(ic_labels))
+                    }
+                    preproc_info["iclabel_labels"] = ic_labels
+                    preproc_info["iclabel_class_counts"] = class_counts
+                preproc_info["iclabel_probabilities"] = ic_probs.tolist()
+                preproc_info["iclabel_brain_threshold"] = thr
 
                 for idx in range(ica.n_components_):
                     try:
@@ -925,6 +935,7 @@ def preprocess_raw(
     # Apply ICA
     ica.exclude = list(sorted(set(excluded)))
     preproc_info["ica_excluded"] = len(ica.exclude)
+    preproc_info["ica_excluded_indices"] = list(ica.exclude)
 
     if ica.exclude:
         ica.apply(raw)
