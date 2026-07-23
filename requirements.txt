@@ -24,6 +24,7 @@ meegkit>=0.1.0
 
 # ICA component classification
 mne-icalabel>=0.4
+torch>=2.0.0  # Required by ICLabel runtime
 
 # Wavelet processing (GEDAI dependency)
 pywavelets>=1.4.0

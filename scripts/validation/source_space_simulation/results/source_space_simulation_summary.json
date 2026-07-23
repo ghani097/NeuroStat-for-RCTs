@@ -1,0 +1,76 @@
+{
+  "analysis": "source_space_simulation",
+  "timestamp": "2026-05-01T21:39:54",
+  "runtime_min": 3.14,
+  "random_seed": 42,
+  "n_repeats": 20,
+  "subjects_dir": "C:\\Users\\Usman.Ghani\\mne_data\\MNE-fsaverage-data",
+  "source_spacing": "ico3",
+  "truth": {
+    "planted_pair": [
+      "lateraloccipital-lh",
+      "lateraloccipital-rh"
+    ],
+    "frequency_hz": 10.0,
+    "phase_lag_rad": 1.0471975511965976,
+    "duration_s": 60.0,
+    "sfreq_hz": 160.0,
+    "n_vertices_label_a": 26,
+    "n_vertices_label_b": 22,
+    "source_signal_amplitude_au": 2.0,
+    "source_background_noise_scale_au": 0.005,
+    "approx_source_snr_db": 52.04119982655925
+  },
+  "conditions": [
+    {
+      "name": "clean",
+      "sensor_noise": 0.03,
+      "blink_amp": 0.0,
+      "muscle_amp": 0.0
+    },
+    {
+      "name": "light_artifact",
+      "sensor_noise": 0.08,
+      "blink_amp": 0.2,
+      "muscle_amp": 0.08
+    },
+    {
+      "name": "moderate_artifact",
+      "sensor_noise": 0.12,
+      "blink_amp": 0.35,
+      "muscle_amp": 0.16
+    }
+  ],
+  "control_edges": {
+    "control_labels": [
+      "rostralmiddlefrontal-lh",
+      "rostralmiddlefrontal-rh",
+      "precentral-lh",
+      "precentral-rh"
+    ],
+    "n_control_edges": 8,
+    "distance_matching": "not applied; controls were anterior/non-posterior Desikan-Killiany parcels"
+  },
+  "summary": {
+    "mean_planted_pli": 0.31301587301587286,
+    "mean_control_pli": 0.2078571428571429,
+    "mean_planted_minus_control": 0.10515873015873006,
+    "all_planted_edges_top_5_percent": false,
+    "shapiro_planted_minus_control_p": 0.2024469172829435,
+    "n_runs": 60,
+    "n_repeats_per_condition": 20,
+    "mean_planted_minus_control_ci95": [
+      0.09585118098163696,
+      0.11446627933582317
+    ],
+    "one_sample_t_vs_zero": 22.60768425818495,
+    "one_sample_t_p": 9.48398023113544e-31,
+    "cohens_d_vs_zero": 2.9186394876088633
+  },
+  "artifacts": {
+    "csv": "D:\\GIT_HUB_MAIN\\NeuroStat-for-RCTs\\scripts\\validation\\source_space_simulation\\results\\source_space_simulation_results.csv",
+    "summary_csv": "D:\\GIT_HUB_MAIN\\NeuroStat-for-RCTs\\scripts\\validation\\source_space_simulation\\results\\source_space_simulation_summary_by_condition.csv",
+    "figure": "D:\\GIT_HUB_MAIN\\NeuroStat-for-RCTs\\scripts\\validation\\source_space_simulation\\results\\source_space_simulation_recovery.png",
+    "json": "D:\\GIT_HUB_MAIN\\NeuroStat-for-RCTs\\scripts\\validation\\source_space_simulation\\results\\source_space_simulation_summary.json"
+  }
+}

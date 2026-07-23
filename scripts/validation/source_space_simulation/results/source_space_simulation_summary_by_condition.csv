@@ -1,0 +1,4 @@
+condition,n_repeats,planted_pli_mean,planted_pli_ci95_low,planted_pli_ci95_high,control_mean_pli_mean,control_mean_pli_ci95_low,control_mean_pli_ci95_high,planted_minus_control_mean,planted_minus_control_ci95_low,planted_minus_control_ci95_high,planted_edge_percentile_mean,planted_edge_percentile_ci95_low,planted_edge_percentile_ci95_high,planted_minus_control_t,planted_minus_control_p,planted_minus_control_d,all_planted_edges_top_5_percent
+clean,20,0.297460,0.283783,0.311138,0.207698,0.200142,0.215255,0.089762,0.074154,0.105369,91.363038,88.350238,94.375838,12.037473,0.000000,2.691661,False
+light_artifact,20,0.316825,0.301448,0.332203,0.208492,0.201139,0.215845,0.108333,0.090829,0.125838,89.091308,84.497422,93.685194,12.953704,0.000000,2.896536,False
+moderate_artifact,20,0.324762,0.312710,0.336814,0.207381,0.201657,0.213105,0.117381,0.101839,0.132923,89.563213,85.997711,93.128716,15.807420,0.000000,3.534647,False
