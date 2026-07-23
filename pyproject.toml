@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neurostat-rcts"
+version = "2.0.0a1"
+description = "Staged EEG analysis tools for randomised controlled trials"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.23.0",
+    "scipy>=1.9.0",
+    "pandas>=1.5.0",
+    "matplotlib>=3.6.0",
+    "mne>=1.9.0",
+    "mne-connectivity>=0.5.0",
+    "eeglabio>=0.1.0",
+    "nibabel>=5.0.0",
+    "gedai>=0.1.0",
+    "asrpy>=0.0.3",
+    "meegkit>=0.1.0",
+    "mne-icalabel>=0.4",
+    "pywavelets>=1.4.0",
+    "scikit-learn>=1.2.0",
+    "h5py>=3.8.0",
+    "joblib>=1.2.0",
+    "tqdm>=4.65.0",
+    "PyYAML",
+]
+
+[project.optional-dependencies]
+gui = ["PyQt5>=5.15.0"]
+dev = ["build>=1.0", "pytest>=8.0"]
+
+[project.scripts]
+neurostat = "neurostat.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = ["--import-mode=importlib"]

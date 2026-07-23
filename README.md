@@ -187,6 +187,14 @@ The application features a modern PyQt5 interface with a dark theme and threaded
 | `scripts/validation/` | Validation scripts (simulated + PhysioNet) |
 | `docs/paper/` | Publication-ready Methods and Results sections |
 
+## NeuroStat v2 foundation
+
+The installable v2 package is being introduced alongside the supported v1 launchers. Its staged architecture and compatibility boundary are described in [the v2 architecture notes](docs/v2/architecture.md).
+
+```bash
+python -m neurostat --version
+```
+
 
 ## Notes
 
