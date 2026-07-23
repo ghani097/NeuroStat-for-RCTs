@@ -86,6 +86,8 @@ class StageResult:
         artifacts = tuple(self.artifacts)
         if not all(isinstance(artifact, ArtifactRef) for artifact in artifacts):
             raise TypeError("artifacts must contain ArtifactRef values")
+        if self.message is not None and not isinstance(self.message, str):
+            raise TypeError("message must be a string or None")
         object.__setattr__(self, "artifacts", artifacts)
 
 
@@ -101,6 +103,12 @@ class ProgressEvent:
     def __post_init__(self) -> None:
         if not isinstance(self.stage, StageName):
             raise TypeError("stage must be a StageName")
+        if not isinstance(self.message, str):
+            raise TypeError("message must be a string")
+        for field_name in ("completed", "total"):
+            value = getattr(self, field_name)
+            if value is not None and type(value) is not int:
+                raise TypeError(f"{field_name} must be an int or None")
         if self.completed is not None and self.completed < 0:
             raise ValueError("completed must be nonnegative")
         if self.total is not None and self.total < 0:

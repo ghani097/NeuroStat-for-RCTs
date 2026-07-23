@@ -53,12 +53,29 @@ def test_stage_result_converts_artifacts_to_an_immutable_tuple() -> None:
     assert result.artifacts == (ArtifactRef("matrix", Path("matrix.csv")),)
 
 
+def test_stage_result_rejects_a_non_string_message() -> None:
+    with pytest.raises(TypeError, match="message"):
+        StageResult(StageName.CONNECTIVITY, StageState.SUCCEEDED, message=1)  # type: ignore[arg-type]
+
+
 @pytest.mark.parametrize(("completed", "total", "message"), [(-1, None, "completed"), (None, -1, "total"), (3, 2, "cannot exceed")])
 def test_progress_event_rejects_invalid_counts(completed: int | None, total: int | None, message: str) -> None:
     with pytest.raises(ValueError, match=message):
         ProgressEvent(StageName.INGEST, "reading", completed, total)
 
 
+@pytest.mark.parametrize(("completed", "total"), [(1.5, None), (True, None), (None, 1.5), (None, False)])
+def test_progress_event_rejects_non_integer_counts(completed: object, total: object) -> None:
+    with pytest.raises(TypeError, match="int"):
+        ProgressEvent(StageName.INGEST, "reading", completed, total)  # type: ignore[arg-type]
+
+
+def test_progress_event_rejects_a_non_string_message() -> None:
+    with pytest.raises(TypeError, match="message"):
+        ProgressEvent(StageName.INGEST, 1)  # type: ignore[arg-type]
+
+
 def test_progress_event_allows_unknown_or_valid_progress() -> None:
     assert ProgressEvent(StageName.INGEST, "reading") == ProgressEvent(StageName.INGEST, "reading")
+    assert ProgressEvent(StageName.INGEST, "reading", 0, 0).completed == 0
     assert ProgressEvent(StageName.INGEST, "reading", 2, 2).total == 2
