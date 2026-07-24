@@ -93,9 +93,9 @@ def test_fieldtrip_square_orientation_electrode_mapping_and_trialinfo(tmp_path: 
         assert file["events"].shape == (1, 1)
 
 
-@pytest.mark.parametrize("pnts", [0, -1, 2.5])
-def test_fieldtrip_invalid_pnts_and_logical_orientation_rejected(tmp_path: Path, pnts: float) -> None:
-    source = tmp_path / f"pnts-{pnts}.mat"; _v73(source, concatenated=True)
+@pytest.mark.parametrize(("pnts", "name"), [(0, "zero"), (-1, "negative"), (2.5, "fraction"), (True, "bool"), (np.bool_(True), "npbool"), ("not-a-number", "text"), (np.array([4, 4]), "vector")])
+def test_fieldtrip_invalid_pnts_and_logical_orientation_rejected(tmp_path: Path, pnts: float, name: str) -> None:
+    source = tmp_path / f"pnts-{name}.mat"; _v73(source, concatenated=True)
     with h5py.File(source, "r+") as file: del file["pnts"]; file.create_dataset("pnts", data=pnts)
     with pytest.raises(IngestError, match="pnts"):
         ingest_project(_project(tmp_path, source, "epochs"))

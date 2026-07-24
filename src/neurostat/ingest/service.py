@@ -192,6 +192,7 @@ def _h5_value(file: Any, value: Any) -> Any:
     if isinstance(value, h5py.Group): return {name: _h5_value(file, value[name]) for name in value.keys()}
     if isinstance(value, h5py.Dataset):
         raw = value[()]
+        if isinstance(raw, bytes): return raw
         if raw.dtype == h5py.ref_dtype:
             return [_h5_value(file, ref) for ref in raw.ravel(order="F")]
         matlab_class = value.attrs.get("MATLAB_class", b"")
@@ -246,7 +247,11 @@ def _fieldtrip(record: ProjectRecord, bundle: SourceBundle) -> CleanRecording:
     elif len(arrays) == 1:
         n = record.samples_per_epoch
         if n is None and "pnts" in raw:
-            candidate = float(np.asarray(raw["pnts"]).squeeze())
+            pnts_value = np.asarray(raw["pnts"])
+            if isinstance(raw["pnts"], (bool, np.bool_)) or pnts_value.ndim != 0:
+                raise IngestError("FieldTrip pnts must be a scalar positive finite integer")
+            try: candidate = float(pnts_value.item())
+            except (TypeError, ValueError): raise IngestError("FieldTrip pnts must be a numeric scalar") from None
             if not np.isfinite(candidate) or candidate <= 0 or not candidate.is_integer(): raise IngestError("FieldTrip pnts must be a positive finite integer")
             n = int(candidate)
         if n:
