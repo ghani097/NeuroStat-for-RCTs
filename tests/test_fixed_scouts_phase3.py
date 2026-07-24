@@ -17,6 +17,7 @@ from neurostat.connectivity import ConnectivityError, run_connectivity
 from neurostat.contracts import StageName
 from neurostat.scouts import ScoutError, run_scouts
 from neurostat.scouts.fixed import load_operator
+from neurostat.scouts.fixed import project_fixed
 from neurostat.analysis_profiles import parse_analysis_profile
 from neurostat.project import load_project
 
@@ -155,6 +156,28 @@ def test_v73_operator_axes_are_undone_only_for_matlab_hdf5(tmp_path: Path) -> No
     np.testing.assert_array_equal(load_operator(config), operator)
 
 
+def test_fixed_operator_route_rejects_raw_in_service_and_backend(tmp_path: Path) -> None:
+    project_file, input_data, _ = _setup(tmp_path)
+    raw_path = tmp_path / "clean-raw.fif"
+    mne.io.RawArray(
+        input_data[0],
+        mne.create_info(["A", "B"], 128.0, "eeg"),
+        verbose="ERROR",
+    ).save(raw_path, overwrite=True, verbose="ERROR")
+    project_file.write_text(
+        project_file.read_text(encoding="utf-8")
+        .replace("data_kind: epochs", "data_kind: raw")
+        .replace("path: clean-epo.fif", "path: clean-raw.fif"),
+        encoding="utf-8",
+    )
+    ingest = ingest_project(project_file)
+    with pytest.raises(ScoutError, match="requires data_kind epochs"):
+        run_scouts(project_file, ingest)
+    config = parse_analysis_profile(load_project(project_file), "sep").source
+    with pytest.raises(ScoutError, match="retained epochs"):
+        project_fixed(ingest.records[0], config)
+
+
 def test_fixed_ingest_scout_connectivity_pipeline_is_real_resumable_and_integrity_checked(tmp_path: Path) -> None:
     project_file, _, _ = _setup(tmp_path)
     events = []
@@ -173,6 +196,26 @@ def test_fixed_ingest_scout_connectivity_pipeline_is_real_resumable_and_integrit
         file["matrix"][0, 1, 0] += 0.01
     with pytest.raises(ConnectivityError, match="symmetric|payload digest"):
         run_connectivity(project_file, scouts)
+
+
+def test_connectivity_service_passes_hdf5_dataset_without_full_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import neurostat.connectivity.service as service
+    from neurostat.connectivity.methods import evoked_average_hilbert_pli as real_kernel
+
+    project_file, _, _ = _setup(tmp_path)
+    ingest = ingest_project(project_file)
+    scouts = run_scouts(project_file, ingest)
+    observed: dict[str, bool] = {}
+
+    def guarded_kernel(values, sfreq, config):
+        observed["dataset"] = isinstance(values, h5py.Dataset)
+        return real_kernel(values, sfreq, config)
+
+    monkeypatch.setattr(service, "evoked_average_hilbert_pli", guarded_kernel)
+    run_connectivity(project_file, scouts)
+    assert observed == {"dataset": True}
 
 
 def test_cli_fixed_pipeline_json_and_invalid_profile_error(tmp_path: Path) -> None:

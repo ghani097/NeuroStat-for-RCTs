@@ -392,7 +392,11 @@ def parse_analysis_profile(project: CleanProject, name: str) -> AnalysisProfile:
             inverse_method=_choice(source_raw.get("inverse_method", "MNE"), f"{prefix}.source.inverse_method", {"MNE", "dSPM", "sLORETA", "eLORETA"}),
             snr=_number(source_raw.get("snr", 3.0), f"{prefix}.source.snr", minimum=1e-12),
             pick_orientation=_choice(source_raw.get("pick_orientation", "normal"), f"{prefix}.source.pick_orientation", {"normal", "none"}),
-            label_mode=_choice(source_raw.get("label_mode", "pca_flip"), f"{prefix}.source.label_mode", {"mean", "mean_flip", "pca_flip", "max"}),
+            label_mode=_choice(
+                source_raw.get("label_mode", "mean_flip"),
+                f"{prefix}.source.label_mode",
+                {"mean", "mean_flip"},
+            ),
             chunk_samples=_integer(source_raw.get("chunk_samples", 16384), f"{prefix}.source.chunk_samples"),
             output_chunk_samples=_integer(source_raw.get("output_chunk_samples", 4096), f"{prefix}.source.output_chunk_samples"),
             depth=_number(source_raw.get("depth", 0.8), f"{prefix}.source.depth", minimum=0.0, maximum=1.0),

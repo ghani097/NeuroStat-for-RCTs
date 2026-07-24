@@ -142,6 +142,16 @@ def run_scouts(
         for completed, record in enumerate(project.records, 1):
             profile = profiles[record.analysis_profile]
             config = profile.source
+            if isinstance(config, FixedLinearSource) and record.data_kind != "epochs":
+                raise ScoutError(f"{record.record_id}: fixed_linear_operator requires data_kind epochs")
+            if isinstance(config, MNEFsaverageSource):
+                if record.data_kind != "raw":
+                    raise ScoutError(f"{record.record_id}: mne_fsaverage requires data_kind raw")
+                if record.format not in {"set", "fif"}:
+                    raise ScoutError(
+                        f"{record.record_id}: mne_fsaverage requires an MNE-ingested SET/FIF recording "
+                        "because FieldTrip coordinate units are not canonicalized"
+                    )
             canonical_entry = ingest_entries[record.record_id]
             canonical_path = Path(canonical_entry["path"]).resolve()
             target = run_dir / "scouts" / "records" / f"{record.record_id}.h5"
@@ -171,8 +181,6 @@ def run_scouts(
                 if isinstance(config, FixedLinearSource):
                     stream = project_fixed(canonical_path, config)
                 elif isinstance(config, MNEFsaverageSource):
-                    if record.data_kind != "raw":
-                        raise ScoutError(f"{record.record_id}: mne_fsaverage requires data_kind raw")
                     stream = projector.project(canonical_path, config)
                 else:  # pragma: no cover - exhaustive profile contract
                     raise ScoutError(f"unsupported source backend: {config}")

@@ -10,6 +10,8 @@ import numpy as np
 
 from ..analysis_profiles import Band, ContinuousMultitaperConnectivity, EvokedHilbertConnectivity
 
+_PLI_PAIR_BLOCK_SAMPLES = 65536
+
 
 class ConnectivityError(RuntimeError):
     """Raised for invalid connectivity input, computation, or artifacts."""
@@ -49,7 +51,7 @@ def _validate_bands(bands: Sequence[Band], sfreq: float) -> None:
 
 
 def evoked_average_hilbert_pli(
-    scouts: np.ndarray,
+    scouts: Any,
     sfreq: float,
     config: EvokedHilbertConnectivity,
 ) -> ConnectivityValues:
@@ -57,9 +59,13 @@ def evoked_average_hilbert_pli(
     import scipy
     from scipy.signal import butter, hilbert, sosfiltfilt
 
-    values = np.asarray(scouts, dtype=np.float64)
-    if values.ndim != 2 or not values.shape[0] or not values.shape[1] or not np.isfinite(values).all():
+    try:
+        shape = tuple(int(value) for value in scouts.shape)
+    except (AttributeError, TypeError, ValueError):
+        raise ConnectivityError("evoked scouts must expose a nodes x samples shape") from None
+    if len(shape) != 2 or not shape[0] or not shape[1]:
         raise ConnectivityError("evoked scouts must be a finite nodes x samples matrix")
+    nodes, samples = shape
     _validate_bands(config.bands, sfreq)
     matrices: list[np.ndarray] = []
     designs: list[np.ndarray] = []
@@ -72,11 +78,27 @@ def evoked_average_hilbert_pli(
             fs=sfreq,
             output="sos",
         )
-        filtered = sosfiltfilt(sos, values, axis=-1)
-        phase = np.angle(hilbert(filtered, axis=-1))
-        differences = phase[:, np.newaxis, :] - phase[np.newaxis, :, :]
-        matrix = np.abs(np.mean(np.sign(np.sin(differences)), axis=-1))
-        np.fill_diagonal(matrix, 0.0)
+        # Read/filter one scout at a time. This accepts an HDF5 dataset without
+        # loading the complete nodes x samples input as a second in-memory copy.
+        phase = np.empty((nodes, samples), dtype=np.float64)
+        for node in range(nodes):
+            row = np.asarray(scouts[node, :], dtype=np.float64)
+            if row.shape != (samples,) or not np.isfinite(row).all():
+                raise ConnectivityError("evoked scouts must be a finite nodes x samples matrix")
+            filtered = sosfiltfilt(sos, row, axis=-1)
+            phase[node] = np.angle(hilbert(filtered, axis=-1))
+        # The summands are exactly -1/0/1. Accumulating integer block sums
+        # preserves the all-sample V7 mean without nodes x nodes x samples.
+        matrix = np.zeros((nodes, nodes), dtype=np.float64)
+        for left in range(nodes):
+            for right in range(left + 1, nodes):
+                signed_sum = np.int64(0)
+                for start in range(0, samples, _PLI_PAIR_BLOCK_SAMPLES):
+                    stop = min(samples, start + _PLI_PAIR_BLOCK_SAMPLES)
+                    difference = phase[left, start:stop] - phase[right, start:stop]
+                    signed_sum += np.sum(np.sign(np.sin(difference)), dtype=np.int64)
+                pli = abs(float(signed_sum) / samples)
+                matrix[left, right] = matrix[right, left] = pli
         matrices.append(validate_pli_matrix(matrix))
         designs.append(np.asarray(sos, dtype=np.float64))
         band_provenance[band.name] = {
@@ -96,6 +118,8 @@ def evoked_average_hilbert_pli(
             "bandpass_realized_order": 2 * config.filter_order,
             "phase_treatment": "zero-phase forward/backward filtering",
             "sample_policy": "one matrix across every retained scout sample; no temporal subdivision",
+            "memory_policy": "one scout filtered at a time; pairwise integer sums in bounded sample blocks",
+            "pair_block_samples": _PLI_PAIR_BLOCK_SAMPLES,
             "diagonal_policy": "exactly zero",
             "bands": band_provenance,
             "numpy_version": np.__version__,

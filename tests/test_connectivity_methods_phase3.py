@@ -96,6 +96,55 @@ def test_evoked_pli_invariants_and_nyquist_rejection() -> None:
         evoked_average_hilbert_pli(rng.normal(size=(2, 100)), 20.0, EvokedHilbertConnectivity((Band("bad", 8.0, 12.0),), 4))
 
 
+def test_evoked_kernel_reads_rows_only_and_uses_no_nodes_squared_sample_tensor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import neurostat.connectivity.methods as methods
+
+    rng = np.random.default_rng(77)
+    values = rng.normal(size=(4, 200_003))
+
+    class RowOnlyDataset:
+        shape = values.shape
+
+        def __init__(self) -> None:
+            self.reads: list[tuple[object, object]] = []
+
+        def __array__(self, *args, **kwargs):
+            raise AssertionError("the complete scout matrix must not be converted eagerly")
+
+        def __getitem__(self, key):
+            assert isinstance(key, tuple) and len(key) == 2
+            node, samples = key
+            assert type(node) is int and samples == slice(None)
+            self.reads.append(key)
+            return values[key]
+
+    guarded = RowOnlyDataset()
+    original_sin = methods.np.sin
+    observed_dimensions: list[int] = []
+
+    def one_dimensional_sin(value, *args, **kwargs):
+        observed_dimensions.append(np.ndim(value))
+        assert np.ndim(value) <= 1
+        return original_sin(value, *args, **kwargs)
+
+    monkeypatch.setattr(methods.np, "sin", one_dimensional_sin)
+    result = methods.evoked_average_hilbert_pli(
+        guarded,
+        256.0,
+        EvokedHilbertConnectivity((Band("alpha", 8.0, 12.0),), 4),
+    )
+    assert guarded.reads == [(0, slice(None)), (1, slice(None)), (2, slice(None)), (3, slice(None))]
+    assert observed_dimensions and max(observed_dimensions) == 1
+    matrix = result.matrices[0]
+    assert matrix.shape == (4, 4)
+    assert np.array_equal(matrix, matrix.T)
+    assert np.array_equal(np.diag(matrix), np.zeros(4))
+    assert result.provenance["pair_block_samples"] == 65536
+    assert "bounded sample blocks" in result.provenance["memory_policy"]
+
+
 def test_window_iterator_streams_complete_windows_and_drops_tail(tmp_path: Path) -> None:
     values = np.arange(2 * 23, dtype=np.float64).reshape(2, 23)
     path = _scout_artifact(tmp_path, values, sfreq=10.0)

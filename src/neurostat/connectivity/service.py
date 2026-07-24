@@ -179,7 +179,7 @@ def run_connectivity(
                     import h5py
 
                     with h5py.File(scout_path, "r") as file:
-                        values = evoked_average_hilbert_pli(file["data"][:], scout_header.sfreq, config)
+                        values = evoked_average_hilbert_pli(file["data"], scout_header.sfreq, config)
                 elif isinstance(config, ContinuousMultitaperConnectivity):
                     values = continuous_multitaper_pli(
                         scout_path,

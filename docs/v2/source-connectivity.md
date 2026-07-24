@@ -6,8 +6,8 @@ The supported pairs are:
 
 | Clean recording | Source backend | Connectivity backend |
 | --- | --- | --- |
-| Retained evoked epochs (or one projected raw recording) | `fixed_linear_operator` | `evoked_average_hilbert_pli` |
-| One continuous raw recording | `mne_fsaverage` | `continuous_multitaper_pli` |
+| Retained evoked epochs | `fixed_linear_operator` | `evoked_average_hilbert_pli` |
+| One continuous MNE-ingested SET/FIF recording | `mne_fsaverage` | `continuous_multitaper_pli` |
 
 Phase-2 ingestion-only projects may retain opaque profiles. The strict scientific profile is required when `scouts` starts. Profile validation is dependency-light and does not import MNE, SciPy, h5py, matplotlib, the GUI, or the v1 pipeline.
 
@@ -29,7 +29,7 @@ Every stage verifies that the upstream lock belongs to the same normalized proje
 
 The fixed backend requires a MAT operator and ordered `sensor_labels` and `scout_labels`. The default matrix variable is `SensorToScoutOperator`. Classic MAT and MATLAB v7.3/HDF5 numeric matrices are supported. Rows must be scouts and columns must be sensors. Only the documented physical axis reversal of a MATLAB v7.3 numeric dataset is undone; a transposed classic matrix is not guessed. If optional `SensorLabels` or `ScoutLabels` metadata are present, they must agree exactly with YAML.
 
-Canonical channels must match the sensor contract exactly. NeuroStat reorders them by label, reads retained epochs in bounded blocks (default 32), accumulates their sum in float64, divides by the retained epoch count, then calculates:
+This route accepts retained epochs only; a canonical raw recording is rejected. Canonical channels must match the sensor contract exactly. NeuroStat reorders them by label, reads retained epochs in bounded blocks (default 32), accumulates their sum in float64, divides by the retained epoch count, then calculates:
 
 ```text
 scouts(scouts × samples) =
@@ -43,7 +43,7 @@ The V7-compatible connectivity method processes every scout band as follows:
 3. `phase = angle(scipy.signal.hilbert(filtered, axis=-1))`
 4. `PLI(i,j) = abs(mean(sign(sin(phase_i - phase_j))))` across all retained samples
 
-The diagonal is exactly zero. There is no 40 ms or other temporal subdivision. The generic manuscript-compatible band declaration is:
+The implementation reads and filters one scout row at a time, retains one `nodes × samples` phase array, and calculates each upper-triangle pair with integer sums over bounded sample blocks. It therefore avoids both a second eager HDF5 matrix read and the `nodes × nodes × samples` phase-difference tensor while preserving the exact all-sample formula. The diagonal is exactly zero. There is no 40 ms or other temporal subdivision. The generic manuscript-compatible band declaration is:
 
 ```yaml
 connectivity:
@@ -60,7 +60,7 @@ Filter coefficients, band edges, SciPy/NumPy versions, realised order, sample po
 
 ## MNE source model and continuous multitaper PLI
 
-`mne_fsaverage` requires local resources and never downloads them:
+`mne_fsaverage` accepts only clean SET/FIF recordings ingested by MNE, whose channel locations are canonical metres. FieldTrip recordings are rejected at this boundary because Phase 2 does not yet carry a typed coordinate-unit contract; millimetres and metres cannot be safely inferred from numeric positions. The backend also requires local resources and never downloads them:
 
 - a FreeSurfer `subjects_dir` with both `<subject>/label/lh.aparc.annot` and `rh.aparc.annot`;
 - an explicit head↔MRI transform;
@@ -68,7 +68,35 @@ Filter coefficients, band edges, SciPy/NumPy versions, realised order, sample po
 - an explicit BEM solution FIF;
 - finite canonical EEG channel positions in the head coordinate frame.
 
+The relevant profile fields are explicit; paths are resolved relative to the project YAML:
+
+```yaml
+source:
+  backend: mne_fsaverage
+  subject: fsaverage
+  subjects_dir: resources/subjects
+  trans: resources/fsaverage-trans.fif
+  source_space: resources/fsaverage-ico3-src.fif
+  bem: resources/fsaverage-bem-sol.fif
+  atlas: aparc
+  inverse_method: MNE
+  snr: 3
+  pick_orientation: normal
+  label_mode: mean_flip
+  chunk_samples: 16384
+  output_chunk_samples: 4096
+  depth: 0.8
+  loose: 0.2
+  mindist_mm: 5
+  noise_covariance: empirical
+  average_reference_projection: true
+  coordinate_frame: head
+  export_matlab: false
+```
+
 The profile freezes hashes for the transform, source space, BEM and annotation files. It also records the subject, atlas, inverse method, SNR and derived `lambda2`, orientation, label extraction mode, depth, looseness, minimum source/sensor distance, empirical covariance policy, average-reference projection assumption, coordinate frame, and source/output chunk sizes.
+
+The streaming-safe label modes are `mean_flip` (default) and `mean`. `mean_flip` uses fixed anatomical sign flips and does not estimate time-dependent weights per chunk. `pca_flip` is deliberately rejected: MNE estimates its spatial weights with an SVD over the supplied time samples, so applying it independently to chunks changes the weights, scaling and boundaries. Supporting PCA-flip safely requires a future global two-pass or fixed-weight implementation.
 
 The backend calculates empirical sensor covariance with bounded reads, constructs the forward and inverse operators once, then applies the inverse to bounded raw chunks. It extracts and writes each chunk incrementally. The accepted DK68 order is explicit and hemisphere-interleaved (`bankssts-lh`, `bankssts-rh`, …, `transversetemporal-lh`, `transversetemporal-rh`). Unknown and corpus-callosum labels are excluded; any missing or extra cortical label fails the run.
 
@@ -103,4 +131,4 @@ Connectivity files use schema `neurostat.connectivity.v1`:
 
 ## Scientific non-goals
 
-These stages do not clean, rereference, reject epochs, interpolate sensors, filter broadband data, resample, or infer channel/operator correspondence by column position. They do not fetch fsaverage, choose a transform, generate a BEM implicitly, substitute missing atlas nodes, pad an incomplete connectivity window, or silently change backend combinations.
+These stages do not clean, rereference, reject epochs, interpolate sensors, filter broadband data, resample, infer coordinate units, or infer channel/operator correspondence by column position. They do not fetch fsaverage, choose a transform, generate a BEM implicitly, substitute missing atlas nodes, estimate PCA-flip weights independently per chunk, pad an incomplete connectivity window, or silently change backend combinations.

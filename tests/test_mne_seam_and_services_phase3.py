@@ -11,6 +11,7 @@ import h5py
 import mne
 import numpy as np
 import pytest
+from scipy.io import savemat
 
 from neurostat.atlas import DK68_LABELS
 from neurostat.connectivity import run_connectivity
@@ -72,7 +73,7 @@ analysis_profiles:
       inverse_method: MNE
       snr: 3.0
       pick_orientation: normal
-      label_mode: pca_flip
+      label_mode: mean_flip
       chunk_samples: 40
       output_chunk_samples: 29
       depth: 0.8
@@ -214,6 +215,53 @@ def test_mne_profile_rejects_unsupported_or_ambiguous_parameters(
         parse_analysis_profile(load_project(project), "rest")
 
 
+@pytest.mark.parametrize("unsafe_mode", ["pca_flip", "max"])
+def test_mne_profile_defaults_to_mean_flip_and_rejects_cross_time_modes(
+    tmp_path: Path, unsafe_mode: str
+) -> None:
+    from neurostat.analysis_profiles import AnalysisProfileError, parse_analysis_profile
+    from neurostat.project import load_project
+
+    project = _project(tmp_path)
+    text = project.read_text(encoding="utf-8")
+    project.write_text(text.replace("      label_mode: mean_flip\n", ""), encoding="utf-8")
+    assert parse_analysis_profile(load_project(project), "rest").source.label_mode == "mean_flip"
+    project.write_text(text.replace("label_mode: mean_flip", f"label_mode: {unsafe_mode}"), encoding="utf-8")
+    with pytest.raises(AnalysisProfileError, match="label_mode"):
+        parse_analysis_profile(load_project(project), "rest")
+
+
+def test_fieldtrip_raw_is_rejected_before_mne_projector_due_to_coordinate_units(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    samples = 135
+    time = np.arange(samples, dtype=np.float64) / 64.0
+    savemat(
+        tmp_path / "clean-fieldtrip.mat",
+        {
+            "data_ft": {
+                "label": np.asarray(["A", "B"], dtype=object),
+                "fsample": 64.0,
+                "trial": np.vstack((np.sin(time), np.cos(time))),
+                "time": time,
+                # Deliberately millimetre-like values: Phase 3 cannot safely
+                # infer or normalize FieldTrip coordinate units.
+                "elec": {
+                    "label": np.asarray(["A", "B"], dtype=object),
+                    "chanpos": np.asarray([[0.0, 30.0, 80.0], [20.0, -20.0, 75.0]]),
+                },
+            }
+        },
+    )
+    text = project.read_text(encoding="utf-8")
+    text = text.replace("format: fif, path: clean-raw.fif", "format: fieldtrip_mat, path: clean-fieldtrip.mat")
+    project.write_text(text, encoding="utf-8")
+    ingest = ingest_project(project)
+    projector = FakeMNEProjector()
+    with pytest.raises(RuntimeError, match="MNE-ingested SET/FIF"):
+        run_scouts(project, ingest, mne_projector=projector)
+    assert projector.calls == 0
+
+
 def test_cli_help_lists_source_and_connectivity_without_importing_science() -> None:
     root = Path(__file__).parents[1]
     env = os.environ | {"PYTHONPATH": str(root / "src")}
@@ -247,6 +295,8 @@ def test_default_mne_backend_forwards_scientific_parameters_reorders_atlas_and_c
     project = _project(tmp_path)
     ingest = ingest_project(project)
     config = parse_analysis_profile(load_project(project), "rest").source
+    with pytest.raises(RuntimeError, match="only mean or mean_flip"):
+        DefaultMNEProjector().project(ingest.records[0], replace(config, label_mode="pca_flip"))
     calls: dict[str, object] = {"apply": [], "extract": []}
 
     class Label:
@@ -298,7 +348,7 @@ def test_default_mne_backend_forwards_scientific_parameters_reorders_atlas_and_c
     assert all(call["lambda2"] == config.lambda2 and call["method"] == "MNE" for call in calls["apply"])
     assert all(call["pick_ori"] == "normal" and call["buffer_size"] == 40 for call in calls["apply"])
     assert all(names == DK68_LABELS for names, _ in calls["extract"])
-    assert all(kwargs["mode"] == "pca_flip" and kwargs["src"] == "inverse-source" for _, kwargs in calls["extract"])
+    assert all(kwargs["mode"] == "mean_flip" and kwargs["src"] == "inverse-source" for _, kwargs in calls["extract"])
 
     calls["apply"].clear()
     none_stream = DefaultMNEProjector().project(ingest.records[0], replace(config, pick_orientation="none"))

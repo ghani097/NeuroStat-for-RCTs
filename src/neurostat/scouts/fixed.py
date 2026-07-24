@@ -96,6 +96,8 @@ def project_fixed(canonical_path: Path, config: FixedLinearSource) -> ScoutStrea
 
     operator = load_operator(config)
     with h5py.File(canonical_path, "r") as file:
+        if str(file.attrs["data_kind"]) != "epochs":
+            raise ScoutError("fixed_linear_operator requires canonical retained epochs")
         data = file["data"]
         canonical_labels = tuple(value.decode("utf-8") if isinstance(value, bytes) else str(value) for value in file["channel_names"][:])
         if len(canonical_labels) != len(set(canonical_labels)):
@@ -105,8 +107,6 @@ def project_fixed(canonical_path: Path, config: FixedLinearSource) -> ScoutStrea
             extra = sorted(set(canonical_labels) - set(config.sensor_labels))
             raise ScoutError(f"canonical/operator sensor labels do not match exactly (missing={missing}, extra={extra})")
         order = tuple(canonical_labels.index(label) for label in config.sensor_labels)
-        if str(file.attrs["data_kind"]) == "raw" and data.shape[0] != 1:
-            raise ScoutError("canonical raw data must contain exactly one epoch")
         # Read all channels per bounded epoch block, then reorder in NumPy.
         # This supports non-monotone label contracts without h5py fancy-index
         # restrictions and matches the accepted V7 float64 accumulation.
