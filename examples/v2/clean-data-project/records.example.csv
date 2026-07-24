@@ -1,0 +1,3 @@
+record_id,participant_id,arm,session,condition,data_kind,format,path,analysis_profile,data_unit
+demo-001-baseline,demo-001,active,baseline,rest,raw,fif,clean/demo-001-baseline_raw.fif,sensor_connectivity,V
+demo-002-baseline,demo-002,comparison,baseline,rest,epochs,set,clean/demo-002-baseline.set,sensor_connectivity,V

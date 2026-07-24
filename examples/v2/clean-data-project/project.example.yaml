@@ -1,0 +1,11 @@
+schema_version: 1
+study:
+  id: illustrative-rct
+  arms: [active, comparison]
+  sessions: [baseline, week4, week12]
+  conditions: [rest]
+input: {state: cleaned}
+records: {manifest: records.example.csv}
+analysis_profiles:
+  sensor_connectivity: {bands: [alpha]}
+output: {root: outputs}

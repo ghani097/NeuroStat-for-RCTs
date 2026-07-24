@@ -190,6 +190,7 @@ The application features a modern PyQt5 interface with a dark theme and threaded
 ## NeuroStat v2 foundation
 
 The installable v2 package is being introduced alongside the supported v1 launchers. Its staged architecture and compatibility boundary are described in [the v2 architecture notes](docs/v2/architecture.md).
+Clean externally prepared recordings can be validated and ingested with the [v2 clean-data project format](docs/v2/clean-data-ingestion.md).
 
 ```bash
 python -m neurostat --version
