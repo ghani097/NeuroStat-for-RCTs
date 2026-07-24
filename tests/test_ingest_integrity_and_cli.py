@@ -74,6 +74,9 @@ def test_set_companion_provenance_uses_actual_header_reference(tmp_path: Path) -
     external_bundle = source_bundle(load_project(project_for(external_set)).records[0]); assert external.resolve() in external_bundle.files
     before = external_bundle.digest; external.write_bytes(b"second"); assert source_bundle(load_project(project_for(external_set)).records[0]).digest != before
     assert stray.resolve() not in source_bundle(load_project(project_for(embedded_set)).records[0]).files
+    missing = tmp_path / "missing.set"; savemat(missing, {"EEG": {"data": "gone.fdt"}})
+    with pytest.raises(IngestError, match="missing companion"):
+        source_bundle(load_project(project_for(missing)).records[0])
 
 
 def test_cli_validate_ingest_json_and_error(tmp_path: Path) -> None:
