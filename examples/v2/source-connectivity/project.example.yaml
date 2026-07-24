@@ -1,0 +1,38 @@
+schema_version: 1
+study:
+  id: portable-evoked-example
+  arms: [active, comparison]
+  sessions: [baseline, followup]
+  conditions: [evoked]
+input: {state: cleaned}
+records:
+  - record_id: example-evoked
+    participant_id: example-01
+    arm: active
+    session: baseline
+    condition: evoked
+    data_kind: epochs
+    format: fif
+    path: clean-evoked-epo.fif
+    analysis_profile: evoked-v7-method
+analysis_profiles:
+  evoked-v7-method:
+    source:
+      backend: fixed_linear_operator
+      operator: sensor-to-scout.mat
+      operator_variable: SensorToScoutOperator
+      sensor_labels: [Fz, Cz, Pz]
+      scout_labels: [example-frontal-lh, example-frontal-rh]
+      epoch_reduction: mean
+      epoch_chunk_size: 32
+      output_chunk_samples: 4096
+      export_matlab: false
+    connectivity:
+      backend: evoked_average_hilbert_pli
+      filter_order: 4
+      bands:
+        theta: [3.5, 7.5]
+        alpha: [7.5, 12.5]
+        beta: [12.5, 30]
+        gamma: [30, 40]
+output: {root: outputs}
