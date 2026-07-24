@@ -16,7 +16,7 @@ _RECORD_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*\Z")
 _TOP = {"schema_version", "study", "input", "records", "analysis_profiles", "output", "contrasts", "families", "runtime"}
 _RECORD = {"record_id", "participant_id", "arm", "session", "condition", "data_kind", "format", "path", "analysis_profile", "mat_variable", "samples_per_epoch", "data_unit"}
 _REQUIRED = {"record_id", "participant_id", "arm", "session", "condition", "data_kind", "format", "path", "analysis_profile"}
-_FORMATS = {"set": {".set"}, "fif": {".fif", ".fif.gz"}, "fieldtrip_mat": {".mat", ".h5", ".hdf5"}}
+_FORMATS = {"set": {".set"}, "fif": {".fif", ".fif.gz"}, "fieldtrip_mat": {".mat"}}
 
 
 class ProjectValidationError(ValueError):
@@ -110,7 +110,16 @@ def _read_manifest(path: Path) -> list[dict[str, str]]:
     with path.open(newline="", encoding="utf-8-sig") as handle:
         reader = csv.DictReader(handle, delimiter=delimiter)
         if not reader.fieldnames: raise ProjectValidationError("records manifest has no header")
-        return [dict(row) for row in reader]
+        headers = reader.fieldnames
+        if any(not name or not name.strip() for name in headers): raise ProjectValidationError("records manifest has blank header")
+        if len(set(headers)) != len(headers): raise ProjectValidationError("records manifest has duplicate headers")
+        unknown = set(headers) - _RECORD
+        if unknown: raise ProjectValidationError(f"records manifest has unknown headers: {', '.join(sorted(unknown))}")
+        missing = _REQUIRED - set(headers)
+        if missing: raise ProjectValidationError(f"records manifest missing required headers: {', '.join(sorted(missing))}")
+        rows = [dict(row) for row in reader]
+        if not rows: raise ProjectValidationError("records manifest must contain at least one record")
+        return rows
 
 
 def _record(row: Mapping[str, Any], base: Path, index: int, study: Study, profiles: Mapping[str, Any]) -> ProjectRecord:
@@ -134,9 +143,13 @@ def _record(row: Mapping[str, Any], base: Path, index: int, study: Study, profil
     if spe not in (None, ""):
         if isinstance(spe, bool) or not str(spe).isdigit() or int(spe) <= 0: raise ProjectValidationError(f"record {rid}.samples_per_epoch must be a positive integer")
         spe = int(spe)
+    mat_variable = row.get("mat_variable") or None
+    if mat_variable is not None: mat_variable = _string(mat_variable, f"record {rid}.mat_variable")
     unit = row.get("data_unit") or None
     if unit is not None and unit not in {"V", "mV", "uV", "native"}: raise ProjectValidationError(f"record {rid}.data_unit is invalid")
-    return ProjectRecord(rid, key, kind, fmt, source, profile, row.get("mat_variable") or None, spe, unit)
+    if fmt in {"set", "fif"} and unit not in (None, "V"): raise ProjectValidationError(f"record {rid}: SET/FIF data_unit must be V or blank")
+    if spe is not None and (fmt != "fieldtrip_mat" or kind != "epochs"): raise ProjectValidationError(f"record {rid}.samples_per_epoch is only valid for FieldTrip epochs")
+    return ProjectRecord(rid, key, kind, fmt, source, profile, mat_variable, spe, unit)
 
 
 def load_project(project_file: str | Path) -> CleanProject:
@@ -148,7 +161,7 @@ def load_project(project_file: str | Path) -> CleanProject:
     if not isinstance(root, Mapping): raise ProjectValidationError("project must be a YAML mapping")
     unknown = set(root) - _TOP
     if unknown: raise ProjectValidationError(f"project has unknown keys: {', '.join(sorted(unknown))}")
-    if root.get("schema_version") != 1: raise ProjectValidationError("schema_version must be integer 1")
+    if type(root.get("schema_version")) is not int or root.get("schema_version") != 1: raise ProjectValidationError("schema_version must be integer 1")
     study_raw = root.get("study")
     if not isinstance(study_raw, Mapping) or set(study_raw) != {"id", "arms", "sessions", "conditions"}: raise ProjectValidationError("study must contain exactly id, arms, sessions, and conditions")
     arms = _list(study_raw["arms"], "study.arms")

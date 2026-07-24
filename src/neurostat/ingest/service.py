@@ -33,6 +33,19 @@ def _json(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
+def _payload_digest(data: np.ndarray, labels: tuple[str, ...], times: np.ndarray, events: np.ndarray | None, positions: np.ndarray | None, metadata: dict[str, Any]) -> str:
+    """Hash every canonical value, not merely HDF5's structural metadata."""
+    digest = hashlib.sha256()
+    def add_array(value: np.ndarray | None) -> None:
+        if value is None:
+            digest.update(b"none\0"); return
+        array = np.ascontiguousarray(value)
+        digest.update(str(array.dtype).encode()); digest.update(_json(list(array.shape)).encode()); digest.update(array.tobytes())
+    digest.update(_json(list(labels)).encode("utf-8")); add_array(data); add_array(times); add_array(events); add_array(positions)
+    digest.update(_json(metadata).encode("utf-8"))
+    return digest.hexdigest()
+
+
 def _atomic_json(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
@@ -72,8 +85,9 @@ class CleanRecording:
 
     def __post_init__(self) -> None:
         data, times = np.array(self.data, dtype=np.float64, copy=True), np.array(self.times, dtype=np.float64, copy=True)
+        names = tuple(self.channel_names)
         if data.ndim != 3 or not data.shape[0] or not data.shape[1] or not data.shape[2]: raise IngestError("canonical data must have nonempty (epochs, channels, samples) shape")
-        if len(self.channel_names) != data.shape[1] or any(not isinstance(x, str) or not x.strip() for x in self.channel_names) or len(set(self.channel_names)) != len(self.channel_names): raise IngestError("channel labels must be unique nonblank strings")
+        if len(names) != data.shape[1] or any(not isinstance(x, str) or not x.strip() for x in names) or len(set(names)) != len(names): raise IngestError("channel labels must be unique nonblank strings")
         if not np.isfinite(self.sfreq) or self.sfreq <= 0 or times.shape != (data.shape[2],) or not np.isfinite(times).all() or (len(times) > 1 and not np.all(np.diff(times) > 0)): raise IngestError("sfreq/times are invalid")
         if not np.isfinite(data).all(): raise IngestError("recording data contains non-finite values")
         events = None if self.events is None else np.array(self.events, copy=True)
@@ -83,7 +97,7 @@ class CleanRecording:
         data.setflags(write=False); times.setflags(write=False)
         if events is not None: events.setflags(write=False)
         if positions is not None: positions.setflags(write=False)
-        object.__setattr__(self, "data", data); object.__setattr__(self, "times", times); object.__setattr__(self, "events", events); object.__setattr__(self, "channel_positions", positions)
+        object.__setattr__(self, "channel_names", names); object.__setattr__(self, "data", data); object.__setattr__(self, "times", times); object.__setattr__(self, "events", events); object.__setattr__(self, "channel_positions", positions)
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,19 +113,25 @@ class IngestRun:
 def source_bundle(record: ProjectRecord) -> SourceBundle:
     files = [record.path]
     if record.format == "set":
-        # EEGLAB headers commonly hold a relative .fdt name; only include a real companion.
-        text = record.path.read_bytes()[:1024 * 1024].decode("latin1", "ignore")
-        candidates = [record.path.with_suffix(".fdt")]
+        # Prefer the actual EEGLAB EEG.data field; same-stem is only a fallback.
+        parsed = False
         try:
             from scipy.io import loadmat
             eeg = loadmat(record.path, squeeze_me=True, struct_as_record=False).get("EEG")
-            data_ref = getattr(eeg, "data", None)
-            if isinstance(data_ref, str) and data_ref.lower().endswith(".fdt"): candidates.insert(0, record.path.parent / data_ref)
+            if eeg is not None and hasattr(eeg, "data"):
+                parsed = True; data_ref = eeg.data
+                if isinstance(data_ref, str) and data_ref.lower().endswith(".fdt"):
+                    companion = (record.path.parent / data_ref).resolve()
+                    if not companion.is_file(): raise IngestError(f"{record.record_id}: EEGLAB header references missing companion .fdt: {companion}")
+                    files.append(companion)
         except (OSError, ValueError, NotImplementedError):
-            pass
-        candidates += [record.path.parent / match for match in re.findall(r"['\"]([^'\"]+\.fdt)['\"]", text, flags=re.I)]
-        for candidate in candidates:
-            if candidate.is_file(): files.append(candidate.resolve())
+            parsed = False
+        if not parsed:
+            text = record.path.read_bytes()[:1024 * 1024].decode("latin1", "ignore")
+            refs = re.findall(r"['\"]([^'\"]+\.fdt)['\"]", text, flags=re.I)
+            candidates = [record.path.parent / ref for ref in refs] or [record.path.with_suffix(".fdt")]
+            for candidate in candidates:
+                if candidate.is_file(): files.append(candidate.resolve())
     unique = tuple(sorted(set(path.resolve() for path in files), key=lambda p: str(p).casefold()))
     hashes = tuple((str(path), _sha256(path)) for path in unique)
     return SourceBundle(unique, hashes, hashlib.sha256(_json(hashes).encode()).hexdigest())
@@ -120,7 +140,7 @@ def source_bundle(record: ProjectRecord) -> SourceBundle:
 def _mne(record: ProjectRecord, bundle: SourceBundle) -> CleanRecording:
     import mne
     if record.data_unit not in (None, "", "V"): raise IngestError(f"{record.record_id}: MNE SET/FIF data are volts; data_unit must be V or blank")
-    if record.format == "set": obj = mne.io.read_raw_eeglab(record.path, preload=True, verbose="ERROR") if record.data_kind == "raw" else mne.read_epochs_eeglab(record.path, preload=True, verbose="ERROR")
+    if record.format == "set": obj = mne.io.read_raw_eeglab(record.path, preload=True, verbose="ERROR") if record.data_kind == "raw" else mne.read_epochs_eeglab(record.path, verbose="ERROR")
     else: obj = mne.io.read_raw_fif(record.path, preload=True, verbose="ERROR") if record.data_kind == "raw" else mne.read_epochs(record.path, preload=True, verbose="ERROR")
     data = obj.get_data()
     if record.data_kind == "raw": data = data[None, :, :]
@@ -170,13 +190,17 @@ def _fieldtrip(record: ProjectRecord, bundle: SourceBundle) -> CleanRecording:
     labels = raw.get("label")
     if labels is None: raise IngestError(f"{record.record_id}: FieldTrip label is required")
     labels = tuple(str(x.decode() if isinstance(x, bytes) else x).strip() for x in np.asarray(labels, dtype=object).ravel())
-    fsample = float(np.asarray(raw.get("fsample")).squeeze())
+    if raw.get("fsample") is None: raise IngestError(f"{record.record_id}: FieldTrip fsample is required")
+    try: fsample = float(np.asarray(raw["fsample"]).squeeze())
+    except (TypeError, ValueError): raise IngestError(f"{record.record_id}: FieldTrip fsample is invalid") from None
+    if not np.isfinite(fsample) or fsample <= 0: raise IngestError(f"{record.record_id}: FieldTrip fsample must be positive and finite")
     trials0 = raw.get("trial")
     if trials0 is None: raise IngestError(f"{record.record_id}: FieldTrip trial is required")
     if isinstance(trials0, list):
         trials = trials0
     elif isinstance(trials0, np.ndarray) and trials0.dtype == object:
-        trials = list(trials0.ravel())
+        numeric = np.asarray(trials0, dtype=float)
+        trials = [numeric] if numeric.ndim == 2 and len(labels) in numeric.shape else (list(numeric) if numeric.ndim == 3 and len(labels) in numeric.shape[1:] else list(trials0.ravel()))
     else:
         trials = [trials0]
     arrays: list[np.ndarray] = []
@@ -187,31 +211,45 @@ def _fieldtrip(record: ProjectRecord, bundle: SourceBundle) -> CleanRecording:
         elif a.shape[1] == len(labels): a = a.T
         else: raise IngestError("FieldTrip trial dimensions do not match labels")
         arrays.append(a)
+    split_samples: int | None = None
     if record.data_kind == "raw":
         if len(arrays) != 1: raise IngestError("FieldTrip raw requires exactly one trial")
     elif len(arrays) == 1:
         n = record.samples_per_epoch or (int(np.asarray(raw["pnts"]).squeeze()) if "pnts" in raw else None)
         if n:
             if arrays[0].shape[1] % n: raise IngestError("FieldTrip concatenated trial is not divisible by samples_per_epoch")
+            split_samples = n
             arrays = [arrays[0][:, i:i+n] for i in range(0, arrays[0].shape[1], n)]
     if len({a.shape for a in arrays}) != 1: raise IngestError("FieldTrip trials must have identical shapes")
     times0 = raw.get("time")
     times = np.arange(arrays[0].shape[1], dtype=float) / fsample
     if times0 is not None:
-        candidate = times0[0] if isinstance(times0, list) else np.asarray(times0)
-        candidate = np.asarray(candidate, dtype=float).ravel()
-        if candidate.shape == times.shape: times = candidate
+        if isinstance(times0, list): time_trials = times0
+        elif isinstance(times0, np.ndarray) and times0.dtype == object:
+            numeric_times = np.asarray(times0, dtype=float)
+            time_trials = [numeric_times] if numeric_times.ndim == 1 else (list(numeric_times) if numeric_times.ndim == 2 and numeric_times.shape[0] == len(arrays) else list(times0.ravel()))
+        else: time_trials = [times0]
+        candidates = [np.asarray(candidate, dtype=float).ravel() for candidate in time_trials]
+        if split_samples is not None and len(candidates) == 1 and candidates[0].size == split_samples * len(arrays):
+            # A concatenated FieldTrip trial can have one continuous time vector;
+            # canonical epochs share the first retained epoch's sample grid.
+            candidates = [candidates[0][:split_samples]] * len(arrays)
+        if len(candidates) == 1 and len(arrays) > 1: candidates *= len(arrays)
+        if len(candidates) != len(arrays) or any(candidate.shape != times.shape for candidate in candidates) or any(not np.array_equal(candidate, candidates[0]) for candidate in candidates[1:]): raise IngestError("FieldTrip trial time vectors must be identical and match samples")
+        times = candidates[0]
     positions = None
     elec = raw.get("elec")
     if elec is not None:
         pos = getattr(elec, "chanpos", None) if not isinstance(elec, dict) else elec.get("chanpos")
-        if pos is None and isinstance(elec, dict): pos = elec.get("pnt")
+        if pos is None: pos = getattr(elec, "pnt", None) if not isinstance(elec, dict) else elec.get("pnt")
         if pos is not None:
             pos = np.asarray(pos, dtype=float)
             if pos.shape == (len(labels), 3): positions = pos
     events = raw.get("trialinfo")
     events = np.asarray(events) if events is not None else None
+    if events is not None and events.ndim == 0: events = events.reshape(1, 1)
     if events is not None and len(arrays) == 1 and events.ndim == 1: events = events[None, :]
+    if events is not None and len(arrays) > 1 and events.shape[0] != len(arrays): events = None
     unit = record.data_unit or "native"; scales = {"V": 1.0, "mV": 1e-3, "uV": 1e-6, "native": 1.0}; scale = scales[unit]
     return CleanRecording(record.record_id, record.key, record.data_kind, record.format, record.analysis_profile, fsample, labels, np.stack(arrays) * scale, times, events, positions, unit, "V" if unit != "native" else "native", scale, bundle)
 
@@ -231,7 +269,9 @@ def _write_record(path: Path, recording: CleanRecording) -> str:
             if recording.events is not None: file.create_dataset("events", data=recording.events)
             if recording.channel_positions is not None: file.create_dataset("channel_positions", data=recording.channel_positions)
             attrs = {"schema": SCHEMA, "record_id": recording.record_id, "participant_id": recording.key.participant_id, "arm": recording.key.arm, "session": recording.key.session, "condition": recording.key.condition, "format": recording.format, "data_kind": recording.data_kind, "analysis_profile": recording.analysis_profile, "sfreq": recording.sfreq, "dimensions": _json(list(recording.data.shape)), "source_bundle_digest": recording.source_bundle.digest, "source_file_hashes": _json(recording.source_bundle.hashes), "source_unit": recording.source_unit, "canonical_unit": recording.canonical_unit, "scale": recording.scale, "cleaning": CLEANING_MARKER}
+            attrs["payload_digest"] = _payload_digest(recording.data, recording.channel_names, recording.times, recording.events, recording.channel_positions, attrs)
             for key, value in attrs.items(): file.attrs[key] = value
+        _verify(Path(name), recording.source_bundle.digest, recording.data.shape)
         os.replace(name, path)
     except BaseException:
         try: os.unlink(name)
@@ -245,7 +285,15 @@ def _verify(path: Path, source_digest: str, shape: tuple[int, ...]) -> None:
     import h5py
     try:
         with h5py.File(path, "r") as file:
-            if file.attrs.get("schema") != SCHEMA or tuple(file["data"].shape) != tuple(shape) or file.attrs.get("source_bundle_digest") != source_digest: raise IngestError(f"invalid canonical artifact: {path}")
+            required = {"schema", "record_id", "participant_id", "arm", "session", "condition", "format", "data_kind", "analysis_profile", "sfreq", "dimensions", "source_bundle_digest", "source_file_hashes", "source_unit", "canonical_unit", "scale", "cleaning", "payload_digest"}
+            if not required.issubset(file.attrs) or not {"data", "channel_names", "times"}.issubset(file): raise IngestError(f"invalid canonical artifact: {path}")
+            if file.attrs["schema"] != SCHEMA or tuple(file["data"].shape) != tuple(shape) or file.attrs["source_bundle_digest"] != source_digest or file.attrs["cleaning"] != CLEANING_MARKER or json.loads(file.attrs["dimensions"]) != list(shape): raise IngestError(f"invalid canonical artifact: {path}")
+            data, times = file["data"][:], file["times"][:]
+            labels = tuple(x.decode() if isinstance(x, bytes) else str(x) for x in file["channel_names"][:])
+            events = file["events"][:] if "events" in file else None; positions = file["channel_positions"][:] if "channel_positions" in file else None
+            metadata = {key: file.attrs[key] for key in required - {"payload_digest"}}
+            expected = _payload_digest(data, labels, times, events, positions, metadata)
+            if expected != file.attrs["payload_digest"]: raise IngestError(f"canonical payload digest mismatch: {path}")
     except OSError as exc: raise IngestError(f"corrupt canonical artifact: {path}") from exc
 
 
@@ -278,7 +326,7 @@ def ingest_project(project: CleanProject | str | Path, progress: Callable[[Progr
             # reopen dimensions avoids trusting a reader value for reused artifacts.
             import h5py
             with h5py.File(target, "r") as file: dimensions = list(file["data"].shape)
-            entries.append({"record_id": record.record_id, "path": str(target), "sha256": digest, "dimensions": _json(dimensions), "source_bundle_digest": bundle.digest, "source_hashes": list(bundle.hashes), "reused": was_reused})
+            entries.append({"record_id": record.record_id, "path": str(target), "sha256": digest, "dimensions": dimensions, "source_bundle_digest": bundle.digest, "source_hashes": list(bundle.hashes), "reused": was_reused})
             paths.append(target); _atomic_json(status, {"state": "running", "total": len(project.records), "completed": i})
             if progress: progress(ProgressEvent(StageName.INGEST, f"ingested {record.record_id}", i, len(project.records)))
         _atomic_json(manifest_path, {"schema": "neurostat.ingest_manifest.v1", "run_id": run_id, "records": entries}); _atomic_json(status, {"state": "succeeded", "total": len(project.records), "completed": len(project.records), "reused": reused, "written": written})

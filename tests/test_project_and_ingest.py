@@ -38,7 +38,7 @@ def test_fif_ingestion_is_deterministic_and_resumable(tmp_path: Path) -> None:
     first = ingest_project(loaded); second = ingest_project(loaded)
     assert first.run_id == second.run_id and second.reused == 1
     manifest = json.loads(second.manifest.read_text(encoding="utf-8"))
-    assert manifest["records"][0]["dimensions"] == "[1,2,12]"
+    assert manifest["records"][0]["dimensions"] == [1, 2, 12]
 
 
 def test_duplicate_yaml_key_is_rejected(tmp_path: Path) -> None:
