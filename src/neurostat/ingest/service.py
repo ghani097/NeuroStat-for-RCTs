@@ -248,9 +248,12 @@ def _fieldtrip(record: ProjectRecord, bundle: SourceBundle) -> CleanRecording:
         n = record.samples_per_epoch
         if n is None and "pnts" in raw:
             pnts_value = np.asarray(raw["pnts"])
-            if isinstance(raw["pnts"], (bool, np.bool_)) or pnts_value.ndim != 0:
+            if pnts_value.size != 1:
                 raise IngestError("FieldTrip pnts must be a scalar positive finite integer")
-            try: candidate = float(pnts_value.item())
+            element = pnts_value.item()
+            if isinstance(element, (bool, np.bool_)):
+                raise IngestError("FieldTrip pnts must be a scalar positive finite integer")
+            try: candidate = float(element)
             except (TypeError, ValueError): raise IngestError("FieldTrip pnts must be a numeric scalar") from None
             if not np.isfinite(candidate) or candidate <= 0 or not candidate.is_integer(): raise IngestError("FieldTrip pnts must be a positive finite integer")
             n = int(candidate)

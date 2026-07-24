@@ -83,6 +83,13 @@ def test_v73_concatenated_pnts_and_time_mismatch_rejection(tmp_path: Path) -> No
         ingest_project(_project(tmp_path, bad, "epochs"))
 
 
+def test_v73_one_by_one_numeric_pnts_is_accepted(tmp_path: Path) -> None:
+    source = tmp_path / "one-by-one-pnts.mat"; _v73(source, concatenated=True)
+    with h5py.File(source, "r+") as file: del file["pnts"]; file.create_dataset("pnts", data=np.array([[4]], dtype=np.int64))
+    run = ingest_project(_project(tmp_path, source, "epochs"))
+    with h5py.File(run.records[0], "r") as file: assert file["data"].shape == (2, 2, 4)
+
+
 def test_fieldtrip_square_orientation_electrode_mapping_and_trialinfo(tmp_path: Path) -> None:
     source = tmp_path / "mapped.mat"
     savemat(source, {"data_ft": {"label": np.array(["Cz", "Pz"], dtype=object), "trial": np.eye(2) * 7, "fsample": 10., "trialinfo": np.array([4]), "elec": {"label": np.array(["Pz", "Cz"], dtype=object), "chanpos": np.array([[2., 2., 2.], [1., 1., 1.]])}}})
