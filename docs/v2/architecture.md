@@ -13,3 +13,5 @@ Future CLI and GUI interfaces will call shared application services for these st
 `neurostat.contracts` defines lightweight typed records that do not depend on MNE, matplotlib, PyQt, or the legacy module. `RecordKey` identifies a participant, arm, session, and condition. `ArtifactRef` uses `pathlib.Path` to locate a typed output. `StageResult` contains immutable artifact tuples and a lifecycle state. `ProgressEvent` and `ProgressCallback` give services a UI-neutral way to report work. `ProjectPaths` holds the project file and output root as `Path` objects.
 
 The contracts use frozen, slotted dataclasses where records are appropriate. They validate nonblank identifiers and artifact kinds, and progress counts cannot be negative or exceed their total. This small boundary is the stable base for later migration phases.
+
+Phase 2 adds strict externally-cleaned project files and resumable canonical ingestion; see [clean-data ingestion](clean-data-ingestion.md).
