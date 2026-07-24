@@ -14,4 +14,4 @@ Future CLI and GUI interfaces will call shared application services for these st
 
 The contracts use frozen, slotted dataclasses where records are appropriate. They validate nonblank identifiers and artifact kinds, and progress counts cannot be negative or exceed their total. This small boundary is the stable base for later migration phases.
 
-Phase 2 adds strict externally-cleaned project files and resumable canonical ingestion; see [clean-data ingestion](clean-data-ingestion.md). Phase 3 adds variable-length source scouts and the two explicit PLI routes described in [source scouts and connectivity](source-connectivity.md).
+Phase 2 adds strict externally-cleaned project files and resumable canonical ingestion; see [clean-data ingestion](clean-data-ingestion.md). Phase 3 adds variable-length source scouts and the two explicit PLI routes described in [source scouts and connectivity](source-connectivity.md). Phase 4 adds exact-label network summaries, common-cohort repeated-measures mixed models, explicit multiple-testing families, R dependency preflight, and immutable validated outputs described in [network mixed models](network-models.md).
