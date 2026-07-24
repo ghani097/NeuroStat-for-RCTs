@@ -1,0 +1,97 @@
+# Append this generic fragment to a project whose connectivity atlas contains
+# these illustrative labels. Replace names and labels explicitly; no network is
+# inferred from atlas order.
+network_models:
+  networks:
+    salience-example:
+      - parcel-a-lh
+      - parcel-a-rh
+      - parcel-b-lh
+      - parcel-b-rh
+    executive-example:
+      - parcel-c-lh
+      - parcel-c-rh
+      - parcel-d-lh
+      - parcel-d-rh
+  families:
+    - name: evoked-primary
+      condition: evoked
+      bands: [alpha, beta]
+      networks: [salience-example, executive-example]
+      sessions: [baseline, followup]
+      boundary_observation_count: scout_samples
+      between_arm_contrasts:
+        - name: active-minus-comparison-baseline
+          session: baseline
+          numerator_arm: active
+          denominator_arm: comparison
+        - name: active-minus-comparison-followup
+          session: followup
+          numerator_arm: active
+          denominator_arm: comparison
+      within_arm_contrasts:
+        - name: followup-minus-baseline
+          arms: [active, comparison]
+          numerator_session: followup
+          denominator_session: baseline
+      correction_families:
+        # Separate term families reproduce a by-term Type-III adjustment over
+        # every requested band/network job.
+        - name: all-arm-tests
+          target: anova
+          terms: [arm]
+          bands: [alpha, beta]
+          networks: [salience-example, executive-example]
+          methods: [BH, holm]
+        - name: all-session-tests
+          target: anova
+          terms: [session]
+          bands: [alpha, beta]
+          networks: [salience-example, executive-example]
+          methods: [BH, holm]
+        - name: all-interaction-tests
+          target: anova
+          terms: [arm:session]
+          bands: [alpha, beta]
+          networks: [salience-example, executive-example]
+          methods: [BH, holm]
+        - name: all-primary-between
+          target: between
+          contrasts:
+            - active-minus-comparison-baseline
+            - active-minus-comparison-followup
+          bands: [alpha, beta]
+          networks: [salience-example, executive-example]
+          methods: [BH, holm, bonferroni]
+        - name: all-primary-within
+          target: within
+          contrasts: [followup-minus-baseline]
+          bands: [alpha, beta]
+          networks: [salience-example, executive-example]
+          methods: [BH, holm, bonferroni]
+  model:
+    reml: true
+    optimizer: nloptwrap
+    maxfun: 100000
+    arm_contrasts: sum
+    session_contrasts: poly
+    df_method: satterthwaite
+  diagnostics:
+    residuals: true
+    raw_scale: true
+    winsorized: true
+    winsor_robust_z: 3.5
+    all_fit: false
+    influence: false
+    leave_one_out: false
+  runtime:
+    # A bare command is resolved through PATH. A relative/absolute executable
+    # path is also supported and is passed without shell parsing.
+    executable: Rscript
+    library_paths: []
+    dependency_contract: builtin
+    strict_renv: false
+    timeout_seconds: 3600
+  validation:
+    absolute_tolerance: 1.0e-10
+    relative_tolerance: 1.0e-8

@@ -37,6 +37,10 @@ def _build_parser() -> argparse.ArgumentParser:
     connectivity.add_argument("project", metavar="PROJECT")
     connectivity.add_argument("--scouts-run", required=True, metavar="RUN_DIR")
     connectivity.add_argument("--json", action="store_true", dest="as_json")
+    network_models = commands.add_parser("network-models")
+    network_models.add_argument("project", metavar="PROJECT")
+    network_models.add_argument("--connectivity-run", required=True, metavar="RUN_DIR")
+    network_models.add_argument("--json", action="store_true", dest="as_json")
     return parser
 
 
@@ -58,14 +62,33 @@ def main(argv: Sequence[str] | None = None) -> int:
             from .scouts import run_scouts
             run = run_scouts(project, args.ingest_run)
             result = {"run_id": run.run_id, "run_dir": str(run.run_dir), "records": len(run.records), "reused": run.reused, "written": run.written}
-        else:
+        elif args.command == "connectivity":
             from .connectivity import run_connectivity
             run = run_connectivity(project, args.scouts_run)
             result = {"run_id": run.run_id, "run_dir": str(run.run_dir), "records": len(run.records), "reused": run.reused, "written": run.written}
+        else:
+            from .network_models import run_network_models
+            run = run_network_models(project, args.connectivity_run)
+            result = {
+                "run_id": run.run_id,
+                "run_dir": str(run.run_dir),
+                "artifacts": len(run.artifacts),
+                "reused": run.reused,
+            }
         if args.as_json: print(json.dumps(result, sort_keys=True))
         else:
-            verbs = {"validate": "valid", "ingest": "ingested", "scouts": "generated scouts for", "connectivity": "generated connectivity for"}
-            print("valid" if args.command == "validate" else f"{verbs[args.command]} {result['records']} record(s): {result['run_id']}")
+            verbs = {
+                "validate": "valid",
+                "ingest": "ingested",
+                "scouts": "generated scouts for",
+                "connectivity": "generated connectivity for",
+            }
+            if args.command == "validate":
+                print("valid")
+            elif args.command == "network-models":
+                print(f"generated network models: {result['run_id']}")
+            else:
+                print(f"{verbs[args.command]} {result['records']} record(s): {result['run_id']}")
         return 0
     except (ValueError, RuntimeError, OSError) as exc:
         print(f"error: {exc}", file=sys.stderr)

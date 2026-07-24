@@ -13,7 +13,18 @@ import yaml
 from .contracts import RecordKey
 
 _RECORD_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*\Z")
-_TOP = {"schema_version", "study", "input", "records", "analysis_profiles", "output", "contrasts", "families", "runtime"}
+_TOP = {
+    "schema_version",
+    "study",
+    "input",
+    "records",
+    "analysis_profiles",
+    "output",
+    "contrasts",
+    "families",
+    "runtime",
+    "network_models",
+}
 _RECORD = {"record_id", "participant_id", "arm", "session", "condition", "data_kind", "format", "path", "analysis_profile", "mat_variable", "samples_per_epoch", "data_unit"}
 _REQUIRED = {"record_id", "participant_id", "arm", "session", "condition", "data_kind", "format", "path", "analysis_profile"}
 _FORMATS = {"set": {".set"}, "fif": {".fif", ".fif.gz"}, "fieldtrip_mat": {".mat"}}
@@ -191,7 +202,7 @@ def load_project(project_file: str | Path) -> CleanProject:
     output = root.get("output")
     if not isinstance(output, Mapping) or set(output) != {"root"}: raise ProjectValidationError("output must contain exactly root")
     extras: dict[str, Mapping[str, Any]] = {}
-    for key in ("contrasts", "families", "runtime"):
+    for key in ("contrasts", "families", "runtime", "network_models"):
         if key in root:
             if not isinstance(root[key], Mapping): raise ProjectValidationError(f"{key} must be a mapping")
             extras[key] = _freeze(root[key])

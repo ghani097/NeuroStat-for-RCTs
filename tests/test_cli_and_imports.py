@@ -57,3 +57,37 @@ def test_cli_version() -> None:
         env=_subprocess_environment(),
     )
     assert completed.stdout == "neurostat-rcts 2.0.0a1\n"
+
+
+def test_network_models_help_is_dependency_light_and_actionable() -> None:
+    _assert_scientific_stack_not_loaded(_run_import("neurostat.cli"))
+    completed = subprocess.run(
+        [sys.executable, "-m", "neurostat", "network-models", "--help"],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=_subprocess_environment(),
+    )
+    assert "--connectivity-run RUN_DIR" in completed.stdout
+    assert "PROJECT" in completed.stdout
+
+
+def test_network_models_cli_reports_project_errors_without_traceback(tmp_path: Path) -> None:
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "neurostat",
+            "network-models",
+            str(tmp_path / "missing.yaml"),
+            "--connectivity-run",
+            str(tmp_path / "missing-run"),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=_subprocess_environment(),
+    )
+    assert completed.returncode == 2
+    assert completed.stderr.startswith("error:")
+    assert "Traceback" not in completed.stderr
