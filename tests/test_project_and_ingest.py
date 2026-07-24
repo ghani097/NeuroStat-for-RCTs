@@ -58,7 +58,7 @@ def test_v73_fieldtrip_concatenated_trial_is_split(tmp_path: Path) -> None:
     source = tmp_path / "fieldtrip.mat"
     with h5py.File(source, "w") as file:
         group = file.create_group("data_ft")
-        trial = file.create_dataset("trial_data", data=np.arange(16, dtype=float).reshape(2, 8))
+        trial = file.create_dataset("trial_data", data=np.arange(16, dtype=float).reshape(2, 8).T)
         trial_refs = group.create_dataset("trial", (1, 1), dtype=h5py.ref_dtype); trial_refs[0, 0] = trial.ref
         labels = []
         for text in ("Cz", "Pz"):

@@ -50,6 +50,12 @@ def test_determinism_progress_payload_and_partial_reuse(tmp_path: Path) -> None:
     changed = ingest_project(project); assert changed.run_id != first.run_id
 
 
+def test_lock_mismatch_is_refused(tmp_path: Path) -> None:
+    source = tmp_path / "source.fif"; _source(source); project = _project(tmp_path, source); run = ingest_project(project)
+    lock = run.run_dir / "project.lock.json"; lock.write_text("{}", encoding="utf-8")
+    with pytest.raises(IngestError, match="existing lock differs"): ingest_project(project)
+
+
 def test_manifest_hash_and_atomic_failure_refusal(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     source = tmp_path / "source.fif"; _source(source); project = _project(tmp_path, source); run = ingest_project(project)
     with h5py.File(run.records[0], "r+") as file: file["data"][0, 0, 0] += 1
@@ -61,6 +67,13 @@ def test_manifest_hash_and_atomic_failure_refusal(tmp_path: Path, monkeypatch: p
     with pytest.raises(IngestError, match="injected"): ingest_project(other_project)
     assert not list((other / "output").rglob("*.tmp")) and not list((other / "output").rglob("*.h5"))
     assert json.loads(next((other / "output").rglob("status.json")).read_text())["state"] == "failed"
+
+
+def test_complete_manifest_rejects_nonpayload_file_mutation(tmp_path: Path) -> None:
+    source = tmp_path / "source.fif"; _source(source); project = _project(tmp_path, source); run = ingest_project(project)
+    with h5py.File(run.records[0], "r+") as file: file.attrs["untracked_note"] = "changed bytes but valid payload"
+    with pytest.raises(IngestError, match="SHA-256"):
+        ingest_project(project)
 
 
 def test_set_companion_provenance_uses_actual_header_reference(tmp_path: Path) -> None:
@@ -79,11 +92,28 @@ def test_set_companion_provenance_uses_actual_header_reference(tmp_path: Path) -
         source_bundle(load_project(project_for(missing)).records[0])
 
 
+def test_v73_set_companion_reference_is_hashed(tmp_path: Path) -> None:
+    companion = tmp_path / "nonstem-data.fdt"; companion.write_bytes(b"one")
+    header = tmp_path / "header.set"
+    with h5py.File(header, "w") as file:
+        eeg = file.create_group("EEG")
+        text = file.create_dataset("external_name", data=np.asarray([ord(char) for char in companion.name], dtype=np.uint16)); text.attrs["MATLAB_class"] = np.bytes_("char")
+        ref = eeg.create_dataset("data", (1, 1), dtype=h5py.ref_dtype); ref[0, 0] = text.ref
+    source = tmp_path / "source.fif"; _source(source)
+    text = _project(tmp_path, source).read_text().replace("format: fif", "format: set").replace("source.fif", "header.set")
+    project = tmp_path / "v73-set.yaml"; project.write_text(text, encoding="utf-8")
+    before = source_bundle(load_project(project).records[0]); assert companion.resolve() in before.files
+    companion.write_bytes(b"two")
+    assert source_bundle(load_project(project).records[0]).digest != before.digest
+
+
 def test_cli_validate_ingest_json_and_error(tmp_path: Path) -> None:
     source = tmp_path / "source.fif"; _source(source); project = _project(tmp_path, source)
     env = os.environ | {"PYTHONPATH": str(Path(__file__).parents[1] / "src")}
     valid = subprocess.run([sys.executable, "-m", "neurostat", "validate", str(project), "--json"], text=True, capture_output=True, env=env, check=True)
     assert json.loads(valid.stdout)["valid"] is True
+    text_mode = subprocess.run([sys.executable, "-m", "neurostat", "validate", str(project)], text=True, capture_output=True, env=env, check=True)
+    assert text_mode.stdout == "valid\n"
     light = subprocess.run([sys.executable, "-c", "from neurostat.cli import main; import sys; main([\"validate\", sys.argv[1]]); print(' '.join(sys.modules))", str(project)], text=True, capture_output=True, env=env, check=True)
     assert not any(name in light.stdout.split() or any(item.startswith(name + ".") for item in light.stdout.split()) for name in ("mne", "matplotlib", "PyQt5", "pli_pipeline"))
     ingested = subprocess.run([sys.executable, "-m", "neurostat", "ingest", str(project), "--json"], text=True, capture_output=True, env=env, check=True)
@@ -98,3 +128,11 @@ def test_clean_recording_owns_readonly_arrays() -> None:
     data[0, 0, 0] = 9; events[0, 0] = 9
     assert record.channel_names == ("Cz", "Pz") and record.data[0, 0, 0] == 0 and record.events[0, 0] == 1
     with pytest.raises(ValueError): record.times[0] = 3
+
+
+def test_long_signal_is_chunked_without_value_changes(tmp_path: Path) -> None:
+    source = tmp_path / "source.fif"; _source(source, 25001)
+    run = ingest_project(_project(tmp_path, source))
+    with h5py.File(run.records[0], "r") as file:
+        assert file["data"].chunks is not None and 0 < file["data"].chunks[-1] <= 25001
+        np.testing.assert_array_equal(file["data"][0, :, -3:], np.array([[24998, 24999, 25000], [49999, 50000, 50001]], dtype=float))

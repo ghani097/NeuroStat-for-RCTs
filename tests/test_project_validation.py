@@ -52,6 +52,7 @@ def test_inline_and_manifest_relative_bases(tmp_path: Path) -> None:
     ("extension", "[" + _row(path="clean.mat") + "]", {}),
     ("samples_per_epoch", "[" + _row(samples_per_epoch="4") + "]", {}),
     ("must be V", "[" + _row(data_unit="uV") + "]", {}),
+    ("mat_variable", "[" + _row(mat_variable="false") + "]", {}),
 ])
 def test_study_and_record_contract_rejections(tmp_path: Path, needle: str, records: str, changes: dict[str, str]) -> None:
     _source(tmp_path); _source(tmp_path, "clean.mat")
@@ -84,3 +85,9 @@ def test_profiles_and_later_config_are_recursively_immutable(tmp_path: Path) -> 
     project = _load(tmp_path, _yaml("[" + _row() + "]") + "runtime: {deep: {items: [one]}}\n")
     with pytest.raises(TypeError): project.analysis_profiles["default"]["nested"]["value"] = "two"  # type: ignore[index]
     with pytest.raises(TypeError): project.extras["runtime"]["deep"]["items"] += ("two",)  # type: ignore[index]
+
+
+@pytest.mark.parametrize("value", ["false", "0", "[]"])
+def test_optional_values_reject_falsy_nonstrings(tmp_path: Path, value: str) -> None:
+    _source(tmp_path)
+    with pytest.raises(ProjectValidationError): _load(tmp_path, _yaml("[" + _row(data_unit=value) + "]"))

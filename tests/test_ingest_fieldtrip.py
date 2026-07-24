@@ -25,7 +25,7 @@ output: {{root: output}}
 
 
 def _classic(path: Path, trials: list[np.ndarray], times: list[np.ndarray] | None = None) -> None:
-    data = {"label": np.array(["Cz", "Pz"], dtype=object), "trial": np.array(trials, dtype=object), "fsample": 20.0, "trialinfo": np.arange(len(trials))[:, None], "elec": {"pnt": np.array([[0., 0., 1.], [0., 1., 0.]])}}
+    data = {"label": np.array(["Cz", "Pz"], dtype=object), "trial": np.array(trials, dtype=object), "fsample": 20.0, "trialinfo": np.arange(len(trials))[:, None], "elec": {"label": np.array(["Cz", "Pz"], dtype=object), "pnt": np.array([[0., 0., 1.], [0., 1., 0.]])}}
     if times is not None: data["time"] = np.array(times, dtype=object)
     savemat(path, {"data_ft": data})
 
@@ -58,8 +58,10 @@ def _v73(path: Path, *, concatenated: bool = False, mismatched_time: bool = Fals
         for name in ("Cz", "Pz"):
             label = file.create_dataset(f"label_{name}", data=np.asarray([ord(char) for char in name], dtype=np.uint16)); label.attrs["MATLAB_class"] = np.bytes_("char"); labels.append(label.ref)
         cell = group.create_dataset("label", (2, 1), dtype=h5py.ref_dtype); cell[:, 0] = labels
-        group.create_dataset("fsample", data=20.0); group.create_dataset("trialinfo", data=np.arange(len(values)).reshape(1, -1))
+        group.create_dataset("fsample", data=20.0)
+        if not concatenated: group.create_dataset("trialinfo", data=np.arange(len(values)).reshape(1, -1))
         elec = group.create_group("elec"); elec.create_dataset("pnt", data=np.array([[0., 0., 1.], [0., 1., 0.]]).T)
+        elec_labels = elec.create_dataset("label", (2, 1), dtype=h5py.ref_dtype); elec_labels[:, 0] = labels
         if concatenated: file.create_dataset("pnts", data=4)
 
 
@@ -79,3 +81,24 @@ def test_v73_concatenated_pnts_and_time_mismatch_rejection(tmp_path: Path) -> No
     bad = tmp_path / "bad.mat"; _v73(bad, mismatched_time=True)
     with pytest.raises(IngestError, match="time vectors"):
         ingest_project(_project(tmp_path, bad, "epochs"))
+
+
+def test_fieldtrip_square_orientation_electrode_mapping_and_trialinfo(tmp_path: Path) -> None:
+    source = tmp_path / "mapped.mat"
+    savemat(source, {"data_ft": {"label": np.array(["Cz", "Pz"], dtype=object), "trial": np.eye(2) * 7, "fsample": 10., "trialinfo": np.array([4]), "elec": {"label": np.array(["Pz", "Cz"], dtype=object), "chanpos": np.array([[2., 2., 2.], [1., 1., 1.]])}}})
+    run = ingest_project(_project(tmp_path, source, "raw"))
+    with h5py.File(run.records[0], "r") as file:
+        np.testing.assert_allclose(file["data"][0], np.eye(2) * 7e-6)
+        np.testing.assert_allclose(file["channel_positions"][:], [[1, 1, 1], [2, 2, 2]])
+        assert file["events"].shape == (1, 1)
+
+
+@pytest.mark.parametrize("pnts", [0, -1, 2.5])
+def test_fieldtrip_invalid_pnts_and_logical_orientation_rejected(tmp_path: Path, pnts: float) -> None:
+    source = tmp_path / f"pnts-{pnts}.mat"; _v73(source, concatenated=True)
+    with h5py.File(source, "r+") as file: del file["pnts"]; file.create_dataset("pnts", data=pnts)
+    with pytest.raises(IngestError, match="pnts"):
+        ingest_project(_project(tmp_path, source, "epochs"))
+    wrong = tmp_path / "wrong.mat"; savemat(wrong, {"data_ft": {"label": np.array(["Cz", "Pz"], dtype=object), "trial": np.arange(6.).reshape(3, 2), "fsample": 10.}})
+    with pytest.raises(IngestError, match="axis 0"):
+        ingest_project(_project(tmp_path, wrong, "raw"))

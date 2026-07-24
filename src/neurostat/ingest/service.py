@@ -58,6 +58,24 @@ def _atomic_json(path: Path, value: Any) -> None:
         raise
 
 
+def _h5_scalar_or_char(file: Any, value: Any) -> Any:
+    """Read the scalar/reference/UTF-16 shapes used by MATLAB v7.3 headers."""
+    import h5py
+    if isinstance(value, h5py.Reference): return _h5_scalar_or_char(file, file[value])
+    if isinstance(value, h5py.Dataset):
+        raw = value[()]
+        if raw.dtype == h5py.ref_dtype and raw.size == 1: return _h5_scalar_or_char(file, raw.flat[0])
+        matlab_class = value.attrs.get("MATLAB_class", b"")
+        if matlab_class == b"char" or matlab_class == "char": return "".join(chr(int(code)) for code in np.asarray(raw).ravel(order="F") if int(code))
+        if isinstance(raw, bytes): return raw.decode("utf-8", "strict")
+        if isinstance(raw, np.ndarray) and raw.size == 1: return raw.item()
+        return raw
+    if isinstance(value, h5py.Group):
+        for name in ("value", "data"):
+            if name in value: return _h5_scalar_or_char(file, value[name])
+    return value
+
+
 @dataclass(frozen=True, slots=True)
 class SourceBundle:
     files: tuple[Path, ...]
@@ -92,7 +110,7 @@ class CleanRecording:
         if not np.isfinite(data).all(): raise IngestError("recording data contains non-finite values")
         events = None if self.events is None else np.array(self.events, copy=True)
         positions = None if self.channel_positions is None else np.array(self.channel_positions, dtype=np.float64, copy=True)
-        if events is not None and (events.ndim == 0 or events.shape[0] != data.shape[0]): raise IngestError("events must have one row per epoch")
+        if events is not None and (not np.issubdtype(events.dtype, np.number) or events.ndim == 0 or events.shape[0] != data.shape[0] or not np.isfinite(events).all()): raise IngestError("events must be finite numeric rows aligned to epochs")
         if positions is not None and (positions.shape != (data.shape[1], 3) or not np.isfinite(positions).all()): raise IngestError("channel_positions has invalid shape")
         data.setflags(write=False); times.setflags(write=False)
         if events is not None: events.setflags(write=False)
@@ -126,6 +144,19 @@ def source_bundle(record: ProjectRecord) -> SourceBundle:
                     files.append(companion)
         except (OSError, ValueError, NotImplementedError):
             parsed = False
+        if not parsed:
+            try:
+                import h5py
+                with h5py.File(record.path, "r") as file:
+                    if "EEG" in file and "data" in file["EEG"]:
+                        parsed = True
+                        data_ref = _h5_scalar_or_char(file, file["EEG"]["data"])
+                        if isinstance(data_ref, str) and data_ref.lower().endswith(".fdt"):
+                            companion = (record.path.parent / data_ref).resolve()
+                            if not companion.is_file(): raise IngestError(f"{record.record_id}: EEGLAB header references missing companion .fdt: {companion}")
+                            files.append(companion)
+            except OSError:
+                pass
         if not parsed:
             text = record.path.read_bytes()[:1024 * 1024].decode("latin1", "ignore")
             refs = re.findall(r"['\"]([^'\"]+\.fdt)['\"]", text, flags=re.I)
@@ -207,15 +238,17 @@ def _fieldtrip(record: ProjectRecord, bundle: SourceBundle) -> CleanRecording:
     for trial in trials:
         a = np.asarray(trial, dtype=float)
         if a.ndim != 2: raise IngestError("FieldTrip trials must be 2-D")
-        if a.shape[0] == len(labels): pass
-        elif a.shape[1] == len(labels): a = a.T
-        else: raise IngestError("FieldTrip trial dimensions do not match labels")
+        if a.shape[0] != len(labels): raise IngestError("FieldTrip trials must be logical channels x samples (axis 0 matches labels)")
         arrays.append(a)
     split_samples: int | None = None
     if record.data_kind == "raw":
         if len(arrays) != 1: raise IngestError("FieldTrip raw requires exactly one trial")
     elif len(arrays) == 1:
-        n = record.samples_per_epoch or (int(np.asarray(raw["pnts"]).squeeze()) if "pnts" in raw else None)
+        n = record.samples_per_epoch
+        if n is None and "pnts" in raw:
+            candidate = float(np.asarray(raw["pnts"]).squeeze())
+            if not np.isfinite(candidate) or candidate <= 0 or not candidate.is_integer(): raise IngestError("FieldTrip pnts must be a positive finite integer")
+            n = int(candidate)
         if n:
             if arrays[0].shape[1] % n: raise IngestError("FieldTrip concatenated trial is not divisible by samples_per_epoch")
             split_samples = n
@@ -242,14 +275,21 @@ def _fieldtrip(record: ProjectRecord, bundle: SourceBundle) -> CleanRecording:
     if elec is not None:
         pos = getattr(elec, "chanpos", None) if not isinstance(elec, dict) else elec.get("chanpos")
         if pos is None: pos = getattr(elec, "pnt", None) if not isinstance(elec, dict) else elec.get("pnt")
+        elec_labels = getattr(elec, "label", None) if not isinstance(elec, dict) else elec.get("label")
         if pos is not None:
+            if elec_labels is None: raise IngestError("FieldTrip electrode positions require elec.label mapping")
+            electrode_names = tuple(str(x.decode() if isinstance(x, bytes) else x).strip() for x in np.asarray(elec_labels, dtype=object).ravel())
             pos = np.asarray(pos, dtype=float)
-            if pos.shape == (len(labels), 3): positions = pos
+            if pos.shape != (len(electrode_names), 3) or not np.isfinite(pos).all() or len(set(electrode_names)) != len(electrode_names) or set(electrode_names) != set(labels): raise IngestError("FieldTrip electrode labels/positions do not unambiguously match data labels")
+            positions = np.asarray([pos[electrode_names.index(label)] for label in labels], dtype=float)
     events = raw.get("trialinfo")
-    events = np.asarray(events) if events is not None else None
-    if events is not None and events.ndim == 0: events = events.reshape(1, 1)
-    if events is not None and len(arrays) == 1 and events.ndim == 1: events = events[None, :]
-    if events is not None and len(arrays) > 1 and events.shape[0] != len(arrays): events = None
+    if events is not None:
+        events = np.asarray(events)
+        if not np.issubdtype(events.dtype, np.number): raise IngestError("FieldTrip trialinfo must be numeric")
+        if events.ndim == 0: events = events.reshape(1, 1)
+        elif events.ndim == 1: events = events.reshape(1, -1) if len(arrays) == 1 else (events.reshape(-1, 1) if events.size == len(arrays) else (_ for _ in ()).throw(IngestError("FieldTrip trialinfo does not align to epochs")))
+        elif events.ndim != 2: raise IngestError("FieldTrip trialinfo must be scalar, vector, or matrix")
+        if events.shape[0] != len(arrays) or not np.isfinite(events).all(): raise IngestError("FieldTrip trialinfo must be finite and row-aligned to epochs")
     unit = record.data_unit or "native"; scales = {"V": 1.0, "mV": 1e-3, "uV": 1e-6, "native": 1.0}; scale = scales[unit]
     return CleanRecording(record.record_id, record.key, record.data_kind, record.format, record.analysis_profile, fsample, labels, np.stack(arrays) * scale, times, events, positions, unit, "V" if unit != "native" else "native", scale, bundle)
 

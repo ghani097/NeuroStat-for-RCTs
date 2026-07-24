@@ -143,11 +143,13 @@ def _record(row: Mapping[str, Any], base: Path, index: int, study: Study, profil
     if spe not in (None, ""):
         if isinstance(spe, bool) or not str(spe).isdigit() or int(spe) <= 0: raise ProjectValidationError(f"record {rid}.samples_per_epoch must be a positive integer")
         spe = int(spe)
-    mat_variable = row.get("mat_variable") or None
-    if mat_variable is not None: mat_variable = _string(mat_variable, f"record {rid}.mat_variable")
-    unit = row.get("data_unit") or None
-    if unit is not None and unit not in {"V", "mV", "uV", "native"}: raise ProjectValidationError(f"record {rid}.data_unit is invalid")
+    mat_raw = row.get("mat_variable")
+    mat_variable = None if mat_raw is None or mat_raw == "" else _string(mat_raw, f"record {rid}.mat_variable")
+    unit_raw = row.get("data_unit")
+    unit = None if unit_raw is None or unit_raw == "" else unit_raw
+    if unit is not None and (not isinstance(unit, str) or unit not in {"V", "mV", "uV", "native"}): raise ProjectValidationError(f"record {rid}.data_unit is invalid")
     if fmt in {"set", "fif"} and unit not in (None, "V"): raise ProjectValidationError(f"record {rid}: SET/FIF data_unit must be V or blank")
+    if mat_variable is not None and fmt != "fieldtrip_mat": raise ProjectValidationError(f"record {rid}.mat_variable is only valid for FieldTrip")
     if spe is not None and (fmt != "fieldtrip_mat" or kind != "epochs"): raise ProjectValidationError(f"record {rid}.samples_per_epoch is only valid for FieldTrip epochs")
     return ProjectRecord(rid, key, kind, fmt, source, profile, mat_variable, spe, unit)
 
