@@ -403,18 +403,17 @@ def _validate_workspace(workspace: Path, entry: dict[str, Any]) -> None:
 
     settings = loadmat(workspace / "Workspace.mat", simplify_cells=True)
     expected_settings = {
-        "data_path": str((workspace / "data").resolve()),
         "brainSheet": "atlas.xlsx",
         "variableSheet": "Variables.csv",
         "fieldName": manifest["matrix_field"],
     }
     for name, expected in expected_settings.items():
         actual = str(settings.get(name, ""))
-        if name == "data_path":
-            if Path(actual).resolve() != Path(expected):
-                raise GraphVarError(f"workspace {name} is stale: {workspace.name}")
-        elif actual != expected:
+        if actual != expected:
             raise GraphVarError(f"workspace {name} differs: {workspace.name}")
+    data_path = Path(str(settings.get("data_path", "")))
+    if not data_path.is_absolute() or data_path.name.casefold() != "data":
+        raise GraphVarError(f"workspace data_path is invalid: {workspace.name}")
     relative_files = [str(value) for value in np.atleast_1d(settings["files_rel"])]
     absolute_files = [str(value) for value in np.atleast_1d(settings["files"])]
     if (
@@ -423,17 +422,30 @@ def _validate_workspace(workspace: Path, entry: dict[str, Any]) -> None:
     ):
         raise GraphVarError(f"workspace file cardinality differs: {workspace.name}")
     for relative, absolute in zip(relative_files, absolute_files, strict=True):
-        resolved_relative = (workspace / relative).resolve()
-        resolved_absolute = Path(absolute).resolve()
+        relative_path = Path(relative)
+        if relative_path.name != relative or relative in {"", ".", ".."}:
+            raise GraphVarError(
+                f"workspace files_rel entry is not a bare filename: {relative!r}"
+            )
+        resolved_relative = (workspace / "data" / "CorrMatrix" / relative).resolve()
         try:
             resolved_relative.relative_to(workspace.resolve())
-            resolved_absolute.relative_to(workspace.resolve())
         except ValueError:
             raise GraphVarError(
-                f"workspace contains an external matrix reference: {workspace.name}"
+                f"workspace contains an unsafe relative matrix reference: {workspace.name}"
             ) from None
-        if resolved_relative != resolved_absolute or not resolved_relative.is_file():
+        if not resolved_relative.is_file():
             raise GraphVarError(f"workspace matrix reference is stale: {relative}")
+        absolute_carrier = Path(absolute)
+        expected_suffix = ("data", "corrmatrix", relative.casefold())
+        absolute_parts = tuple(part.casefold() for part in absolute_carrier.parts)
+        if (
+            not absolute_carrier.is_absolute()
+            or absolute_parts[-len(expected_suffix) :] != expected_suffix
+        ):
+            raise GraphVarError(
+                f"workspace absolute carrier disagrees with files_rel: {relative}"
+            )
 
 
 def verify_graphvar_workspace_run(
@@ -621,8 +633,10 @@ def build_graphvar_workspaces(
                             "session": session,
                         }
                     )
-                    files_relative.append(relative)
-                    files_absolute.append(str(workspace_final / relative))
+                    files_relative.append(file_name)
+                    files_absolute.append(
+                        str(workspace_final / "data" / "CorrMatrix" / file_name)
+                    )
                     audits.append(
                         {
                             "row_order": len(variables),

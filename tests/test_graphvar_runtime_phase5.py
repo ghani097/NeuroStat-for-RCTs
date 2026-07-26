@@ -188,10 +188,6 @@ def test_real_graphvar_tiny_permutation_smoke() -> None:
         rows[0] = ["ObservationID", "arm", "subject", "session"]
         with variables.open("w", encoding="utf-8", newline="") as handle:
             csv.writer(handle, delimiter=";", lineterminator="\n").writerows(rows)
-        # Historical workspaces may store bare files_rel names. The packaged
-        # builder stores data/CorrMatrix paths; root copies make either usable.
-        for matrix in (workspace / "data" / "CorrMatrix").glob("*.mat"):
-            shutil.copy2(matrix, workspace / matrix.name)
         nodes = tuple(
             AtlasNode(str(index), index, str(index), None) for index in indices
         )

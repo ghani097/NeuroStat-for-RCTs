@@ -56,7 +56,8 @@ lowerMask = ~triu(true(nNodes));
 nLinks = nnz(lowerMask);
 outcomes = zeros(nObservations, nLinks);
 for observation = 1:nObservations
-    matrixPath = fullfile(workspace, relativeFiles{observation});
+    matrixPath = fullfile(workspace, 'data', 'CorrMatrix', ...
+        relativeFiles{observation});
     Content = load(matrixPath, Settings.fieldName);
     assert(isfield(Content, Settings.fieldName), ...
         'Configured matrix field is absent.');

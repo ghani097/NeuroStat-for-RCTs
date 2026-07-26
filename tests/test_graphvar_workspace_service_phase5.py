@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import shutil
 import zipfile
 from pathlib import Path
 from types import MappingProxyType
@@ -307,22 +308,67 @@ def test_workspace_build_is_relocatable_exact_and_matrix_faithful(
     from scipy.io import loadmat
 
     settings = loadmat(workspace / "Workspace.mat", simplify_cells=True)
-    for value in np.atleast_1d(settings["files"]):
+    assert Path(str(settings["data_path"])).resolve() == (workspace / "data").resolve()
+    relative_files = [str(value) for value in np.atleast_1d(settings["files_rel"])]
+    assert relative_files
+    assert all(Path(value).name == value for value in relative_files)
+    for relative, value in zip(
+        relative_files, np.atleast_1d(settings["files"]), strict=True
+    ):
         path = Path(str(value)).resolve()
         path.relative_to(workspace.resolve())
         assert path.is_file()
-    copied = loadmat(
-        Path(str(np.atleast_1d(settings["files"])[0])), simplify_cells=True
-    )
+        assert path == (workspace / "data" / "CorrMatrix" / relative).resolve()
+    copied = loadmat(Path(str(np.atleast_1d(settings["files"])[0])), simplify_cells=True)
     np.testing.assert_array_equal(
         copied["OutPLI_theta"], np.asarray([[0.0, 0.25], [0.25, 0.0]])
     )
     reused = build_graphvar_workspaces(project, tmp_path / "connectivity")
     assert reused.reused is True
     verify_graphvar_workspace_run(run.run_dir)
-    (workspace / "matrix-audit.csv").write_text("tampered", encoding="utf-8")
+    relocated = tmp_path / "relocated" / run.run_dir.name
+    relocated.parent.mkdir()
+    shutil.move(run.run_dir, relocated)
+    relocated_run = verify_graphvar_workspace_run(relocated)
+    assert relocated_run.run_id == run.run_id
+    assert all(path.is_dir() for path in relocated_run.workspaces)
+    result = tmp_path / "relocated-manual.mat"
+    _result(result)
+    analysis = run_graphvar_analysis(
+        project,
+        relocated_run,
+        result_files={relocated_run.workspaces[0].name: result},
+        preflight_function=_preflight,
+    )
+    analysis_workspace = (
+        analysis.run_dir
+        / "graphvar"
+        / "workspaces"
+        / relocated_run.workspaces[0].name
+    )
+    analysis_settings = loadmat(
+        analysis_workspace / "Workspace.mat", simplify_cells=True
+    )
+    assert Path(str(analysis_settings["data_path"])).resolve() == (
+        analysis_workspace / "data"
+    ).resolve()
+    for relative, value in zip(
+        np.atleast_1d(analysis_settings["files_rel"]),
+        np.atleast_1d(analysis_settings["files"]),
+        strict=True,
+    ):
+        assert Path(str(relative)).name == str(relative)
+        assert Path(str(value)).resolve() == (
+            analysis_workspace / "data" / "CorrMatrix" / str(relative)
+        ).resolve()
+    relocated_workspace = (
+        relocated / "workspaces" / relocated_run.workspaces[0].name
+    )
+    (relocated_workspace / "matrix-audit.csv").write_text(
+        "tampered", encoding="utf-8"
+    )
     with pytest.raises(GraphVarError, match="SHA-256"):
-        verify_graphvar_workspace_run(run.run_dir)
+        verify_graphvar_workspace_run(relocated)
 
 
 def test_manual_import_finalizes_no_component_headers_reuses_and_detects_tamper(

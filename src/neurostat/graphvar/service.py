@@ -162,7 +162,9 @@ def _copy_prepared_workspace(source: Path, target: Path, final_target: Path) -> 
 
     settings = loadmat(target / "Workspace.mat", simplify_cells=True)
     relative_files = [str(item) for item in np.atleast_1d(settings["files_rel"])]
-    absolute_files = [str(final_target / item) for item in relative_files]
+    absolute_files = [
+        str(final_target / "data" / "CorrMatrix" / item) for item in relative_files
+    ]
     _write_mat(
         target / "Workspace.mat",
         {
