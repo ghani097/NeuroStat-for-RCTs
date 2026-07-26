@@ -25,6 +25,7 @@ _TOP = {
     "runtime",
     "network_models",
     "graphvar",
+    "brainnet",
 }
 _RECORD = {"record_id", "participant_id", "arm", "session", "condition", "data_kind", "format", "path", "analysis_profile", "mat_variable", "samples_per_epoch", "data_unit"}
 _REQUIRED = {"record_id", "participant_id", "arm", "session", "condition", "data_kind", "format", "path", "analysis_profile"}
@@ -203,7 +204,14 @@ def load_project(project_file: str | Path) -> CleanProject:
     output = root.get("output")
     if not isinstance(output, Mapping) or set(output) != {"root"}: raise ProjectValidationError("output must contain exactly root")
     extras: dict[str, Mapping[str, Any]] = {}
-    for key in ("contrasts", "families", "runtime", "network_models", "graphvar"):
+    for key in (
+        "contrasts",
+        "families",
+        "runtime",
+        "network_models",
+        "graphvar",
+        "brainnet",
+    ):
         if key in root:
             if not isinstance(root[key], Mapping): raise ProjectValidationError(f"{key} must be a mapping")
             extras[key] = _freeze(root[key])

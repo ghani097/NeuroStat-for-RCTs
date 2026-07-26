@@ -1,0 +1,32 @@
+brainnet:
+  resources:
+    surface: brainnet-assets/BrainMesh_ICBM152.nv
+    viewer_config: brainnet-assets/PltSettings.mat
+  selection:
+    # Output and manuscript display order is exactly this order.
+    workspaces:
+      - evoked__theta__post-followup
+      - evoked__alpha__baseline-post
+    policy: largest_primary_node_pfwe
+    top_k: 8
+  nodes:
+    # One exact entry is required for every frozen Phase-5 node.
+    # `color` is BrainNet column 4: a module index or colour scalar.
+    styles:
+      - connectivity_label: exact-left-atlas-label
+        display_label: L.ROI
+        color: 1
+        size: 4
+      - connectivity_label: exact-right-atlas-label
+        display_label: R.ROI
+        color: 2
+        size: 4
+  render:
+    width_pixels: 2000
+    height_pixels: 1500
+    dpi: 300
+  runtime:
+    executable: matlab
+    brainnet_root: BrainNet
+    matlab_release: 2025b
+    timeout_seconds: 900
