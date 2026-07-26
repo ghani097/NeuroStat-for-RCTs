@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import argparse
-from collections.abc import Sequence
 import json
 import sys
+from collections.abc import Sequence
 
 from . import __version__
 
@@ -41,6 +41,28 @@ def _build_parser() -> argparse.ArgumentParser:
     network_models.add_argument("project", metavar="PROJECT")
     network_models.add_argument("--connectivity-run", required=True, metavar="RUN_DIR")
     network_models.add_argument("--json", action="store_true", dest="as_json")
+    graphvar = commands.add_parser(
+        "graphvar",
+        help="Build, execute, or safely import GraphVar 2.03a workspaces.",
+    )
+    graphvar_commands = graphvar.add_subparsers(dest="graphvar_command", required=True)
+    graphvar_build = graphvar_commands.add_parser("build")
+    graphvar_build.add_argument("project", metavar="PROJECT")
+    graphvar_build.add_argument("--connectivity-run", required=True, metavar="RUN_DIR")
+    graphvar_build.add_argument("--json", action="store_true", dest="as_json")
+    for action in ("run", "extract"):
+        command = graphvar_commands.add_parser(action)
+        command.add_argument("project", metavar="PROJECT")
+        command.add_argument("--workspace-run", required=True, metavar="RUN_DIR")
+        if action == "extract":
+            command.add_argument(
+                "--result",
+                action="append",
+                required=True,
+                metavar="WORKSPACE=RESULT_MAT",
+                help="One exact workspace-to-result mapping; repeat for every workspace.",
+            )
+        command.add_argument("--json", action="store_true", dest="as_json")
     return parser
 
 
@@ -51,23 +73,51 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     try:
         from .project import load_project
+
         project = load_project(args.project)
         if args.command == "validate":
-            result = {"valid": True, "project": str(project.project_file), "records": len(project.records), "output_root": str(project.output_root)}
+            result = {
+                "valid": True,
+                "project": str(project.project_file),
+                "records": len(project.records),
+                "output_root": str(project.output_root),
+            }
         elif args.command == "ingest":
             from .ingest import ingest_project
+
             run = ingest_project(project)
-            result = {"run_id": run.run_id, "run_dir": str(run.run_dir), "records": len(run.records), "reused": run.reused, "written": run.written}
+            result = {
+                "run_id": run.run_id,
+                "run_dir": str(run.run_dir),
+                "records": len(run.records),
+                "reused": run.reused,
+                "written": run.written,
+            }
         elif args.command == "scouts":
             from .scouts import run_scouts
+
             run = run_scouts(project, args.ingest_run)
-            result = {"run_id": run.run_id, "run_dir": str(run.run_dir), "records": len(run.records), "reused": run.reused, "written": run.written}
+            result = {
+                "run_id": run.run_id,
+                "run_dir": str(run.run_dir),
+                "records": len(run.records),
+                "reused": run.reused,
+                "written": run.written,
+            }
         elif args.command == "connectivity":
             from .connectivity import run_connectivity
+
             run = run_connectivity(project, args.scouts_run)
-            result = {"run_id": run.run_id, "run_dir": str(run.run_dir), "records": len(run.records), "reused": run.reused, "written": run.written}
-        else:
+            result = {
+                "run_id": run.run_id,
+                "run_dir": str(run.run_dir),
+                "records": len(run.records),
+                "reused": run.reused,
+                "written": run.written,
+            }
+        elif args.command == "network-models":
             from .network_models import run_network_models
+
             run = run_network_models(project, args.connectivity_run)
             result = {
                 "run_id": run.run_id,
@@ -75,7 +125,46 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "artifacts": len(run.artifacts),
                 "reused": run.reused,
             }
-        if args.as_json: print(json.dumps(result, sort_keys=True))
+        elif args.graphvar_command == "build":
+            from .graphvar import build_graphvar_workspaces
+
+            run = build_graphvar_workspaces(project, args.connectivity_run)
+            result = {
+                "run_id": run.run_id,
+                "run_dir": str(run.run_dir),
+                "workspaces": len(run.workspaces),
+                "reused": run.reused,
+                "state": "prepared",
+            }
+        else:
+            from .graphvar import run_graphvar_analysis
+
+            imported = None
+            if args.graphvar_command == "extract":
+                imported = {}
+                for item in args.result:
+                    if "=" not in item:
+                        raise ValueError("--result must use WORKSPACE=RESULT_MAT")
+                    workspace, path = item.split("=", 1)
+                    if not workspace or not path or workspace in imported:
+                        raise ValueError(
+                            "--result mappings must have unique nonblank workspaces"
+                        )
+                    imported[workspace] = path
+            run = run_graphvar_analysis(
+                project,
+                args.workspace_run,
+                result_files=imported,
+            )
+            result = {
+                "run_id": run.run_id,
+                "run_dir": str(run.run_dir),
+                "artifacts": len(run.artifacts),
+                "reused": run.reused,
+                "mode": args.graphvar_command,
+            }
+        if args.as_json:
+            print(json.dumps(result, sort_keys=True))
         else:
             verbs = {
                 "validate": "valid",
@@ -87,8 +176,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print("valid")
             elif args.command == "network-models":
                 print(f"generated network models: {result['run_id']}")
+            elif args.command == "graphvar":
+                print(
+                    f"GraphVar {args.graphvar_command}: {result['run_id']} "
+                    f"({result['run_dir']})"
+                )
             else:
-                print(f"{verbs[args.command]} {result['records']} record(s): {result['run_id']}")
+                print(
+                    f"{verbs[args.command]} {result['records']} record(s): {result['run_id']}"
+                )
         return 0
     except (ValueError, RuntimeError, OSError) as exc:
         print(f"error: {exc}", file=sys.stderr)

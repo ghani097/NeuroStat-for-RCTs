@@ -1,0 +1,36 @@
+graphvar:
+  atlas:
+    workbook: graphvar_atlas.xlsx
+    brain_viewer_config: ConfigBrainViewer.mat
+    nodes:
+      - connectivity_label: exact-left-atlas-label
+        atlas_index_1based: 1
+        display_label: L.ROI
+        coordinates: [-20.0, 10.0, 30.0]
+      - connectivity_label: exact-right-atlas-label
+        atlas_index_1based: 2
+        display_label: R.ROI
+        coordinates: [20.0, 10.0, 30.0]
+  families:
+    - name: evoked-primary
+      holm_family: evoked-components
+      condition: evoked
+      bands: [theta, alpha, beta, gamma]
+      session_pairs:
+        - name: baseline-post
+          first_session: baseline
+          second_session: post
+      effect:
+        numerator_arm: active
+        denominator_arm: control
+      component_forming_alpha: 0.05
+      familywise_alpha: 0.05
+      permutations: 5000
+      seed: {policy: sha256_workspace, base: 20260724}
+      matrix_field_template: OutPLI_{band}
+      effect_label: arm_active-arm_control=0
+  runtime:
+    executable: matlab
+    graphvar_root: GraphVar_2.03a
+    matlab_release: 2025b
+    timeout_seconds: 7200
