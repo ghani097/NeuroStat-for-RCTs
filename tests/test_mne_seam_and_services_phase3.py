@@ -271,7 +271,7 @@ def test_cli_help_lists_source_and_connectivity_without_importing_science() -> N
     )
     result = subprocess.run([sys.executable, "-c", command], text=True, capture_output=True, env=env, check=True)
     help_text, modules = result.stdout.split("MODULES=", 1)
-    assert "{validate,ingest,scouts,connectivity,network-models}" in help_text
+    assert "{validate,ingest,scouts,connectivity,network-models,graphvar}" in help_text
     assert not any(name in modules.split() for name in ("mne", "scipy", "h5py", "matplotlib", "pli_pipeline"))
 
 

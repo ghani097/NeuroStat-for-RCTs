@@ -44,6 +44,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "neurostat.network_models" = ["resources/*.R", "resources/*.tsv"]
+"neurostat.graphvar" = ["matlab/*.m"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
