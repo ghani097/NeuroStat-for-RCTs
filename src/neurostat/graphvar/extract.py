@@ -267,9 +267,39 @@ def extract_workspace_result(
             block = max(1, chunk_permutations * 32)
             for start in range(0, permutations, block):
                 end = min(permutations, start + block)
-                spool[start:end, :, :] = np.asarray(
+                nf_block = np.asarray(
                     file["NF"][start:end, effect, :, :], dtype=np.float64
                 )
+                nb_block = np.asarray(
+                    file["NB"][start:end, effect, :, :], dtype=np.float64
+                )
+                if (
+                    not np.isfinite(nf_block).all()
+                    or not np.isfinite(nb_block).all()
+                    or np.any(nf_block < 0)
+                    or not np.allclose(
+                        nf_block, np.swapaxes(nf_block, 1, 2), atol=1e-12, rtol=0
+                    )
+                    or not np.allclose(
+                        nb_block, np.swapaxes(nb_block, 1, 2), atol=1e-12, rtol=0
+                    )
+                    or not np.allclose(
+                        np.diagonal(nf_block, axis1=1, axis2=2),
+                        0,
+                        atol=1e-12,
+                        rtol=0,
+                    )
+                    or not np.allclose(
+                        np.diagonal(nb_block, axis1=1, axis2=2),
+                        0,
+                        atol=1e-12,
+                        rtol=0,
+                    )
+                ):
+                    raise GraphVarError(
+                        "selected-effect NF/NB null matrices are malformed"
+                    )
+                spool[start:end, :, :] = nf_block
             spool.flush()
             null_mask = np.zeros((permutations, nodes, nodes), dtype=bool)
             for first in range(nodes - 1):
