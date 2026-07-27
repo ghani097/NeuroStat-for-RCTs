@@ -402,6 +402,16 @@ def test_runtime_rejects_unsafe_workspace_before_creating_output(
     assert not output.exists()
 
 
+def test_config_rejects_casefold_colliding_workspaces_before_output(
+    tmp_path: Path,
+) -> None:
+    section = _section(tmp_path)
+    section["selection"]["workspaces"] = ["ws-one", "WS-ONE"]
+    with pytest.raises(BrainNetConfigError, match="case-insensitively unique"):
+        parse_brainnet_config(_project(tmp_path, section))
+    assert not (tmp_path / "outputs").exists()
+
+
 def test_selection_is_primary_only_and_has_stable_top_link_order(
     tmp_path: Path,
 ) -> None:
@@ -659,6 +669,34 @@ def test_artifact_verifier_rejects_forged_traversal_workspace(
         verify_brainnet_artifact_run(forged)
 
 
+def test_artifact_verifier_rejects_forged_casefold_workspace_collision(
+    tmp_path: Path,
+) -> None:
+    project = _project(tmp_path)
+    source = _graphvar_run(tmp_path, project)
+    run = build_brainnet_artifacts(project, source)
+    forged = tmp_path / "casefold-workspace-artifact"
+    shutil.copytree(run.run_dir, forged)
+    _forge_workspace_lock(forged, ["ws-one", "WS-ONE"])
+    with pytest.raises(BrainNetError, match="case-insensitively unique"):
+        verify_brainnet_artifact_run(forged)
+
+
+def test_graphvar_source_rejects_casefold_workspace_spellings_before_output(
+    tmp_path: Path,
+) -> None:
+    section = _section(tmp_path, workspace="ws-one")
+    project = _project(tmp_path, section)
+    components = [
+        _component("ws-one_C01", workspace="ws-one"),
+        _component("WS-ONE_C01", workspace="WS-ONE"),
+    ]
+    source = _graphvar_run(tmp_path, project, components=components)
+    with pytest.raises(BrainNetError, match="case-insensitively unique"):
+        build_brainnet_artifacts(project, source)
+    assert not list((project.output_root / "runs").glob("brainnet-artifacts-*"))
+
+
 def test_graphvar_schema_identity_and_style_coverage_fail_closed(
     tmp_path: Path,
 ) -> None:
@@ -809,12 +847,46 @@ def _replace_with_external_file_symlink(
     assert target.read_bytes() == external.read_bytes()
 
 
-def _forge_workspace_lock(run_dir: Path, workspace: str) -> None:
+def _create_test_link(link: Path, target: Path, link_kind: str) -> None:
+    if link_kind == "file_symlink":
+        os.symlink(target, link)
+    elif link_kind == "directory_symlink":
+        os.symlink(target, link, target_is_directory=True)
+    elif link_kind == "junction":
+        if os.name != "nt":
+            pytest.skip("Windows junctions are only available on Windows")
+        completed = subprocess.run(
+            ["cmd.exe", "/d", "/c", "mklink", "/J", str(link), str(target)],
+            check=False,
+            capture_output=True,
+            text=True,
+            shell=False,
+        )
+        if completed.returncode != 0:
+            pytest.skip(f"junction creation is unavailable: {completed.stderr}")
+    else:
+        raise AssertionError(f"unsupported test link kind: {link_kind}")
+    assert os.path.lexists(link)
+
+
+def _remove_test_link(link: Path) -> None:
+    if not os.path.lexists(link):
+        return
+    if link.is_symlink():
+        link.unlink()
+    else:
+        junction_check = getattr(link, "is_junction", None)
+        assert callable(junction_check) and junction_check()
+        os.rmdir(link)
+
+
+def _forge_workspace_lock(run_dir: Path, workspace: str | list[str]) -> None:
+    workspaces = [workspace] if isinstance(workspace, str) else workspace
     lock_path = run_dir / "project.lock.json"
     lock = json.loads(lock_path.read_text(encoding="utf-8"))
-    lock["config"]["selection"]["workspaces"] = [workspace]
-    if lock["stage"] == "brainnet_artifacts":
-        lock["selection"][0]["workspace"] = workspace
+    lock["config"]["selection"]["workspaces"] = workspaces
+    if lock["stage"] == "brainnet_artifacts" and len(workspaces) == 1:
+        lock["selection"][0]["workspace"] = workspaces[0]
     identity = {key: value for key, value in lock.items() if key != "run_id"}
     scientific_sha = digest_json(identity)
     lock["run_id"] = scientific_sha[:12]
@@ -823,9 +895,86 @@ def _forge_workspace_lock(run_dir: Path, workspace: str) -> None:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["run_id"] = lock["run_id"]
     manifest["scientific_identity_sha256"] = scientific_sha
-    manifest["workspaces"] = [workspace]
+    manifest["workspaces"] = workspaces
     manifest["artifacts"] = _all_files(run_dir, {"brainnet/manifest.json"})
     atomic_json(manifest_path, manifest)
+
+
+@pytest.mark.parametrize(
+    "link_kind", ("file_symlink", "directory_symlink", "junction")
+)
+def test_stale_attempt_cleanup_never_touches_internal_link_target(
+    tmp_path: Path, link_kind: str
+) -> None:
+    runs_root = tmp_path / "runs"
+    renders = runs_root / "partial" / "brainnet" / "renders"
+    renders.mkdir(parents=True)
+    attempt = renders / ".ws-one.attempt-linked"
+    if link_kind == "file_symlink":
+        target = renders / "internal-target.txt"
+        target.write_text("keep", encoding="utf-8")
+        marker = target
+    else:
+        target = renders / f"internal-target-{link_kind}"
+        target.mkdir()
+        marker = target / "marker.txt"
+        marker.write_text("keep", encoding="utf-8")
+    _create_test_link(attempt, target, link_kind)
+
+    render_service._discard_stale_attempt(attempt, runs_root, "run-id", "ws-one")
+
+    assert not os.path.lexists(attempt)
+    assert marker.read_text(encoding="utf-8") == "keep"
+    assert not list(runs_root.glob(".brainnet-render-run-id-ws-one-attempt.invalid-*"))
+
+
+@pytest.mark.parametrize("link_kind", ("directory_symlink", "junction"))
+def test_stale_attempt_tree_removal_never_follows_child_directory_link(
+    tmp_path: Path, link_kind: str
+) -> None:
+    runs_root = tmp_path / "runs"
+    renders = runs_root / "partial" / "brainnet" / "renders"
+    renders.mkdir(parents=True)
+    target = renders / f"child-target-{link_kind}"
+    target.mkdir()
+    marker = target / "marker.txt"
+    marker.write_text("keep", encoding="utf-8")
+    attempt = renders / ".ws-one.attempt-owned"
+    attempt.mkdir()
+    _create_test_link(attempt / "linked-child", target, link_kind)
+
+    render_service._discard_stale_attempt(attempt, runs_root, "run-id", "ws-one")
+
+    assert not os.path.lexists(attempt)
+    assert marker.read_text(encoding="utf-8") == "keep"
+
+
+def test_stale_attempt_cleanup_rechecks_quarantined_root_after_swap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runs_root = tmp_path / "runs"
+    renders = runs_root / "partial" / "brainnet" / "renders"
+    renders.mkdir(parents=True)
+    attempt = renders / ".ws-one.attempt-owned"
+    attempt.mkdir()
+    (attempt / "owned.txt").write_text("discard", encoding="utf-8")
+    target = renders / "swap-target"
+    target.mkdir()
+    marker = target / "marker.txt"
+    marker.write_text("keep", encoding="utf-8")
+    real_remove = render_service.remove_entry_no_follow
+
+    def swap_then_remove(path: str | Path) -> None:
+        quarantined = Path(path)
+        shutil.rmtree(quarantined)
+        os.symlink(target, quarantined, target_is_directory=True)
+        real_remove(quarantined)
+
+    monkeypatch.setattr(render_service, "remove_entry_no_follow", swap_then_remove)
+    render_service._discard_stale_attempt(attempt, runs_root, "run-id", "ws-one")
+
+    assert not os.path.lexists(attempt)
+    assert marker.read_text(encoding="utf-8") == "keep"
 
 
 def test_runtime_preflight_render_and_false_success(tmp_path: Path) -> None:
@@ -1054,6 +1203,64 @@ def test_render_service_resume_final_reuse_and_tamper(tmp_path: Path) -> None:
     assert list((project.output_root / "runs").glob(f".{final.run_dir.name}.invalid-*"))
 
 
+def test_corrupt_resumed_image_is_quarantined_outside_render_tree(
+    tmp_path: Path,
+) -> None:
+    section = _section(tmp_path)
+    section["selection"]["workspaces"] = ["ws-one", "ws-two"]
+    project = _project(tmp_path, section)
+    source = _graphvar_run(
+        tmp_path,
+        project,
+        components=[
+            _component("ws-one_C01", workspace="ws-one"),
+            _component("ws-two_C01", workspace="ws-two"),
+        ],
+    )
+    prepared = build_brainnet_artifacts(project, source)
+    fail_second = True
+
+    def runner(config: Any, **kwargs: Any) -> BrainNetExecution:
+        nonlocal fail_second
+        if kwargs["workspace"] == "ws-two" and fail_second:
+            fail_second = False
+            raise BrainNetError("seed second workspace failure")
+        return _service_runner(config, **kwargs)
+
+    with pytest.raises(BrainNetError, match="seed second workspace"):
+        render_brainnet_artifacts(
+            project,
+            prepared,
+            preflight_function=_service_preflight,
+            image_runner=runner,
+        )
+    runs_root = project.output_root / "runs"
+    partial = next(runs_root.glob(".brainnet-render-*.partial"))
+    prior_image = partial / "brainnet" / "renders" / "ws-one"
+    (prior_image / "unexpected.txt").write_text("corrupt", encoding="utf-8")
+
+    rendered = render_brainnet_artifacts(
+        project,
+        prepared,
+        preflight_function=_service_preflight,
+        image_runner=runner,
+    )
+
+    quarantined = tuple(
+        runs_root.glob(
+            f".brainnet-render-{rendered.run_id}-ws-one-image.invalid-*"
+        )
+    )
+    assert len(quarantined) == 1
+    assert quarantined[0].parent == runs_root
+    assert (quarantined[0] / "unexpected.txt").read_text(encoding="utf-8") == "corrupt"
+    assert {
+        child.name
+        for child in (rendered.run_dir / "brainnet" / "renders").iterdir()
+    } == {"ws-one", "ws-two"}
+    assert verify_brainnet_render_run(rendered.run_dir).run_id == rendered.run_id
+
+
 def test_render_provenance_paths_are_portable_and_historical_paths_are_typed(
     tmp_path: Path,
 ) -> None:
@@ -1206,6 +1413,20 @@ def test_render_semantic_verifier_rejects_coherently_rehashed_carriers(
             verify_brainnet_render_run(forged)
 
 
+def test_render_verifier_rejects_extra_renders_directory_child(
+    tmp_path: Path,
+) -> None:
+    _, _, rendered = _rendered_fixture(tmp_path)
+    forged = tmp_path / "extra-render-child"
+    shutil.copytree(rendered.run_dir, forged)
+    hidden = forged / "brainnet" / "renders" / ".ws-one.invalid-forged"
+    hidden.mkdir()
+    (hidden / "marker.txt").write_text("forged", encoding="utf-8")
+    _rehash_artifact_manifest(forged)
+    with pytest.raises(BrainNetError, match="renders directory entries differ"):
+        verify_brainnet_render_run(forged)
+
+
 @pytest.mark.parametrize(
     "relative",
     (
@@ -1237,6 +1458,17 @@ def test_render_verifier_rejects_forged_reserved_workspace(
         verify_brainnet_render_run(forged)
 
 
+def test_render_verifier_rejects_forged_casefold_workspace_collision(
+    tmp_path: Path,
+) -> None:
+    _, _, rendered = _rendered_fixture(tmp_path)
+    forged = tmp_path / "casefold-workspace-render"
+    shutil.copytree(rendered.run_dir, forged)
+    _forge_workspace_lock(forged, ["ws-one", "WS-ONE"])
+    with pytest.raises(BrainNetError, match="case-insensitively unique"):
+        verify_brainnet_render_run(forged)
+
+
 def test_artifact_and_render_finals_remain_valid_after_copy_and_move(
     tmp_path: Path,
 ) -> None:
@@ -1256,6 +1488,64 @@ def test_artifact_and_render_finals_remain_valid_after_copy_and_move(
     shutil.move(render_copy, moved_render)
     assert verify_brainnet_artifact_run(moved_artifact).run_id == prepared.run_id
     assert verify_brainnet_render_run(moved_render).run_id == rendered.run_id
+
+
+@pytest.mark.parametrize(
+    "link_kind", ("file_symlink", "directory_symlink", "junction")
+)
+def test_linked_partial_root_is_quarantined_and_reinitialized(
+    tmp_path: Path, link_kind: str
+) -> None:
+    project = _project(tmp_path)
+    source = _graphvar_run(tmp_path, project)
+    prepared = build_brainnet_artifacts(project, source)
+
+    def fail_runner(*_: Any, **__: Any) -> BrainNetExecution:
+        raise BrainNetError("seed partial failure")
+
+    with pytest.raises(BrainNetError, match="seed partial"):
+        render_brainnet_artifacts(
+            project,
+            prepared,
+            preflight_function=_service_preflight,
+            image_runner=fail_runner,
+        )
+    runs_root = project.output_root / "runs"
+    partial = next(runs_root.glob(".brainnet-render-*.partial"))
+    shutil.rmtree(partial)
+    if link_kind == "file_symlink":
+        target = tmp_path / "partial-target.txt"
+        target.write_text("keep", encoding="utf-8")
+        marker = target
+    else:
+        target = tmp_path / f"partial-target-{link_kind}"
+        target.mkdir()
+        marker = target / "marker.txt"
+        marker.write_text("keep", encoding="utf-8")
+    _create_test_link(partial, target, link_kind)
+
+    rendered = render_brainnet_artifacts(
+        project,
+        prepared,
+        preflight_function=_service_preflight,
+        image_runner=_service_runner,
+    )
+
+    quarantined = tuple(
+        runs_root.glob(f".brainnet-render-{rendered.run_id}-partial.invalid-*")
+    )
+    try:
+        assert verify_brainnet_render_run(rendered.run_dir).run_id == rendered.run_id
+        assert marker.read_text(encoding="utf-8") == "keep"
+        assert len(quarantined) == 1
+        assert os.path.lexists(quarantined[0])
+        assert {
+            child.name
+            for child in (rendered.run_dir / "brainnet" / "renders").iterdir()
+        } == {"ws-one"}
+    finally:
+        for linked in quarantined:
+            _remove_test_link(linked)
 
 
 def test_image_post_publish_verification_failure_rolls_back(

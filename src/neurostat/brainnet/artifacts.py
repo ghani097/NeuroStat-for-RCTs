@@ -21,6 +21,7 @@ from ..stage_io import atomic_json, canonical_json, digest_json, load_json, sha2
 from .config import BrainNetConfig, parse_brainnet_config
 from .containment import (
     RunContainmentError,
+    artifact_slug_key,
     audit_run_tree,
     is_safe_artifact_slug,
 )
@@ -97,10 +98,19 @@ def _text(value: Any, name: str) -> str:
     return value.strip()
 
 
-def _workspace(value: Any, name: str) -> str:
+def _workspace(
+    value: Any, name: str, spellings: dict[str, str] | None = None
+) -> str:
     result = _text(value, name)
     if not is_safe_artifact_slug(result):
         raise BrainNetError(f"{name} must be a safe single-component artifact slug")
+    if spellings is not None:
+        key = artifact_slug_key(result)
+        prior = spellings.setdefault(key, result)
+        if prior != result:
+            raise BrainNetError(
+                "GraphVar workspace spellings must be case-insensitively unique"
+            )
     return result
 
 
@@ -261,6 +271,7 @@ def _validate_graphvar_tables(
     family_lookup = _families_by_identity(graphvar_lock)
     components: list[dict[str, Any]] = []
     by_id: dict[str, dict[str, Any]] = {}
+    workspace_spellings: dict[str, str] = {}
     for position, raw in enumerate(component_raw, 1):
         component_id = _text(raw["component_id"], f"component {position} id")
         if component_id in by_id:
@@ -279,7 +290,9 @@ def _validate_graphvar_tables(
             family=family_key[0],
             condition=_text(raw["condition"], "component condition"),
             component_id=component_id,
-            workspace=_workspace(raw["workspace"], "component workspace"),
+            workspace=_workspace(
+                raw["workspace"], "component workspace", workspace_spellings
+            ),
             band=_text(raw["band"], "component band"),
             session_pair=_text(raw["session_pair"], "component session pair"),
             effect_label=_text(raw["effect_label"], "component effect label"),
@@ -510,7 +523,9 @@ def _validate_graphvar_tables(
         row: dict[str, Any] = dict(raw)
         row.update(
             component_id=component_id,
-            workspace=_workspace(raw["workspace"], "link workspace"),
+            workspace=_workspace(
+                raw["workspace"], "link workspace", workspace_spellings
+            ),
             roi1_result_index_1based=first,
             roi2_result_index_1based=second,
             paired_change_contrast_b=_float(raw["paired_change_contrast_b"], "link B"),
@@ -649,10 +664,12 @@ def _selection_values(
         not isinstance(raw_workspaces, list)
         or not raw_workspaces
         or any(not is_safe_artifact_slug(item) for item in raw_workspaces)
-        or len(set(raw_workspaces)) != len(raw_workspaces)
+        or len({artifact_slug_key(item) for item in raw_workspaces})
+        != len(raw_workspaces)
     ):
         raise BrainNetError(
-            "BrainNet selection workspaces must be safe single-component artifact slugs"
+            "BrainNet selection workspaces must be safe, case-insensitively unique "
+            "single-component artifact slugs"
         )
     policy = _text(selection["policy"], "BrainNet selection policy")
     if policy != "largest_primary_node_pfwe":

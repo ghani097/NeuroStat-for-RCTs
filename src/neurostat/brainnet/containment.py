@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import errno
 import os
 import re
 import stat
+import uuid
 from pathlib import Path, PureWindowsPath
 from typing import Any
 
@@ -18,6 +20,8 @@ _WINDOWS_RESERVED = {
     *(f"lpt{number}" for number in range(1, 10)),
 }
 _REPARSE_POINT = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+_MAX_REMOVAL_PASSES = 16
+_MAX_REMOVAL_DEPTH = 128
 
 
 class RunContainmentError(RuntimeError):
@@ -43,6 +47,11 @@ def is_safe_artifact_slug(value: Any) -> bool:
     return value.split(".", 1)[0].casefold() not in _WINDOWS_RESERVED
 
 
+def artifact_slug_key(value: str) -> str:
+    """Return the portable case-insensitive filesystem identity of a slug."""
+    return value.casefold()
+
+
 def _identity(metadata: os.stat_result) -> tuple[int, int, int, int]:
     return (
         metadata.st_dev,
@@ -52,22 +61,35 @@ def _identity(metadata: os.stat_result) -> tuple[int, int, int, int]:
     )
 
 
-def _ordinary_lstat(path: Path) -> os.stat_result:
+def _lstat(path: Path) -> os.stat_result:
     try:
-        metadata = os.lstat(path)
+        return os.lstat(path)
     except OSError as exc:
         raise RunContainmentError(
             f"BrainNet run carrier cannot be inspected safely: {path}"
         ) from exc
+
+
+def _is_junction(path: Path) -> bool:
     junction_check = getattr(path, "is_junction", None)
     try:
-        is_junction = bool(junction_check()) if callable(junction_check) else False
+        return bool(junction_check()) if callable(junction_check) else False
     except OSError as exc:
         raise RunContainmentError(
             f"BrainNet run carrier junction state is unreadable: {path}"
         ) from exc
+
+
+def _is_link_like(path: Path, metadata: os.stat_result) -> tuple[bool, bool]:
+    is_junction = _is_junction(path)
     is_reparse = bool(int(getattr(metadata, "st_file_attributes", 0)) & _REPARSE_POINT)
-    if stat.S_ISLNK(metadata.st_mode) or is_junction or is_reparse:
+    return stat.S_ISLNK(metadata.st_mode) or is_junction or is_reparse, is_junction
+
+
+def _ordinary_lstat(path: Path) -> os.stat_result:
+    metadata = _lstat(path)
+    is_link_like, _ = _is_link_like(path, metadata)
+    if is_link_like:
         raise RunContainmentError(
             f"BrainNet run carrier is a symlink, junction, or reparse point: {path}"
         )
@@ -87,6 +109,91 @@ def _same_carrier(
             f"BrainNet run carrier changed during containment audit: {description}"
         )
     return after
+
+
+def _remove_entry_no_follow(path: Path, depth: int) -> None:
+    if depth > _MAX_REMOVAL_DEPTH:
+        raise RunContainmentError(
+            f"BrainNet quarantined tree exceeds safe removal depth: {path}"
+        )
+    metadata = _lstat(path)
+    is_link_like, is_junction = _is_link_like(path, metadata)
+    if is_link_like:
+        remover = (
+            os.rmdir
+            if is_junction or stat.S_ISDIR(metadata.st_mode)
+            else os.unlink
+        )
+        try:
+            remover(path)
+        except OSError as exc:
+            raise RunContainmentError(
+                f"BrainNet quarantined link cannot be removed safely: {path}"
+            ) from exc
+        return
+    if stat.S_ISREG(metadata.st_mode):
+        try:
+            os.unlink(path)
+        except OSError as exc:
+            raise RunContainmentError(
+                f"BrainNet quarantined file cannot be removed safely: {path}"
+            ) from exc
+        return
+    if not stat.S_ISDIR(metadata.st_mode):
+        raise RunContainmentError(
+            f"BrainNet quarantined entry is not an ordinary file or directory: {path}"
+        )
+
+    directory_before = metadata
+    for _ in range(_MAX_REMOVAL_PASSES):
+        directory_before = _same_carrier(path, directory_before, str(path))
+        try:
+            scanner = os.scandir(path)
+        except OSError as exc:
+            raise RunContainmentError(
+                f"BrainNet quarantined directory cannot be enumerated safely: {path}"
+            ) from exc
+        with scanner:
+            _same_carrier(path, directory_before, str(path))
+            names = tuple(entry.name for entry in scanner)
+        directory_before = _same_carrier(path, directory_before, str(path))
+        if not names:
+            try:
+                os.rmdir(path)
+                return
+            except FileNotFoundError:
+                return
+            except OSError as exc:
+                if exc.errno in {errno.EEXIST, errno.ENOTEMPTY}:
+                    continue
+                raise RunContainmentError(
+                    f"BrainNet quarantined directory cannot be removed safely: {path}"
+                ) from exc
+        for name in names:
+            directory_before = _same_carrier(path, directory_before, str(path))
+            child = path / name
+            tombstone = path / f".neurostat-remove-{uuid.uuid4().hex}"
+            try:
+                os.replace(child, tombstone)
+            except FileNotFoundError:
+                continue
+            except OSError as exc:
+                raise RunContainmentError(
+                    f"BrainNet quarantined child cannot be isolated safely: {child}"
+                ) from exc
+            _remove_entry_no_follow(tombstone, depth + 1)
+            directory_before = _ordinary_lstat(path)
+    raise RunContainmentError(
+        f"BrainNet quarantined directory remained active during removal: {path}"
+    )
+
+
+def remove_entry_no_follow(path: str | Path) -> None:
+    """Remove one quarantined entry without following any filesystem link."""
+    requested = Path(os.path.abspath(os.fspath(path)))
+    if not os.path.lexists(requested):
+        return
+    _remove_entry_no_follow(requested, 0)
 
 
 def audit_run_tree(run_dir: str | Path) -> Path:

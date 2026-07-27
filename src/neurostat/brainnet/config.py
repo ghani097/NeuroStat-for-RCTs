@@ -10,7 +10,7 @@ from typing import Any
 
 from ..project import CleanProject, ProjectValidationError
 from ..stage_io import sha256_file
-from .containment import is_safe_artifact_slug
+from .containment import artifact_slug_key, is_safe_artifact_slug
 
 _ROOT = {"resources", "selection", "nodes", "render", "runtime"}
 _RESOURCES = {"surface", "viewer_config"}
@@ -213,9 +213,9 @@ def parse_brainnet_config(project: CleanProject) -> BrainNetConfig:
         _safe(item, f"brainnet.selection.workspaces[{index}]")
         for index, item in enumerate(workspace_raw, 1)
     )
-    if len(set(workspaces)) != len(workspaces):
+    if len({artifact_slug_key(item) for item in workspaces}) != len(workspaces):
         raise BrainNetConfigError(
-            "brainnet.selection.workspaces must not contain duplicates"
+            "brainnet.selection.workspaces must be case-insensitively unique"
         )
     policy = _string(selection_raw["policy"], "brainnet.selection.policy")
     if policy != "largest_primary_node_pfwe":

@@ -23,8 +23,10 @@ from .artifacts import (
 from .config import BrainNetConfig, parse_brainnet_config
 from .containment import (
     RunContainmentError,
+    artifact_slug_key,
     audit_run_tree,
     is_safe_artifact_slug,
+    remove_entry_no_follow,
 )
 from .qa import inspect_png
 from .runtime import (
@@ -759,12 +761,30 @@ def _workspaces(lock: dict[str, Any]) -> tuple[str, ...]:
         not isinstance(raw, list)
         or not raw
         or any(not is_safe_artifact_slug(item) for item in raw)
-        or len(set(raw)) != len(raw)
+        or len({artifact_slug_key(item) for item in raw}) != len(raw)
     ):
         raise BrainNetError(
-            "BrainNet render workspaces must be safe single-component artifact slugs"
+            "BrainNet render workspaces must be safe, case-insensitively unique "
+            "single-component artifact slugs"
         )
     return tuple(raw)
+
+
+def _verify_render_directory_children(
+    run_dir: Path, workspaces: tuple[str, ...]
+) -> None:
+    renders = run_dir / "brainnet" / "renders"
+    try:
+        with os.scandir(renders) as entries:
+            actual = {entry.name for entry in entries}
+    except OSError as exc:
+        raise BrainNetError("BrainNet renders directory cannot be enumerated") from exc
+    expected = set(workspaces)
+    if actual != expected:
+        raise BrainNetError(
+            "BrainNet renders directory entries differ; "
+            f"missing={sorted(expected - actual)}, extra={sorted(actual - expected)}"
+        )
 
 
 def verify_brainnet_render_run(
@@ -838,6 +858,7 @@ def verify_brainnet_render_run(
         raise BrainNetError("BrainNet historical runtime environment is invalid")
     _render_values(lock)
     workspaces = _workspaces(lock)
+    _verify_render_directory_children(run_dir, workspaces)
     try:
         _verify_hash_set(
             run_dir,
@@ -927,10 +948,33 @@ def verify_brainnet_render_run(
     )
 
 
-def _quarantine(path: Path) -> Path:
-    quarantine = path.with_name(f".{path.name}.invalid-{uuid.uuid4().hex}")
+def _quarantine(
+    path: Path,
+    *,
+    quarantine_root: Path | None = None,
+    label: str | None = None,
+) -> Path:
+    root = path.parent if quarantine_root is None else quarantine_root
+    quarantine = root / f".{label or path.name}.invalid-{uuid.uuid4().hex}"
     os.replace(path, quarantine)
     return quarantine
+
+
+def _discard_stale_attempt(
+    path: Path, runs_root: Path, run_id: str, workspace: str
+) -> None:
+    try:
+        quarantined = _quarantine(
+            path,
+            quarantine_root=runs_root,
+            label=f"brainnet-render-{run_id}-{workspace}-attempt",
+        )
+    except FileNotFoundError:
+        return
+    try:
+        remove_entry_no_follow(quarantined)
+    except RunContainmentError as exc:
+        raise BrainNetError(str(exc)) from exc
 
 
 def render_brainnet_artifacts(
@@ -987,12 +1031,18 @@ def render_brainnet_artifacts(
         except (BrainNetError, RuntimeError, OSError):
             _quarantine(final)
     partial = runs_root / f".brainnet-render-{run_id}.partial"
-    brainnet = partial / "brainnet"
+    resume_partial = False
     if os.path.lexists(partial):
         try:
             partial = audit_run_tree(partial)
-        except RunContainmentError as exc:
-            raise BrainNetError(str(exc)) from exc
+            resume_partial = True
+        except RunContainmentError:
+            _quarantine(
+                partial,
+                quarantine_root=runs_root,
+                label=f"brainnet-render-{run_id}-partial",
+            )
+    if resume_partial:
         existing = load_json(partial / "project.lock.json", "partial BrainNet lock")
         if canonical_json(existing) != canonical_json(lock):
             raise BrainNetError("partial BrainNet render lock differs from request")
@@ -1032,7 +1082,7 @@ def render_brainnet_artifacts(
             if initializing.exists():
                 shutil.rmtree(initializing)
             raise
-        brainnet = partial / "brainnet"
+    brainnet = partial / "brainnet"
     source_run = brainnet / "source-run"
     source = source_run / "brainnet"
     runner = image_runner or run_brainnet_image
@@ -1080,7 +1130,11 @@ def render_brainnet_artifacts(
                 )
             except (BrainNetError, RuntimeError, OSError):
                 if os.path.lexists(final_image_dir):
-                    _quarantine(final_image_dir)
+                    _quarantine(
+                        final_image_dir,
+                        quarantine_root=runs_root,
+                        label=f"brainnet-render-{run_id}-{workspace}-image",
+                    )
                     completed = None
                 else:
                     raise
@@ -1088,14 +1142,7 @@ def render_brainnet_artifacts(
                 index.append(completed)
                 continue
             for attempt in renders.glob(f".{workspace}.attempt-*"):
-                resolved = attempt.resolve()
-                try:
-                    resolved.relative_to(renders.resolve())
-                except ValueError:
-                    raise BrainNetError("unsafe BrainNet attempt path") from None
-                if not resolved.is_dir():
-                    raise BrainNetError("BrainNet attempt path is not a directory")
-                shutil.rmtree(resolved)
+                _discard_stale_attempt(attempt, runs_root, run_id, workspace)
             attempt = Path(
                 tempfile.mkdtemp(prefix=f".{workspace}.attempt-", dir=renders)
             ).resolve()
