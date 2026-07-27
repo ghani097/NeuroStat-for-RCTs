@@ -8,7 +8,6 @@ import math
 import os
 import shutil
 import tempfile
-import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -24,6 +23,7 @@ from .containment import (
     artifact_slug_key,
     audit_run_tree,
     is_safe_artifact_slug,
+    quarantine_entry,
 )
 
 SCHEMA = "neurostat.brainnet_artifacts.v1"
@@ -98,9 +98,7 @@ def _text(value: Any, name: str) -> str:
     return value.strip()
 
 
-def _workspace(
-    value: Any, name: str, spellings: dict[str, str] | None = None
-) -> str:
+def _workspace(value: Any, name: str, spellings: dict[str, str] | None = None) -> str:
     result = _text(value, name)
     if not is_safe_artifact_slug(result):
         raise BrainNetError(f"{name} must be a safe single-component artifact slug")
@@ -1280,16 +1278,23 @@ def build_brainnet_artifacts(
     runs_root.mkdir(parents=True, exist_ok=True)
     # Keep the final leaf unresolved so a pre-existing root link is audited and
     # quarantined as the link itself, never as its external target.
-    final = runs_root.resolve() / f"brainnet-artifacts-{run_id}"
+    runs_root = runs_root.resolve()
+    final = runs_root / f"brainnet-artifacts-{run_id}"
     if os.path.lexists(final):
         try:
             return verify_brainnet_artifact_run(final, lock)
-        except (BrainNetError, RuntimeError, OSError):
-            quarantine = final.with_name(f".{final.name}.invalid-{uuid.uuid4().hex}")
-            os.replace(final, quarantine)
+        except (BrainNetError, RuntimeError, OSError) as verification_error:
+            try:
+                quarantine_entry(
+                    final,
+                    runs_root,
+                    f"artifact-final-{run_id}",
+                )
+            except OSError:
+                raise verification_error from None
     staging = Path(
         tempfile.mkdtemp(prefix=f".brainnet-artifacts-{run_id}.staging-", dir=runs_root)
-    ).resolve()
+    )
     try:
         brainnet = staging / "brainnet"
         (brainnet / "edges").mkdir(parents=True)
@@ -1377,6 +1382,12 @@ def build_brainnet_artifacts(
             verified.artifacts,
         )
     except BaseException:
-        if staging.exists():
-            shutil.rmtree(staging)
+        try:
+            quarantine_entry(
+                staging,
+                runs_root,
+                f"artifact-staging-{run_id}",
+            )
+        except OSError:
+            pass
         raise

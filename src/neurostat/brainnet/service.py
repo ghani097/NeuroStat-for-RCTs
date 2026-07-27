@@ -6,7 +6,6 @@ import os
 import re
 import shutil
 import tempfile
-import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,7 +25,7 @@ from .containment import (
     artifact_slug_key,
     audit_run_tree,
     is_safe_artifact_slug,
-    remove_entry_no_follow,
+    quarantine_entry,
 )
 from .qa import inspect_png
 from .runtime import (
@@ -122,9 +121,8 @@ def _preflight_bundle(
     runs_root: Path,
     preflight_function: Preflight | None,
 ) -> tuple[BrainNetRuntimeMetadata, dict[str, bytes], str]:
-    temporary = Path(
-        tempfile.mkdtemp(prefix=".brainnet-preflight-", dir=runs_root)
-    ).resolve()
+    temporary = Path(tempfile.mkdtemp(prefix=".brainnet-preflight-", dir=runs_root))
+    historical_root = str(temporary)
     try:
         metadata = (preflight_function or preflight_brainnet)(config, temporary)
         carriers = {
@@ -139,9 +137,15 @@ def _preflight_bundle(
                 "BrainNet preflight exact carrier set differs; "
                 f"missing={missing}, extra={extra}"
             )
-        return metadata, carriers, str(temporary)
-    finally:
-        shutil.rmtree(temporary)
+    except BaseException:
+        _best_effort_quarantine(
+            temporary,
+            runs_root,
+            "render-preflight",
+        )
+        raise
+    _quarantine_or_raise(temporary, runs_root, "render-preflight")
+    return metadata, carriers, historical_root
 
 
 def _preflight_current_paths(runtime: dict[str, Any]) -> dict[str, str]:
@@ -948,33 +952,38 @@ def verify_brainnet_render_run(
     )
 
 
-def _quarantine(
-    path: Path,
-    *,
-    quarantine_root: Path | None = None,
-    label: str | None = None,
-) -> Path:
-    root = path.parent if quarantine_root is None else quarantine_root
-    quarantine = root / f".{label or path.name}.invalid-{uuid.uuid4().hex}"
-    os.replace(path, quarantine)
-    return quarantine
+def _quarantine_or_raise(path: Path, runs_root: Path, kind: str) -> Path:
+    try:
+        return quarantine_entry(path, runs_root, kind)
+    except OSError as exc:
+        raise BrainNetError(
+            f"BrainNet entry could not be retained safely in quarantine: {path}"
+        ) from exc
+
+
+def _best_effort_quarantine(path: Path, runs_root: Path, kind: str) -> Path | None:
+    """Retain an unresolved leaf without ever masking an active exception."""
+    try:
+        return quarantine_entry(path, runs_root, kind)
+    except OSError:
+        return None
 
 
 def _discard_stale_attempt(
     path: Path, runs_root: Path, run_id: str, workspace: str
 ) -> None:
     try:
-        quarantined = _quarantine(
+        quarantine_entry(
             path,
-            quarantine_root=runs_root,
-            label=f"brainnet-render-{run_id}-{workspace}-attempt",
+            runs_root,
+            f"render-attempt-{run_id}",
         )
     except FileNotFoundError:
         return
-    try:
-        remove_entry_no_follow(quarantined)
-    except RunContainmentError as exc:
-        raise BrainNetError(str(exc)) from exc
+    except OSError as exc:
+        raise BrainNetError(
+            f"stale BrainNet render attempt could not be retained safely: {workspace}"
+        ) from exc
 
 
 def render_brainnet_artifacts(
@@ -1028,20 +1037,30 @@ def render_brainnet_artifacts(
     if os.path.lexists(final):
         try:
             return verify_brainnet_render_run(final, lock)
-        except (BrainNetError, RuntimeError, OSError):
-            _quarantine(final)
+        except (BrainNetError, RuntimeError, OSError) as verification_error:
+            try:
+                _quarantine_or_raise(
+                    final,
+                    runs_root,
+                    f"render-final-{run_id}",
+                )
+            except BrainNetError:
+                raise verification_error from None
     partial = runs_root / f".brainnet-render-{run_id}.partial"
     resume_partial = False
     if os.path.lexists(partial):
         try:
             partial = audit_run_tree(partial)
             resume_partial = True
-        except RunContainmentError:
-            _quarantine(
-                partial,
-                quarantine_root=runs_root,
-                label=f"brainnet-render-{run_id}-partial",
-            )
+        except RunContainmentError as containment_error:
+            try:
+                _quarantine_or_raise(
+                    partial,
+                    runs_root,
+                    f"render-partial-{run_id}",
+                )
+            except BrainNetError:
+                raise containment_error from None
     if resume_partial:
         existing = load_json(partial / "project.lock.json", "partial BrainNet lock")
         if canonical_json(existing) != canonical_json(lock):
@@ -1051,7 +1070,7 @@ def render_brainnet_artifacts(
             tempfile.mkdtemp(
                 prefix=f".brainnet-render-{run_id}.initializing-", dir=runs_root
             )
-        ).resolve()
+        )
         try:
             initialized = initializing / "brainnet"
             initialized.mkdir()
@@ -1079,14 +1098,18 @@ def render_brainnet_artifacts(
             )
             os.replace(initializing, partial)
         except BaseException:
-            if initializing.exists():
-                shutil.rmtree(initializing)
+            _best_effort_quarantine(
+                initializing,
+                runs_root,
+                f"render-initializing-{run_id}",
+            )
             raise
     brainnet = partial / "brainnet"
     source_run = brainnet / "source-run"
     source = source_run / "brainnet"
     runner = image_runner or run_brainnet_image
-    try:
+
+    def _render_remaining_and_publish() -> BrainNetRenderRun:
         index: list[dict[str, Any]] = []
         for workspace in prepared.workspaces:
             copied_source = verify_brainnet_artifact_run(source_run, prepared_lock)
@@ -1128,13 +1151,16 @@ def render_brainnet_artifacts(
                     source_node_sha256=source_node_hash,
                     source_edge_sha256=source_edge_hash,
                 )
-            except (BrainNetError, RuntimeError, OSError):
+            except (BrainNetError, RuntimeError, OSError) as verification_error:
                 if os.path.lexists(final_image_dir):
-                    _quarantine(
-                        final_image_dir,
-                        quarantine_root=runs_root,
-                        label=f"brainnet-render-{run_id}-{workspace}-image",
-                    )
+                    try:
+                        _quarantine_or_raise(
+                            final_image_dir,
+                            runs_root,
+                            f"render-image-{run_id}",
+                        )
+                    except BrainNetError:
+                        raise verification_error from None
                     completed = None
                 else:
                     raise
@@ -1145,7 +1171,7 @@ def render_brainnet_artifacts(
                 _discard_stale_attempt(attempt, runs_root, run_id, workspace)
             attempt = Path(
                 tempfile.mkdtemp(prefix=f".{workspace}.attempt-", dir=renders)
-            ).resolve()
+            )
             execution = runner(
                 config,
                 surface=source / "resources" / "surface.nv",
@@ -1273,24 +1299,7 @@ def render_brainnet_artifacts(
             verified.images,
             verified.artifacts,
         )
-    except BaseException as exc:
-        if os.path.lexists(partial):
-            atomic_json(
-                partial / "brainnet" / "status.json",
-                {
-                    "state": "failed_nonfinal",
-                    "completed": sum(
-                        (
-                            partial
-                            / "brainnet"
-                            / "renders"
-                            / workspace
-                            / "completion.json"
-                        ).is_file()
-                        for workspace in prepared.workspaces
-                    ),
-                    "total": len(prepared.workspaces),
-                    "error": str(exc),
-                },
-            )
-        raise
+
+    # A long-lived partial may be swapped while work is running. Propagate every
+    # failure without inspecting or mutating that unresolved leaf.
+    return _render_remaining_and_publish()

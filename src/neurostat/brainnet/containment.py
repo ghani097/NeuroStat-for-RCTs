@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import errno
 import os
 import re
 import stat
@@ -20,8 +19,9 @@ _WINDOWS_RESERVED = {
     *(f"lpt{number}" for number in range(1, 10)),
 }
 _REPARSE_POINT = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
-_MAX_REMOVAL_PASSES = 16
-_MAX_REMOVAL_DEPTH = 128
+_SAFE_QUARANTINE_KIND = re.compile(r"[a-z0-9][a-z0-9-]{0,47}\Z")
+QUARANTINE_PREFIX = ".neurostat-quarantine-"
+_atomic_replace = os.replace
 
 
 class RunContainmentError(RuntimeError):
@@ -111,89 +111,24 @@ def _same_carrier(
     return after
 
 
-def _remove_entry_no_follow(path: Path, depth: int) -> None:
-    if depth > _MAX_REMOVAL_DEPTH:
-        raise RunContainmentError(
-            f"BrainNet quarantined tree exceeds safe removal depth: {path}"
-        )
-    metadata = _lstat(path)
-    is_link_like, is_junction = _is_link_like(path, metadata)
-    if is_link_like:
-        remover = (
-            os.rmdir
-            if is_junction or stat.S_ISDIR(metadata.st_mode)
-            else os.unlink
-        )
-        try:
-            remover(path)
-        except OSError as exc:
-            raise RunContainmentError(
-                f"BrainNet quarantined link cannot be removed safely: {path}"
-            ) from exc
-        return
-    if stat.S_ISREG(metadata.st_mode):
-        try:
-            os.unlink(path)
-        except OSError as exc:
-            raise RunContainmentError(
-                f"BrainNet quarantined file cannot be removed safely: {path}"
-            ) from exc
-        return
-    if not stat.S_ISDIR(metadata.st_mode):
-        raise RunContainmentError(
-            f"BrainNet quarantined entry is not an ordinary file or directory: {path}"
-        )
+def quarantine_entry(
+    path: str | Path,
+    quarantine_root: str | Path,
+    kind: str,
+) -> Path:
+    """Atomically retain one unresolved leaf outside a BrainNet run.
 
-    directory_before = metadata
-    for _ in range(_MAX_REMOVAL_PASSES):
-        directory_before = _same_carrier(path, directory_before, str(path))
-        try:
-            scanner = os.scandir(path)
-        except OSError as exc:
-            raise RunContainmentError(
-                f"BrainNet quarantined directory cannot be enumerated safely: {path}"
-            ) from exc
-        with scanner:
-            _same_carrier(path, directory_before, str(path))
-            names = tuple(entry.name for entry in scanner)
-        directory_before = _same_carrier(path, directory_before, str(path))
-        if not names:
-            try:
-                os.rmdir(path)
-                return
-            except FileNotFoundError:
-                return
-            except OSError as exc:
-                if exc.errno in {errno.EEXIST, errno.ENOTEMPTY}:
-                    continue
-                raise RunContainmentError(
-                    f"BrainNet quarantined directory cannot be removed safely: {path}"
-                ) from exc
-        for name in names:
-            directory_before = _same_carrier(path, directory_before, str(path))
-            child = path / name
-            tombstone = path / f".neurostat-remove-{uuid.uuid4().hex}"
-            try:
-                os.replace(child, tombstone)
-            except FileNotFoundError:
-                continue
-            except OSError as exc:
-                raise RunContainmentError(
-                    f"BrainNet quarantined child cannot be isolated safely: {child}"
-                ) from exc
-            _remove_entry_no_follow(tombstone, depth + 1)
-            directory_before = _ordinary_lstat(path)
-    raise RunContainmentError(
-        f"BrainNet quarantined directory remained active during removal: {path}"
-    )
-
-
-def remove_entry_no_follow(path: str | Path) -> None:
-    """Remove one quarantined entry without following any filesystem link."""
+    Quarantines are deliberately never traversed or deleted. Their reserved
+    hidden names cannot be mistaken for final or resumable run roots, and they
+    remain as evidence for explicit manual cleanup.
+    """
+    if not _SAFE_QUARANTINE_KIND.fullmatch(kind):
+        raise ValueError(f"invalid BrainNet quarantine kind: {kind!r}")
     requested = Path(os.path.abspath(os.fspath(path)))
-    if not os.path.lexists(requested):
-        return
-    _remove_entry_no_follow(requested, 0)
+    root = Path(os.path.abspath(os.fspath(quarantine_root)))
+    destination = root / f"{QUARANTINE_PREFIX}{kind}-{uuid.uuid4().hex}"
+    _atomic_replace(requested, destination)
+    return destination
 
 
 def audit_run_tree(run_dir: str | Path) -> Path:

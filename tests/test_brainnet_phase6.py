@@ -15,6 +15,7 @@ from typing import Any
 import pytest
 
 import neurostat.brainnet.artifacts as artifact_service
+import neurostat.brainnet.containment as containment_service
 import neurostat.brainnet.service as render_service
 from neurostat.brainnet import (
     BrainNetConfigError,
@@ -461,7 +462,11 @@ def test_build_exact_node_edge_manifest_reuse_and_tamper(tmp_path: Path) -> None
         verify_brainnet_artifact_run(run.run_dir)
     repaired = build_brainnet_artifacts(project, source)
     assert verify_brainnet_artifact_run(repaired.run_dir).run_id == run.run_id
-    assert list((project.output_root / "runs").glob(f".{run.run_dir.name}.invalid-*"))
+    assert list(
+        (project.output_root / "runs").glob(
+            f"{containment_service.QUARANTINE_PREFIX}artifact-final-{run.run_id}-*"
+        )
+    )
 
 
 def test_artifact_semantic_verifier_rejects_coherently_rehashed_science(
@@ -601,7 +606,9 @@ def test_artifact_builder_quarantines_root_link_without_moving_target(
     rebuilt = build_brainnet_artifacts(project, source)
 
     quarantined = tuple(
-        final.parent.glob(f".{final.name}.invalid-*"),
+        final.parent.glob(
+            f"{containment_service.QUARANTINE_PREFIX}artifact-final-{run.run_id}-*"
+        ),
     )
     try:
         assert rebuilt.run_dir == final
@@ -880,6 +887,281 @@ def _remove_test_link(link: Path) -> None:
         os.rmdir(link)
 
 
+def _forbid_recursive_cleanup(*_: Any, **__: Any) -> None:
+    raise AssertionError("BrainNet production cleanup must never call shutil.rmtree")
+
+
+def test_brainnet_production_has_no_recursive_destructive_cleanup() -> None:
+    forbidden = (
+        "remove_entry_no_follow",
+        "rmtree(",
+        ".unlink(",
+        "os.unlink(",
+        ".rmdir(",
+        "os.rmdir(",
+    )
+    assert containment_service.__file__ is not None
+    package_root = Path(containment_service.__file__).parent
+    for source_path in package_root.rglob("*.py"):
+        source = source_path.read_text(encoding="utf-8")
+        for operation in forbidden:
+            assert operation not in source
+
+    quarantine_name = (
+        f"{containment_service.QUARANTINE_PREFIX}render-final-run-id-0123456789abcdef"
+    )
+    assert not quarantine_name.startswith("brainnet-artifacts-")
+    assert not quarantine_name.startswith("brainnet-render-")
+    assert not (
+        quarantine_name.startswith(".brainnet-render-")
+        and quarantine_name.endswith(".partial")
+    )
+
+
+def test_preflight_cleanup_retains_atomic_swap_without_recursive_delete(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = _project(tmp_path)
+    config = parse_brainnet_config(project)
+    runs_root = project.output_root / "runs"
+    runs_root.mkdir(parents=True)
+    runs_root = runs_root.resolve()
+    external = tmp_path / "preflight-swap-target"
+    external.mkdir()
+    marker = external / "marker.txt"
+    marker.write_text("keep", encoding="utf-8")
+    owned = runs_root / ".owned-preflight-before-swap"
+    real_replace = os.replace
+
+    def swap_at_quarantine_boundary(
+        source: str | os.PathLike[str],
+        destination: str | os.PathLike[str],
+    ) -> None:
+        source_path = Path(source)
+        if source_path.name.startswith(".brainnet-preflight-"):
+            real_replace(source_path, owned)
+            os.symlink(external, source_path, target_is_directory=True)
+        real_replace(source_path, destination)
+
+    monkeypatch.setattr(render_service.shutil, "rmtree", _forbid_recursive_cleanup)
+    monkeypatch.setattr(
+        containment_service,
+        "_atomic_replace",
+        swap_at_quarantine_boundary,
+    )
+
+    metadata, carriers, historical_root = render_service._preflight_bundle(
+        config,
+        runs_root,
+        _service_preflight,
+    )
+    quarantined = tuple(
+        runs_root.glob(f"{containment_service.QUARANTINE_PREFIX}render-preflight-*")
+    )
+    try:
+        assert metadata.mapcfg_sha256
+        assert set(carriers) == render_service.PREFLIGHT_CARRIERS
+        assert not os.path.lexists(historical_root)
+        assert marker.read_text(encoding="utf-8") == "keep"
+        assert (owned / "preflight.json").is_file()
+        assert len(quarantined) == 1
+        assert quarantined[0].is_symlink()
+    finally:
+        for linked in quarantined:
+            _remove_test_link(linked)
+
+
+def test_initializing_cleanup_retains_atomic_swap_and_original_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = _project(tmp_path)
+    source = _graphvar_run(tmp_path, project)
+    prepared = build_brainnet_artifacts(project, source)
+    runs_root = (project.output_root / "runs").resolve()
+    external = tmp_path / "initializing-swap-target"
+    external.mkdir()
+    marker = external / "marker.txt"
+    marker.write_text("keep", encoding="utf-8")
+    owned = runs_root / ".owned-initializing-before-swap"
+    real_replace = os.replace
+
+    def fail_initializing(*_: Any, **__: Any) -> None:
+        raise BrainNetError("injected initializing verification failure")
+
+    def swap_at_quarantine_boundary(
+        source_path_value: str | os.PathLike[str],
+        destination: str | os.PathLike[str],
+    ) -> None:
+        source_path = Path(source_path_value)
+        if ".initializing-" in source_path.name:
+            real_replace(source_path, owned)
+            os.symlink(external, source_path, target_is_directory=True)
+        real_replace(source_path, destination)
+
+    monkeypatch.setattr(render_service.shutil, "rmtree", _forbid_recursive_cleanup)
+    monkeypatch.setattr(
+        render_service,
+        "_verify_preflight_evidence",
+        fail_initializing,
+    )
+    monkeypatch.setattr(
+        containment_service,
+        "_atomic_replace",
+        swap_at_quarantine_boundary,
+    )
+
+    with pytest.raises(BrainNetError, match="injected initializing"):
+        render_brainnet_artifacts(
+            project,
+            prepared,
+            preflight_function=_service_preflight,
+            image_runner=_service_runner,
+        )
+
+    quarantined = tuple(
+        runs_root.glob(f"{containment_service.QUARANTINE_PREFIX}render-initializing-*")
+    )
+    try:
+        assert marker.read_text(encoding="utf-8") == "keep"
+        assert (owned / "project.lock.json").is_file()
+        assert len(quarantined) == 1
+        assert quarantined[0].is_symlink()
+    finally:
+        for linked in quarantined:
+            _remove_test_link(linked)
+
+
+def test_artifact_staging_cleanup_retains_atomic_swap_and_original_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = _project(tmp_path)
+    source = _graphvar_run(tmp_path, project)
+    runs_root = (project.output_root / "runs").resolve()
+    external = tmp_path / "artifact-staging-swap-target"
+    external.mkdir()
+    marker = external / "marker.txt"
+    marker.write_text("keep", encoding="utf-8")
+    owned = runs_root / ".owned-artifact-staging-before-swap"
+    real_replace = os.replace
+    original_verify = artifact_service.verify_brainnet_artifact_run
+
+    def fail_staging(
+        run_dir: str | Path,
+        expected_lock: dict[str, Any] | None = None,
+    ) -> Any:
+        if ".staging-" in Path(run_dir).name:
+            raise BrainNetError("injected artifact staging verification failure")
+        return original_verify(run_dir, expected_lock)
+
+    def swap_at_quarantine_boundary(
+        source_path_value: str | os.PathLike[str],
+        destination: str | os.PathLike[str],
+    ) -> None:
+        source_path = Path(source_path_value)
+        if ".staging-" in source_path.name:
+            real_replace(source_path, owned)
+            os.symlink(external, source_path, target_is_directory=True)
+        real_replace(source_path, destination)
+
+    monkeypatch.setattr(artifact_service.shutil, "rmtree", _forbid_recursive_cleanup)
+    monkeypatch.setattr(
+        artifact_service,
+        "verify_brainnet_artifact_run",
+        fail_staging,
+    )
+    monkeypatch.setattr(
+        containment_service,
+        "_atomic_replace",
+        swap_at_quarantine_boundary,
+    )
+
+    with pytest.raises(BrainNetError, match="injected artifact staging"):
+        build_brainnet_artifacts(project, source)
+
+    quarantined = tuple(
+        runs_root.glob(f"{containment_service.QUARANTINE_PREFIX}artifact-staging-*")
+    )
+    try:
+        assert marker.read_text(encoding="utf-8") == "keep"
+        assert (owned / "brainnet" / "manifest.json").is_file()
+        assert len(quarantined) == 1
+        assert quarantined[0].is_symlink()
+    finally:
+        for linked in quarantined:
+            _remove_test_link(linked)
+
+
+def test_broad_render_failure_never_probes_or_mutates_swapped_partial(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = _project(tmp_path)
+    source = _graphvar_run(tmp_path, project)
+    prepared = build_brainnet_artifacts(project, source)
+    runs_root = (project.output_root / "runs").resolve()
+    external = tmp_path / "partial-swap-target"
+    external_brainnet = external / "brainnet"
+    external_brainnet.mkdir(parents=True)
+    external_status = external_brainnet / "status.json"
+    external_status.write_bytes(b"external-status-must-not-change")
+    owned = runs_root / ".owned-partial-before-failure"
+    real_replace = os.replace
+    real_atomic_json = render_service.atomic_json
+    real_is_file = Path.is_file
+    failure_started = False
+    swapped_partial: Path | None = None
+
+    def guarded_atomic_json(path: Path, value: Any) -> None:
+        requested = Path(path)
+        if (
+            failure_started
+            and swapped_partial is not None
+            and (requested == swapped_partial or swapped_partial in requested.parents)
+        ):
+            raise AssertionError("swapped partial was mutated after broad failure")
+        real_atomic_json(requested, value)
+
+    def guarded_is_file(path: Path) -> bool:
+        if (
+            failure_started
+            and swapped_partial is not None
+            and (path == swapped_partial or swapped_partial in path.parents)
+        ):
+            raise AssertionError("swapped partial was probed after broad failure")
+        return real_is_file(path)
+
+    def fail_after_swap(config: Any, **kwargs: Any) -> BrainNetExecution:
+        del config
+        nonlocal failure_started, swapped_partial
+        attempt = Path(kwargs["output_dir"])
+        swapped_partial = attempt.parents[2]
+        real_replace(swapped_partial, owned)
+        os.symlink(external, swapped_partial, target_is_directory=True)
+        failure_started = True
+        raise BrainNetError("injected runner failure after partial swap")
+
+    monkeypatch.setattr(render_service, "atomic_json", guarded_atomic_json)
+    monkeypatch.setattr(Path, "is_file", guarded_is_file)
+
+    with pytest.raises(BrainNetError, match="injected runner failure"):
+        render_brainnet_artifacts(
+            project,
+            prepared,
+            preflight_function=_service_preflight,
+            image_runner=fail_after_swap,
+        )
+
+    assert swapped_partial is not None
+    try:
+        assert swapped_partial.is_symlink()
+        assert external_status.read_bytes() == b"external-status-must-not-change"
+        owned_status = json.loads(
+            (owned / "brainnet" / "status.json").read_text(encoding="utf-8")
+        )
+        assert owned_status["state"] == "rendering"
+    finally:
+        _remove_test_link(swapped_partial)
+
+
 def _forge_workspace_lock(run_dir: Path, workspace: str | list[str]) -> None:
     workspaces = [workspace] if isinstance(workspace, str) else workspace
     lock_path = run_dir / "project.lock.json"
@@ -900,9 +1182,7 @@ def _forge_workspace_lock(run_dir: Path, workspace: str | list[str]) -> None:
     atomic_json(manifest_path, manifest)
 
 
-@pytest.mark.parametrize(
-    "link_kind", ("file_symlink", "directory_symlink", "junction")
-)
+@pytest.mark.parametrize("link_kind", ("file_symlink", "directory_symlink", "junction"))
 def test_stale_attempt_cleanup_never_touches_internal_link_target(
     tmp_path: Path, link_kind: str
 ) -> None:
@@ -923,13 +1203,23 @@ def test_stale_attempt_cleanup_never_touches_internal_link_target(
 
     render_service._discard_stale_attempt(attempt, runs_root, "run-id", "ws-one")
 
-    assert not os.path.lexists(attempt)
-    assert marker.read_text(encoding="utf-8") == "keep"
-    assert not list(runs_root.glob(".brainnet-render-run-id-ws-one-attempt.invalid-*"))
+    quarantined = tuple(
+        runs_root.glob(
+            f"{containment_service.QUARANTINE_PREFIX}render-attempt-run-id-*"
+        )
+    )
+    try:
+        assert not os.path.lexists(attempt)
+        assert marker.read_text(encoding="utf-8") == "keep"
+        assert len(quarantined) == 1
+        assert os.path.lexists(quarantined[0])
+    finally:
+        for linked in quarantined:
+            _remove_test_link(linked)
 
 
 @pytest.mark.parametrize("link_kind", ("directory_symlink", "junction"))
-def test_stale_attempt_tree_removal_never_follows_child_directory_link(
+def test_stale_attempt_tree_is_retained_without_following_child_directory_link(
     tmp_path: Path, link_kind: str
 ) -> None:
     runs_root = tmp_path / "runs"
@@ -945,11 +1235,18 @@ def test_stale_attempt_tree_removal_never_follows_child_directory_link(
 
     render_service._discard_stale_attempt(attempt, runs_root, "run-id", "ws-one")
 
+    quarantined = tuple(
+        runs_root.glob(
+            f"{containment_service.QUARANTINE_PREFIX}render-attempt-run-id-*"
+        )
+    )
     assert not os.path.lexists(attempt)
     assert marker.read_text(encoding="utf-8") == "keep"
+    assert len(quarantined) == 1
+    assert os.path.lexists(quarantined[0] / "linked-child")
 
 
-def test_stale_attempt_cleanup_rechecks_quarantined_root_after_swap(
+def test_stale_attempt_atomic_quarantine_retains_swapped_root(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     runs_root = tmp_path / "runs"
@@ -962,19 +1259,41 @@ def test_stale_attempt_cleanup_rechecks_quarantined_root_after_swap(
     target.mkdir()
     marker = target / "marker.txt"
     marker.write_text("keep", encoding="utf-8")
-    real_remove = render_service.remove_entry_no_follow
+    owned = runs_root / ".owned-attempt-before-swap"
+    real_replace = os.replace
 
-    def swap_then_remove(path: str | Path) -> None:
-        quarantined = Path(path)
-        shutil.rmtree(quarantined)
-        os.symlink(target, quarantined, target_is_directory=True)
-        real_remove(quarantined)
+    def swap_at_quarantine_boundary(
+        source: str | os.PathLike[str],
+        destination: str | os.PathLike[str],
+    ) -> None:
+        source_path = Path(source)
+        if source_path == attempt:
+            real_replace(source_path, owned)
+            os.symlink(target, source_path, target_is_directory=True)
+        real_replace(source_path, destination)
 
-    monkeypatch.setattr(render_service, "remove_entry_no_follow", swap_then_remove)
+    monkeypatch.setattr(
+        containment_service,
+        "_atomic_replace",
+        swap_at_quarantine_boundary,
+    )
+    monkeypatch.setattr(render_service.shutil, "rmtree", _forbid_recursive_cleanup)
     render_service._discard_stale_attempt(attempt, runs_root, "run-id", "ws-one")
 
-    assert not os.path.lexists(attempt)
-    assert marker.read_text(encoding="utf-8") == "keep"
+    quarantined = tuple(
+        runs_root.glob(
+            f"{containment_service.QUARANTINE_PREFIX}render-attempt-run-id-*"
+        )
+    )
+    try:
+        assert not os.path.lexists(attempt)
+        assert marker.read_text(encoding="utf-8") == "keep"
+        assert (owned / "owned.txt").read_text(encoding="utf-8") == "discard"
+        assert len(quarantined) == 1
+        assert quarantined[0].is_symlink()
+    finally:
+        for linked in quarantined:
+            _remove_test_link(linked)
 
 
 def test_runtime_preflight_render_and_false_success(tmp_path: Path) -> None:
@@ -1200,7 +1519,11 @@ def test_render_service_resume_final_reuse_and_tamper(tmp_path: Path) -> None:
         image_runner=fake_runner,
     )
     assert verify_brainnet_render_run(repaired.run_dir).run_id == final.run_id
-    assert list((project.output_root / "runs").glob(f".{final.run_dir.name}.invalid-*"))
+    assert list(
+        (project.output_root / "runs").glob(
+            f"{containment_service.QUARANTINE_PREFIX}render-final-{final.run_id}-*"
+        )
+    )
 
 
 def test_corrupt_resumed_image_is_quarantined_outside_render_tree(
@@ -1248,15 +1571,14 @@ def test_corrupt_resumed_image_is_quarantined_outside_render_tree(
 
     quarantined = tuple(
         runs_root.glob(
-            f".brainnet-render-{rendered.run_id}-ws-one-image.invalid-*"
+            f"{containment_service.QUARANTINE_PREFIX}render-image-{rendered.run_id}-*"
         )
     )
     assert len(quarantined) == 1
     assert quarantined[0].parent == runs_root
     assert (quarantined[0] / "unexpected.txt").read_text(encoding="utf-8") == "corrupt"
     assert {
-        child.name
-        for child in (rendered.run_dir / "brainnet" / "renders").iterdir()
+        child.name for child in (rendered.run_dir / "brainnet" / "renders").iterdir()
     } == {"ws-one", "ws-two"}
     assert verify_brainnet_render_run(rendered.run_dir).run_id == rendered.run_id
 
@@ -1490,9 +1812,7 @@ def test_artifact_and_render_finals_remain_valid_after_copy_and_move(
     assert verify_brainnet_render_run(moved_render).run_id == rendered.run_id
 
 
-@pytest.mark.parametrize(
-    "link_kind", ("file_symlink", "directory_symlink", "junction")
-)
+@pytest.mark.parametrize("link_kind", ("file_symlink", "directory_symlink", "junction"))
 def test_linked_partial_root_is_quarantined_and_reinitialized(
     tmp_path: Path, link_kind: str
 ) -> None:
@@ -1532,7 +1852,9 @@ def test_linked_partial_root_is_quarantined_and_reinitialized(
     )
 
     quarantined = tuple(
-        runs_root.glob(f".brainnet-render-{rendered.run_id}-partial.invalid-*")
+        runs_root.glob(
+            f"{containment_service.QUARANTINE_PREFIX}render-partial-{rendered.run_id}-*"
+        )
     )
     try:
         assert verify_brainnet_render_run(rendered.run_dir).run_id == rendered.run_id

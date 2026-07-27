@@ -72,6 +72,21 @@ changes after preflight, wrong dimensions/DPI, corrupt PNGs, and
 blank/near-constant pixels. Resume reuses only attempts whose complete hash
 manifest, source node/edge hashes, metadata, and pixel QA still agree.
 
+## Containment and retained quarantine
+
+Standalone verification audits the complete run tree before reading scientific
+carriers. Symlinks, junctions, reparse points, nonordinary entries, and paths
+that resolve outside the run are rejected.
+
+Unsafe, stale, or corrupt leaves are moved once, without resolution or child
+traversal, to a hidden sibling named
+`.neurostat-quarantine-<kind>-<unique-id>` directly under `outputs/runs`.
+These entries never match final or resumable-partial discovery. NeuroStat does
+not inspect or delete quarantines automatically: they are retained as evidence
+until the operator reviews and manually removes them. If the atomic move cannot
+be completed, the original leaf is left untouched and an active processing
+error is preserved.
+
 All filesystem resources are explicitly configured. Relative paths resolve
 against the project file; absolute paths are accepted only when explicitly
 written by the operator. The package contains no installation- or
