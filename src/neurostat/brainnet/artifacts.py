@@ -19,6 +19,11 @@ from ..graphvar.workspace import _all_files, _verify_hash_set
 from ..project import CleanProject, load_project
 from ..stage_io import atomic_json, canonical_json, digest_json, load_json, sha256_file
 from .config import BrainNetConfig, parse_brainnet_config
+from .containment import (
+    RunContainmentError,
+    audit_run_tree,
+    is_safe_artifact_slug,
+)
 
 SCHEMA = "neurostat.brainnet_artifacts.v1"
 SOURCE_SCIENCE_SCHEMA = "neurostat.brainnet_source_science.v1"
@@ -90,6 +95,13 @@ def _text(value: Any, name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise BrainNetError(f"{name} must be nonblank")
     return value.strip()
+
+
+def _workspace(value: Any, name: str) -> str:
+    result = _text(value, name)
+    if not is_safe_artifact_slug(result):
+        raise BrainNetError(f"{name} must be a safe single-component artifact slug")
+    return result
 
 
 def _integer(value: Any, name: str, minimum: int = 0) -> int:
@@ -267,7 +279,7 @@ def _validate_graphvar_tables(
             family=family_key[0],
             condition=_text(raw["condition"], "component condition"),
             component_id=component_id,
-            workspace=_text(raw["workspace"], "component workspace"),
+            workspace=_workspace(raw["workspace"], "component workspace"),
             band=_text(raw["band"], "component band"),
             session_pair=_text(raw["session_pair"], "component session pair"),
             effect_label=_text(raw["effect_label"], "component effect label"),
@@ -498,7 +510,7 @@ def _validate_graphvar_tables(
         row: dict[str, Any] = dict(raw)
         row.update(
             component_id=component_id,
-            workspace=_text(raw["workspace"], "link workspace"),
+            workspace=_workspace(raw["workspace"], "link workspace"),
             roi1_result_index_1based=first,
             roi2_result_index_1based=second,
             paired_change_contrast_b=_float(raw["paired_change_contrast_b"], "link B"),
@@ -636,10 +648,12 @@ def _selection_values(
     if (
         not isinstance(raw_workspaces, list)
         or not raw_workspaces
-        or any(not isinstance(item, str) or not item for item in raw_workspaces)
+        or any(not is_safe_artifact_slug(item) for item in raw_workspaces)
         or len(set(raw_workspaces)) != len(raw_workspaces)
     ):
-        raise BrainNetError("BrainNet selection workspace contract is invalid")
+        raise BrainNetError(
+            "BrainNet selection workspaces must be safe single-component artifact slugs"
+        )
     policy = _text(selection["policy"], "BrainNet selection policy")
     if policy != "largest_primary_node_pfwe":
         raise BrainNetError("BrainNet selection policy is unsupported")
@@ -910,7 +924,10 @@ def verify_brainnet_artifact_run(
     run_dir: str | Path, expected_lock: dict[str, Any] | None = None
 ) -> BrainNetArtifactRun:
     """Recompute every prepared artifact from its portable GraphVar evidence."""
-    run_dir = Path(run_dir).resolve()
+    try:
+        run_dir = audit_run_tree(run_dir)
+    except RunContainmentError as exc:
+        raise BrainNetError(str(exc)) from exc
     lock = load_json(run_dir / "project.lock.json", "BrainNet artifact lock")
     manifest = load_json(
         run_dir / "brainnet" / "manifest.json", "BrainNet artifact manifest"
@@ -1244,8 +1261,10 @@ def build_brainnet_artifacts(
     lock = identity | {"run_id": run_id}
     runs_root = project.output_root / "runs"
     runs_root.mkdir(parents=True, exist_ok=True)
-    final = (runs_root / f"brainnet-artifacts-{run_id}").resolve()
-    if final.exists():
+    # Keep the final leaf unresolved so a pre-existing root link is audited and
+    # quarantined as the link itself, never as its external target.
+    final = runs_root.resolve() / f"brainnet-artifacts-{run_id}"
+    if os.path.lexists(final):
         try:
             return verify_brainnet_artifact_run(final, lock)
         except (BrainNetError, RuntimeError, OSError):
@@ -1321,7 +1340,7 @@ def build_brainnet_artifacts(
             },
         )
         verify_brainnet_artifact_run(staging, lock)
-        if final.exists():
+        if os.path.lexists(final):
             raise BrainNetError(
                 f"BrainNet artifact final appeared concurrently: {final}"
             )
@@ -1329,7 +1348,7 @@ def build_brainnet_artifacts(
         try:
             verified = verify_brainnet_artifact_run(final, lock)
         except BaseException:
-            if final.exists() and not staging.exists():
+            if os.path.lexists(final) and not os.path.lexists(staging):
                 os.replace(final, staging)
             raise
         return BrainNetArtifactRun(

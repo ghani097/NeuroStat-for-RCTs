@@ -361,6 +361,47 @@ def test_config_exact_paths_and_style_contract(tmp_path: Path) -> None:
     assert len(parse_brainnet_config(_project(tmp_path / "single", single)).styles) == 1
 
 
+@pytest.mark.parametrize(
+    "workspace",
+    (
+        ".",
+        "..",
+        "../escape",
+        "nested/workspace",
+        r"nested\workspace",
+        "C:workspace",
+        "CON",
+        "NUL.csv",
+        "workspace.",
+    ),
+)
+def test_config_rejects_unsafe_workspace_artifact_slugs(
+    tmp_path: Path, workspace: str
+) -> None:
+    section = _section(tmp_path, workspace=workspace)
+    with pytest.raises(BrainNetConfigError, match="safe artifact name"):
+        parse_brainnet_config(_project(tmp_path, section))
+
+
+def test_runtime_rejects_unsafe_workspace_before_creating_output(
+    tmp_path: Path,
+) -> None:
+    config = parse_brainnet_config(_project(tmp_path))
+    output = tmp_path / "render-output"
+    with pytest.raises(BrainNetError, match="single-component artifact slug"):
+        run_brainnet_image(
+            config,
+            surface=tmp_path / "surface",
+            node=tmp_path / "node",
+            edge=tmp_path / "edge",
+            viewer_config=tmp_path / "viewer",
+            compatibility_dir=tmp_path / "compatibility",
+            output_dir=output,
+            workspace="../escape",
+        )
+    assert not output.exists()
+
+
 def test_selection_is_primary_only_and_has_stable_top_link_order(
     tmp_path: Path,
 ) -> None:
@@ -511,6 +552,113 @@ def test_artifact_post_publish_verification_failure_rolls_back(
     assert verify_brainnet_artifact_run(run.run_dir).run_id == run.run_id
 
 
+@pytest.mark.parametrize(
+    "relative",
+    (
+        "project.lock.json",
+        "brainnet/manifest.json",
+        "brainnet/source-science/components-all.csv",
+        "brainnet/resources/viewer-config.mat",
+        "brainnet/matlab/whitebg.m",
+    ),
+)
+def test_artifact_verifier_rejects_same_byte_external_file_links(
+    tmp_path: Path, relative: str
+) -> None:
+    project = _project(tmp_path)
+    source = _graphvar_run(tmp_path, project)
+    run = build_brainnet_artifacts(project, source)
+    forged = tmp_path / "linked-artifact"
+    shutil.copytree(run.run_dir, forged)
+    _replace_with_external_file_symlink(forged, relative, tmp_path / "external-files")
+    with pytest.raises(BrainNetError, match="symlink, junction, or reparse"):
+        verify_brainnet_artifact_run(forged)
+
+
+def test_artifact_builder_quarantines_root_link_without_moving_target(
+    tmp_path: Path,
+) -> None:
+    project = _project(tmp_path)
+    source = _graphvar_run(tmp_path, project)
+    run = build_brainnet_artifacts(project, source)
+    final = run.run_dir
+    external = tmp_path / "external-artifact-final"
+    shutil.copytree(final, external)
+    external_manifest_sha256 = sha256_file(external / "brainnet" / "manifest.json")
+    shutil.rmtree(final)
+    os.symlink(external, final, target_is_directory=True)
+
+    rebuilt = build_brainnet_artifacts(project, source)
+
+    quarantined = tuple(
+        final.parent.glob(f".{final.name}.invalid-*"),
+    )
+    try:
+        assert rebuilt.run_dir == final
+        assert not final.is_symlink()
+        assert verify_brainnet_artifact_run(final).run_id == run.run_id
+        assert len(quarantined) == 1
+        assert quarantined[0].is_symlink()
+        assert sha256_file(external / "brainnet" / "manifest.json") == (
+            external_manifest_sha256
+        )
+    finally:
+        for linked in quarantined:
+            if linked.is_symlink():
+                linked.unlink()
+
+
+@pytest.mark.parametrize("link_kind", ("symlink", "junction"))
+def test_artifact_verifier_rejects_directory_links_without_following(
+    tmp_path: Path, link_kind: str
+) -> None:
+    if link_kind == "junction" and os.name != "nt":
+        pytest.skip("Windows junctions are only available on Windows")
+    project = _project(tmp_path)
+    source = _graphvar_run(tmp_path, project)
+    run = build_brainnet_artifacts(project, source)
+    forged = tmp_path / f"directory-linked-artifact-{link_kind}"
+    shutil.copytree(run.run_dir, forged)
+    target = forged / "brainnet" / "source-science"
+    external = tmp_path / f"external-source-science-{link_kind}"
+    shutil.copytree(target, external)
+    shutil.rmtree(target)
+    if link_kind == "symlink":
+        os.symlink(external, target, target_is_directory=True)
+    else:
+        completed = subprocess.run(
+            ["cmd.exe", "/d", "/c", "mklink", "/J", str(target), str(external)],
+            check=False,
+            capture_output=True,
+            text=True,
+            shell=False,
+        )
+        if completed.returncode != 0:
+            pytest.skip(f"junction creation is unavailable: {completed.stderr}")
+    try:
+        with pytest.raises(BrainNetError, match="symlink, junction, or reparse"):
+            verify_brainnet_artifact_run(forged)
+    finally:
+        if os.path.lexists(target):
+            if target.is_symlink():
+                target.unlink()
+            else:
+                os.rmdir(target)
+
+
+def test_artifact_verifier_rejects_forged_traversal_workspace(
+    tmp_path: Path,
+) -> None:
+    project = _project(tmp_path)
+    source = _graphvar_run(tmp_path, project)
+    run = build_brainnet_artifacts(project, source)
+    forged = tmp_path / "unsafe-workspace-artifact"
+    shutil.copytree(run.run_dir, forged)
+    _forge_workspace_lock(forged, "../outside")
+    with pytest.raises(BrainNetError, match="single-component artifact slugs"):
+        verify_brainnet_artifact_run(forged)
+
+
 def test_graphvar_schema_identity_and_style_coverage_fail_closed(
     tmp_path: Path,
 ) -> None:
@@ -646,6 +794,38 @@ def _rehash_render_manifests(run_dir: Path, workspace: str = "ws-one") -> None:
     inner["artifacts"] = _all_files(image_dir, {"output-manifest.json"})
     atomic_json(inner_path, inner)
     _rehash_artifact_manifest(run_dir)
+
+
+def _replace_with_external_file_symlink(
+    run_dir: Path, relative: str, external_root: Path
+) -> None:
+    target = run_dir / relative
+    external = external_root / relative
+    external.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(target, external)
+    target.unlink()
+    os.symlink(external, target)
+    assert target.is_symlink()
+    assert target.read_bytes() == external.read_bytes()
+
+
+def _forge_workspace_lock(run_dir: Path, workspace: str) -> None:
+    lock_path = run_dir / "project.lock.json"
+    lock = json.loads(lock_path.read_text(encoding="utf-8"))
+    lock["config"]["selection"]["workspaces"] = [workspace]
+    if lock["stage"] == "brainnet_artifacts":
+        lock["selection"][0]["workspace"] = workspace
+    identity = {key: value for key, value in lock.items() if key != "run_id"}
+    scientific_sha = digest_json(identity)
+    lock["run_id"] = scientific_sha[:12]
+    atomic_json(lock_path, lock)
+    manifest_path = run_dir / "brainnet" / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["run_id"] = lock["run_id"]
+    manifest["scientific_identity_sha256"] = scientific_sha
+    manifest["workspaces"] = [workspace]
+    manifest["artifacts"] = _all_files(run_dir, {"brainnet/manifest.json"})
+    atomic_json(manifest_path, manifest)
 
 
 def test_runtime_preflight_render_and_false_success(tmp_path: Path) -> None:
@@ -1024,6 +1204,58 @@ def test_render_semantic_verifier_rejects_coherently_rehashed_carriers(
         _rehash_render_manifests(forged)
         with pytest.raises(BrainNetError):
             verify_brainnet_render_run(forged)
+
+
+@pytest.mark.parametrize(
+    "relative",
+    (
+        "brainnet/source-run/brainnet/resources/surface.nv",
+        "brainnet/runtime/source-evidence/BrainNet_MapCfg.m",
+    ),
+)
+def test_render_verifier_rejects_same_byte_external_nested_links(
+    tmp_path: Path, relative: str
+) -> None:
+    _, _, rendered = _rendered_fixture(tmp_path)
+    forged = tmp_path / "linked-render"
+    shutil.copytree(rendered.run_dir, forged)
+    _replace_with_external_file_symlink(
+        forged, relative, tmp_path / "external-render-files"
+    )
+    with pytest.raises(BrainNetError, match="symlink, junction, or reparse"):
+        verify_brainnet_render_run(forged)
+
+
+def test_render_verifier_rejects_forged_reserved_workspace(
+    tmp_path: Path,
+) -> None:
+    _, _, rendered = _rendered_fixture(tmp_path)
+    forged = tmp_path / "unsafe-workspace-render"
+    shutil.copytree(rendered.run_dir, forged)
+    _forge_workspace_lock(forged, "CON")
+    with pytest.raises(BrainNetError, match="single-component artifact slugs"):
+        verify_brainnet_render_run(forged)
+
+
+def test_artifact_and_render_finals_remain_valid_after_copy_and_move(
+    tmp_path: Path,
+) -> None:
+    project, source, rendered = _rendered_fixture(tmp_path)
+    prepared = build_brainnet_artifacts(project, source)
+    relocated_root = tmp_path / "relocated"
+    relocated_root.mkdir()
+    artifact_copy = relocated_root / "artifact-copy"
+    render_copy = relocated_root / "render-copy"
+    shutil.copytree(prepared.run_dir, artifact_copy)
+    shutil.copytree(rendered.run_dir, render_copy)
+    assert verify_brainnet_artifact_run(artifact_copy).run_id == prepared.run_id
+    assert verify_brainnet_render_run(render_copy).run_id == rendered.run_id
+    moved_artifact = relocated_root / "artifact-moved"
+    moved_render = relocated_root / "render-moved"
+    shutil.move(artifact_copy, moved_artifact)
+    shutil.move(render_copy, moved_render)
+    assert verify_brainnet_artifact_run(moved_artifact).run_id == prepared.run_id
+    assert verify_brainnet_render_run(moved_render).run_id == rendered.run_id
 
 
 def test_image_post_publish_verification_failure_rolls_back(

@@ -15,6 +15,7 @@ from typing import Any
 from ..stage_io import atomic_json, load_json, sha256_file
 from .artifacts import BrainNetError
 from .config import BrainNetConfig
+from .containment import is_safe_artifact_slug
 from .qa import inspect_png
 
 ProcessRunner = Callable[..., subprocess.CompletedProcess[str]]
@@ -233,6 +234,10 @@ def run_brainnet_image(
     process_runner: ProcessRunner = subprocess.run,
 ) -> BrainNetExecution:
     """Render one image and reject process, metadata, or pixel false success."""
+    if not is_safe_artifact_slug(workspace):
+        raise BrainNetError(
+            "BrainNet render workspace must be a safe single-component artifact slug"
+        )
     output_dir = output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     mapcfg = (config.runtime.brainnet_root / "BrainNet_MapCfg.m").resolve()

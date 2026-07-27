@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import math
-import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,8 +10,8 @@ from typing import Any
 
 from ..project import CleanProject, ProjectValidationError
 from ..stage_io import sha256_file
+from .containment import is_safe_artifact_slug
 
-_SAFE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*\Z")
 _ROOT = {"resources", "selection", "nodes", "render", "runtime"}
 _RESOURCES = {"surface", "viewer_config"}
 _SELECTION = {"workspaces", "policy", "top_k"}
@@ -57,7 +56,7 @@ def _string(value: Any, name: str) -> str:
 
 def _safe(value: Any, name: str) -> str:
     result = _string(value, name)
-    if not _SAFE.fullmatch(result):
+    if not is_safe_artifact_slug(result):
         raise BrainNetConfigError(f"{name} must be a safe artifact name")
     return result
 

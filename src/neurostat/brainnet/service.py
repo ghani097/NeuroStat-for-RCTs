@@ -21,6 +21,11 @@ from .artifacts import (
     verify_brainnet_artifact_run,
 )
 from .config import BrainNetConfig, parse_brainnet_config
+from .containment import (
+    RunContainmentError,
+    audit_run_tree,
+    is_safe_artifact_slug,
+)
 from .qa import inspect_png
 from .runtime import (
     BrainNetExecution,
@@ -458,6 +463,10 @@ def _verify_image_directory(
     source_edge_sha256: str,
     published: bool,
 ) -> dict[str, Any]:
+    try:
+        directory = audit_run_tree(directory)
+    except RunContainmentError as exc:
+        raise BrainNetError(str(exc)) from exc
     manifest = load_json(
         directory / "output-manifest.json", "BrainNet image output manifest"
     )
@@ -727,7 +736,7 @@ def _completion_valid(
     source_node_sha256: str,
     source_edge_sha256: str,
 ) -> dict[str, Any] | None:
-    if not directory.exists():
+    if not os.path.lexists(directory):
         return None
     if not (directory / "completion.json").is_file():
         raise BrainNetError(f"incomplete BrainNet image directory exists: {workspace}")
@@ -749,10 +758,12 @@ def _workspaces(lock: dict[str, Any]) -> tuple[str, ...]:
     if (
         not isinstance(raw, list)
         or not raw
-        or any(not isinstance(item, str) or not item for item in raw)
+        or any(not is_safe_artifact_slug(item) for item in raw)
         or len(set(raw)) != len(raw)
     ):
-        raise BrainNetError("BrainNet render workspace contract is invalid")
+        raise BrainNetError(
+            "BrainNet render workspaces must be safe single-component artifact slugs"
+        )
     return tuple(raw)
 
 
@@ -760,7 +771,10 @@ def verify_brainnet_render_run(
     run_dir: str | Path, expected_lock: dict[str, Any] | None = None
 ) -> BrainNetRenderRun:
     """Reverify runtime evidence, every image carrier, and aggregate contracts."""
-    run_dir = Path(run_dir).resolve()
+    try:
+        run_dir = audit_run_tree(run_dir)
+    except RunContainmentError as exc:
+        raise BrainNetError(str(exc)) from exc
     lock = load_json(run_dir / "project.lock.json", "BrainNet render lock")
     manifest = load_json(
         run_dir / "brainnet" / "manifest.json", "BrainNet render manifest"
@@ -963,15 +977,22 @@ def render_brainnet_artifacts(
     scientific_sha = digest_json(identity)
     run_id = scientific_sha[:12]
     lock = identity | {"run_id": run_id}
-    final = (runs_root / f"brainnet-render-{run_id}").resolve()
-    if final.exists():
+    # Do not resolve an existing final/partial leaf: containment must inspect
+    # and quarantine the link itself rather than operating on its target.
+    runs_root = runs_root.resolve()
+    final = runs_root / f"brainnet-render-{run_id}"
+    if os.path.lexists(final):
         try:
             return verify_brainnet_render_run(final, lock)
         except (BrainNetError, RuntimeError, OSError):
             _quarantine(final)
-    partial = (runs_root / f".brainnet-render-{run_id}.partial").resolve()
+    partial = runs_root / f".brainnet-render-{run_id}.partial"
     brainnet = partial / "brainnet"
-    if partial.exists():
+    if os.path.lexists(partial):
+        try:
+            partial = audit_run_tree(partial)
+        except RunContainmentError as exc:
+            raise BrainNetError(str(exc)) from exc
         existing = load_json(partial / "project.lock.json", "partial BrainNet lock")
         if canonical_json(existing) != canonical_json(lock):
             raise BrainNetError("partial BrainNet render lock differs from request")
@@ -992,6 +1013,10 @@ def render_brainnet_artifacts(
                 carriers,
                 historical_preflight_root,
             )
+            try:
+                audit_run_tree(initializing)
+            except RunContainmentError as exc:
+                raise BrainNetError(str(exc)) from exc
             _verify_preflight_evidence(initializing, lock)
             (initialized / "renders").mkdir()
             atomic_json(
@@ -1054,7 +1079,7 @@ def render_brainnet_artifacts(
                     source_edge_sha256=source_edge_hash,
                 )
             except (BrainNetError, RuntimeError, OSError):
-                if final_image_dir.exists():
+                if os.path.lexists(final_image_dir):
                     _quarantine(final_image_dir)
                     completed = None
                 else:
@@ -1134,7 +1159,7 @@ def render_brainnet_artifacts(
                     published=True,
                 )
             except BaseException:
-                if final_image_dir.exists() and not attempt.exists():
+                if os.path.lexists(final_image_dir) and not os.path.lexists(attempt):
                     os.replace(final_image_dir, attempt)
                 raise
             index.append(completed)
@@ -1184,13 +1209,13 @@ def render_brainnet_artifacts(
             },
         )
         verify_brainnet_render_run(partial, lock)
-        if final.exists():
+        if os.path.lexists(final):
             raise BrainNetError(f"BrainNet render final appeared concurrently: {final}")
         os.replace(partial, final)
         try:
             verified = verify_brainnet_render_run(final, lock)
         except BaseException:
-            if final.exists() and not partial.exists():
+            if os.path.lexists(final) and not os.path.lexists(partial):
                 os.replace(final, partial)
             raise
         return BrainNetRenderRun(
@@ -1202,7 +1227,7 @@ def render_brainnet_artifacts(
             verified.artifacts,
         )
     except BaseException as exc:
-        if partial.exists():
+        if os.path.lexists(partial):
             atomic_json(
                 partial / "brainnet" / "status.json",
                 {
