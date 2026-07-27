@@ -37,6 +37,7 @@ class BrainNetRuntimeMetadata:
 
     def normalized(self) -> dict[str, Any]:
         return {
+            "path_semantics": "historical_execution_environment",
             "executable": str(self.executable),
             "matlab_release": self.matlab_release,
             "brainnet_root": str(self.brainnet_root),

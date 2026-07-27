@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import csv
+import io
 import math
 import os
 import shutil
 import tempfile
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -19,6 +21,7 @@ from ..stage_io import atomic_json, canonical_json, digest_json, load_json, sha2
 from .config import BrainNetConfig, parse_brainnet_config
 
 SCHEMA = "neurostat.brainnet_artifacts.v1"
+SOURCE_SCIENCE_SCHEMA = "neurostat.brainnet_source_science.v1"
 TOP_LINK_FIELDS = (
     "workspace",
     "component_id",
@@ -177,14 +180,16 @@ def _node_map(path: Path) -> tuple[dict[str, Any], ...]:
     return tuple(nodes)
 
 
-def _alpha_by_family(graphvar_lock: dict[str, Any]) -> dict[tuple[str, str], float]:
+def _families_by_identity(
+    graphvar_lock: dict[str, Any],
+) -> dict[tuple[str, str], dict[str, Any]]:
     try:
         families = graphvar_lock["config"]["families"]
     except (KeyError, TypeError) as exc:
         raise BrainNetError("GraphVar lock lacks normalized family config") from exc
     if not isinstance(families, list) or not families:
         raise BrainNetError("GraphVar lock family config is invalid")
-    result: dict[tuple[str, str], float] = {}
+    result: dict[tuple[str, str], dict[str, Any]] = {}
     for family in families:
         if not isinstance(family, dict):
             raise BrainNetError("GraphVar lock family entry is invalid")
@@ -192,42 +197,56 @@ def _alpha_by_family(graphvar_lock: dict[str, Any]) -> dict[tuple[str, str], flo
             _text(family.get("name"), "family name"),
             _text(family.get("holm_family"), "Holm family"),
         )
-        alpha = _float(
+        effect = family.get("effect")
+        if isinstance(effect, dict) and set(effect) == {
+            "numerator_arm",
+            "denominator_arm",
+        }:
+            numerator = effect.get("numerator_arm")
+            denominator = effect.get("denominator_arm")
+        elif "effect" not in family and {
+            "numerator_arm",
+            "denominator_arm",
+        } <= set(family):
+            numerator = family.get("numerator_arm")
+            denominator = family.get("denominator_arm")
+        else:
+            raise BrainNetError("GraphVar family effect contract is invalid")
+        normalized = dict(family)
+        normalized["familywise_alpha"] = _float(
             family.get("familywise_alpha"), "familywise alpha", probability=True
         )
-        previous = result.setdefault(key, alpha)
-        if previous != alpha:
-            raise BrainNetError("GraphVar family alpha is ambiguous")
+        normalized["effect"] = {
+            "numerator_arm": _text(numerator, "family numerator arm"),
+            "denominator_arm": _text(denominator, "family denominator arm"),
+        }
+        if key in result:
+            raise BrainNetError("GraphVar family identity is duplicated")
+        result[key] = normalized
     return result
 
 
-def load_verified_graphvar_tables(
-    graphvar: GraphVarAnalysisRun | str | Path,
+def _validate_graphvar_tables(
+    *,
+    node_map_path: Path,
+    components_path: Path,
+    links_path: Path,
+    graphvar_lock: dict[str, Any],
 ) -> tuple[
-    GraphVarAnalysisRun,
     tuple[dict[str, Any], ...],
     list[dict[str, Any]],
     list[dict[str, Any]],
 ]:
-    """Verify the whole source run, then strictly type and cross-check its tables."""
-    source = (
-        verify_graphvar_analysis_run(graphvar.run_dir)
-        if isinstance(graphvar, GraphVarAnalysisRun)
-        else verify_graphvar_analysis_run(graphvar)
-    )
-    graphvar_dir = source.run_dir / "graphvar"
-    nodes = _node_map(graphvar_dir / "selected-node-map.json")
+    """Strictly type and cross-check portable GraphVar source-science tables."""
+    nodes = _node_map(node_map_path)
     node_by_index = {node["result_index_1based"]: node for node in nodes}
-    component_raw = _read_csv(
-        graphvar_dir / "components-all.csv", COMPONENT_FIELDS, "GraphVar components"
-    )
+    component_raw = _read_csv(components_path, COMPONENT_FIELDS, "GraphVar components")
     link_raw = _read_csv(
-        graphvar_dir / "component-member-links-all.csv",
+        links_path,
         LINK_FIELDS,
         "GraphVar component member links",
     )
-    lock = load_json(source.run_dir / "project.lock.json", "GraphVar analysis lock")
-    alpha_lookup = _alpha_by_family(lock)
+    family_lookup = _families_by_identity(graphvar_lock)
     components: list[dict[str, Any]] = []
     by_id: dict[str, dict[str, Any]] = {}
     for position, raw in enumerate(component_raw, 1):
@@ -238,9 +257,10 @@ def load_verified_graphvar_tables(
             _text(raw["family"], "component family"),
             _text(raw["holm_family"], "component Holm family"),
         )
-        if family_key not in alpha_lookup:
+        family = family_lookup.get(family_key)
+        if family is None:
             raise BrainNetError("component family is absent from the GraphVar lock")
-        alpha = alpha_lookup[family_key]
+        alpha = family["familywise_alpha"]
         row: dict[str, Any] = dict(raw)
         row.update(
             holm_family=family_key[1],
@@ -335,6 +355,47 @@ def load_verified_graphvar_tables(
         )
         if row["effect_orientation_multiplier"] not in {-1, 1}:
             raise BrainNetError("component effect orientation must be -1 or 1")
+        if (
+            ("condition" in family and row["condition"] != family["condition"])
+            or (
+                "bands" in family
+                and (
+                    not isinstance(family["bands"], list)
+                    or row["band"] not in family["bands"]
+                )
+            )
+            or (
+                "session_pairs" in family
+                and (
+                    not isinstance(family["session_pairs"], list)
+                    or row["session_pair"]
+                    not in {
+                        pair.get("name")
+                        for pair in family["session_pairs"]
+                        if isinstance(pair, dict)
+                    }
+                )
+            )
+            or (
+                "effect_label" in family
+                and row["effect_label"] != family["effect_label"]
+            )
+            or (
+                "component_forming_alpha" in family
+                and row["component_forming_alpha"]
+                != _float(
+                    family["component_forming_alpha"],
+                    "family component-forming alpha",
+                    probability=True,
+                )
+            )
+            or (
+                "permutations" in family
+                and row["permutations"]
+                != _integer(family["permutations"], "family permutations", 1)
+            )
+        ):
+            raise BrainNetError("component metadata differs from its GraphVar family")
         if (
             not 0 < row["component_forming_alpha"] < 1
             or row["graphvar_numerator_df"] <= 0
@@ -455,6 +516,21 @@ def load_verified_graphvar_tables(
         )
         if row["f_statistic"] < 0:
             raise BrainNetError("member link F must be nonnegative")
+        numerator = family_lookup[(component["family"], component["holm_family"])][
+            "effect"
+        ]["numerator_arm"]
+        denominator = family_lookup[(component["family"], component["holm_family"])][
+            "effect"
+        ]["denominator_arm"]
+        expected_direction = (
+            f"Positive: {numerator} has a more positive second-minus-first "
+            f"change than {denominator}"
+            if row["paired_change_contrast_b"] > 0
+            else f"Negative: {numerator} has a more negative second-minus-first "
+            f"change than {denominator}"
+            if row["paired_change_contrast_b"] < 0
+            else "Zero configured paired-change contrast"
+        )
         if (
             row["workspace"] != component["workspace"]
             or _text(raw["holm_family"], "link Holm family") != component["holm_family"]
@@ -468,6 +544,8 @@ def load_verified_graphvar_tables(
             != component["component_node_count"]
             or _integer(raw["component_link_count"], "link component link count", 1)
             != component["component_link_count"]
+            or _text(raw["effect_direction"], "link effect direction")
+            != expected_direction
         ):
             raise BrainNetError("member link component metadata is inconsistent")
         if _text(raw["inference_scope"], "link inference scope") != (
@@ -513,21 +591,73 @@ def load_verified_graphvar_tables(
             or endpoint_labels != declared
         ):
             raise BrainNetError("component node membership is inconsistent")
+    return nodes, components, links
+
+
+def load_verified_graphvar_tables(
+    graphvar: GraphVarAnalysisRun | str | Path,
+) -> tuple[
+    GraphVarAnalysisRun,
+    tuple[dict[str, Any], ...],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+]:
+    """Verify the whole source run, then strictly type and cross-check its tables."""
+    source = (
+        verify_graphvar_analysis_run(graphvar.run_dir)
+        if isinstance(graphvar, GraphVarAnalysisRun)
+        else verify_graphvar_analysis_run(graphvar)
+    )
+    graphvar_dir = source.run_dir / "graphvar"
+    graphvar_lock = load_json(
+        source.run_dir / "project.lock.json", "GraphVar analysis lock"
+    )
+    if not isinstance(graphvar_lock, dict):
+        raise BrainNetError("GraphVar analysis lock is invalid")
+    nodes, components, links = _validate_graphvar_tables(
+        node_map_path=graphvar_dir / "selected-node-map.json",
+        components_path=graphvar_dir / "components-all.csv",
+        links_path=graphvar_dir / "component-member-links-all.csv",
+        graphvar_lock=graphvar_lock,
+    )
     return source, nodes, components, links
 
 
-def select_components_and_links(
-    config: BrainNetConfig,
+def _selection_values(
+    selection: dict[str, Any],
+) -> tuple[tuple[str, ...], str, int]:
+    if not isinstance(selection, dict) or set(selection) != {
+        "workspaces",
+        "policy",
+        "top_k",
+    }:
+        raise BrainNetError("BrainNet selection contract is invalid")
+    raw_workspaces = selection["workspaces"]
+    if (
+        not isinstance(raw_workspaces, list)
+        or not raw_workspaces
+        or any(not isinstance(item, str) or not item for item in raw_workspaces)
+        or len(set(raw_workspaces)) != len(raw_workspaces)
+    ):
+        raise BrainNetError("BrainNet selection workspace contract is invalid")
+    policy = _text(selection["policy"], "BrainNet selection policy")
+    if policy != "largest_primary_node_pfwe":
+        raise BrainNetError("BrainNet selection policy is unsupported")
+    return tuple(raw_workspaces), policy, _integer(selection["top_k"], "top_k", 1)
+
+
+def _select_components_and_links(
+    selection: dict[str, Any],
     components: list[dict[str, Any]],
     links: list[dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Select requested primary components and deterministic descriptive links."""
+    workspaces, policy, top_k = _selection_values(selection)
     links_by_component: dict[str, list[dict[str, Any]]] = {}
     for row in links:
         links_by_component.setdefault(row["component_id"], []).append(row)
     selections = []
     top_links = []
-    for workspace in config.selection.workspaces:
+    for workspace in workspaces:
         candidates = [
             row
             for row in components
@@ -554,16 +684,16 @@ def select_components_and_links(
                 row["roi2"],
             )
         )
-        if len(member_links) < config.selection.top_k:
+        if len(member_links) < top_k:
             raise BrainNetError(
                 f"selected component has fewer than top_k member links: {workspace}"
             )
-        selected_links = member_links[: config.selection.top_k]
+        selected_links = member_links[:top_k]
         selections.append(
             {
                 "workspace": workspace,
                 "component_id": selected["component_id"],
-                "policy": config.selection.policy,
+                "policy": policy,
                 "component_node_count": selected["component_node_count"],
                 "component_link_count": selected["component_link_count"],
                 "primary_node_pfwe_plus_one": selected["primary_node_pfwe_plus_one"],
@@ -631,13 +761,44 @@ def select_components_and_links(
     return selections, top_links
 
 
-def _write_node(
-    path: Path, nodes: tuple[dict[str, Any], ...], config: BrainNetConfig
-) -> None:
-    styles = {
-        (style.connectivity_label, style.display_label): style
-        for style in config.styles
-    }
+def select_components_and_links(
+    config: BrainNetConfig,
+    components: list[dict[str, Any]],
+    links: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Select requested primary components and deterministic descriptive links."""
+    return _select_components_and_links(
+        config.selection.normalized(), components, links
+    )
+
+
+def _node_text(
+    nodes: tuple[dict[str, Any], ...], styles_raw: list[dict[str, Any]]
+) -> str:
+    styles: dict[tuple[str, str], dict[str, Any]] = {}
+    for position, style in enumerate(styles_raw, 1):
+        if not isinstance(style, dict) or set(style) != {
+            "connectivity_label",
+            "display_label",
+            "color",
+            "size",
+        }:
+            raise BrainNetError(f"BrainNet node style {position} is invalid")
+        identity = (
+            _text(style["connectivity_label"], "style connectivity label"),
+            _text(style["display_label"], "style display label"),
+        )
+        color = _float(style["color"], "style color")
+        size = _float(style["size"], "style size")
+        if color <= 0 or size <= 0:
+            raise BrainNetError("BrainNet node style color/size must be positive")
+        if identity in styles:
+            raise BrainNetError("BrainNet node style identity is duplicated")
+        styles[identity] = style | {"color": color, "size": size}
+    if len({identity[0] for identity in styles}) != len(styles) or len(
+        {identity[1] for identity in styles}
+    ) != len(styles):
+        raise BrainNetError("BrainNet node style labels must be independently unique")
     expected = {(node["connectivity_label"], node["display_label"]) for node in nodes}
     if set(styles) != expected:
         missing = sorted(expected - set(styles))
@@ -645,7 +806,7 @@ def _write_node(
         raise BrainNetError(
             f"node style coverage differs from frozen node map; missing={missing!r}, extra={extra!r}"
         )
-    lines = []
+    lines: list[str] = []
     for node in nodes:
         style = styles[(node["connectivity_label"], node["display_label"])]
         label = node["display_label"]
@@ -658,13 +819,23 @@ def _write_node(
                     format(x, ".10g"),
                     format(y, ".10g"),
                     format(z, ".10g"),
-                    format(style.color, ".10g"),
-                    format(style.size, ".10g"),
+                    format(_float(style["color"], "style color"), ".10g"),
+                    format(_float(style["size"], "style size"), ".10g"),
                     label,
                 )
             )
         )
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+    return "\n".join(lines) + "\n"
+
+
+def _write_node(
+    path: Path, nodes: tuple[dict[str, Any], ...], config: BrainNetConfig
+) -> None:
+    path.write_text(
+        _node_text(nodes, [style.normalized() for style in config.styles]),
+        encoding="utf-8",
+        newline="\n",
+    )
 
 
 def _matrix(
@@ -688,27 +859,43 @@ def _matrix(
     return matrix
 
 
+def _edge_text(matrix: list[list[float]]) -> str:
+    rows: list[str] = []
+    for row in matrix:
+        formatted: list[str] = []
+        for value in row:
+            text = format(value, ".4f")
+            if value != 0 and float(text) == 0:
+                raise BrainNetError(
+                    "nonzero BrainNet edge weight rounds to zero at .edge precision"
+                )
+            formatted.append(text)
+        rows.append("\t".join(formatted))
+    return "\n".join(rows) + "\n"
+
+
 def _write_edge(path: Path, matrix: list[list[float]]) -> None:
-    path.write_text(
-        "".join(
-            "\t".join(format(value, ".4f") for value in row) + "\n" for row in matrix
-        ),
-        encoding="utf-8",
-        newline="\n",
-    )
+    path.write_text(_edge_text(matrix), encoding="utf-8", newline="\n")
+
+
+def _top_csv_text(rows: list[dict[str, Any]]) -> str:
+    handle = io.StringIO(newline="")
+    writer = csv.DictWriter(handle, fieldnames=TOP_LINK_FIELDS, lineterminator="\n")
+    writer.writeheader()
+    for row in rows:
+        if set(row) != set(TOP_LINK_FIELDS):
+            raise BrainNetError("BrainNet top-link row schema is invalid")
+        writer.writerow(
+            {
+                key: (format(value, ".10g") if isinstance(value, float) else value)
+                for key, value in row.items()
+            }
+        )
+    return handle.getvalue()
 
 
 def _write_top_csv(path: Path, rows: list[dict[str, Any]]) -> None:
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=TOP_LINK_FIELDS, lineterminator="\n")
-        writer.writeheader()
-        for row in rows:
-            writer.writerow(
-                {
-                    key: (format(value, ".10g") if isinstance(value, float) else value)
-                    for key, value in row.items()
-                }
-            )
+    path.write_text(_top_csv_text(rows), encoding="utf-8", newline="\n")
 
 
 def _without_brainnet(project: Any) -> Any:
@@ -722,6 +909,7 @@ def _without_brainnet(project: Any) -> Any:
 def verify_brainnet_artifact_run(
     run_dir: str | Path, expected_lock: dict[str, Any] | None = None
 ) -> BrainNetArtifactRun:
+    """Recompute every prepared artifact from its portable GraphVar evidence."""
     run_dir = Path(run_dir).resolve()
     lock = load_json(run_dir / "project.lock.json", "BrainNet artifact lock")
     manifest = load_json(
@@ -731,17 +919,26 @@ def verify_brainnet_artifact_run(
         expected_lock
     ):
         raise BrainNetError("existing BrainNet artifact lock differs from request")
+    if not isinstance(lock, dict) or set(lock) != {
+        "stage",
+        "project",
+        "config",
+        "graphvar",
+        "source_science",
+        "selection",
+        "packaged_matlab",
+        "run_id",
+    }:
+        raise BrainNetError("BrainNet artifact lock schema is invalid")
+    identity = {key: value for key, value in lock.items() if key != "run_id"}
+    scientific_sha = digest_json(identity)
     if (
-        not isinstance(lock, dict)
-        or lock.get("stage") != "brainnet_artifacts"
+        lock.get("stage") != "brainnet_artifacts"
+        or lock.get("run_id") != scientific_sha[:12]
         or not isinstance(manifest, dict)
         or manifest.get("schema") != SCHEMA
         or manifest.get("run_id") != lock.get("run_id")
-        or manifest.get("scientific_identity_sha256")
-        != digest_json({key: value for key, value in lock.items() if key != "run_id"})
-        or manifest.get("graphvar_run_id") != lock.get("graphvar", {}).get("run_id")
-        or manifest.get("graphvar_manifest_sha256")
-        != lock.get("graphvar", {}).get("manifest_sha256")
+        or manifest.get("scientific_identity_sha256") != scientific_sha
     ):
         raise BrainNetError("BrainNet artifact identity is invalid")
     try:
@@ -753,21 +950,103 @@ def verify_brainnet_artifact_run(
         )
     except RuntimeError as exc:
         raise BrainNetError(str(exc)) from exc
-    status = load_json(run_dir / "brainnet" / "status.json", "BrainNet status")
-    validation = load_json(
-        run_dir / "brainnet" / "validation.json", "BrainNet validation"
-    )
-    if status.get("state") != "prepared" or validation.get("status") != "passed":
-        raise BrainNetError("BrainNet artifact run is not prepared and validated")
-    workspaces = manifest.get("workspaces")
+    config = lock.get("config")
+    graphvar = lock.get("graphvar")
+    science = lock.get("source_science")
     if (
-        not isinstance(workspaces, list)
-        or not workspaces
-        or len(set(workspaces)) != len(workspaces)
-        or any(not isinstance(item, str) or not item for item in workspaces)
-        or workspaces != lock.get("config", {}).get("selection", {}).get("workspaces")
+        not isinstance(config, dict)
+        or not isinstance(graphvar, dict)
+        or set(graphvar)
+        != {
+            "run_id",
+            "manifest_sha256",
+            "components_sha256",
+            "links_sha256",
+            "node_map_sha256",
+        }
+        or not isinstance(science, dict)
+        or set(science)
+        != {
+            "schema",
+            "graphvar_run_id",
+            "graphvar_manifest_sha256",
+            "families",
+            "artifacts",
+        }
+        or science.get("schema") != SOURCE_SCIENCE_SCHEMA
+        or science.get("graphvar_run_id") != graphvar.get("run_id")
+        or science.get("graphvar_manifest_sha256") != graphvar.get("manifest_sha256")
     ):
-        raise BrainNetError("BrainNet manifest workspace order is invalid")
+        raise BrainNetError("BrainNet portable source-science contract is invalid")
+    science_artifacts = science.get("artifacts")
+    expected_science_names = {
+        "selected-node-map.json",
+        "components-all.csv",
+        "component-member-links-all.csv",
+    }
+    if (
+        not isinstance(science_artifacts, dict)
+        or set(science_artifacts) != expected_science_names
+        or any(
+            not isinstance(value, str) or len(value) != 64
+            for value in science_artifacts.values()
+        )
+        or science_artifacts["selected-node-map.json"]
+        != graphvar.get("node_map_sha256")
+        or science_artifacts["components-all.csv"] != graphvar.get("components_sha256")
+        or science_artifacts["component-member-links-all.csv"]
+        != graphvar.get("links_sha256")
+    ):
+        raise BrainNetError("BrainNet source-science hashes are invalid")
+    science_dir = run_dir / "brainnet" / "source-science"
+    recorded_science = load_json(
+        science_dir / "analysis-contract.json",
+        "BrainNet portable source-science contract",
+    )
+    if canonical_json(recorded_science) != canonical_json(science):
+        raise BrainNetError("BrainNet source-science contract differs from its lock")
+    for name, expected_hash in science_artifacts.items():
+        path = science_dir / name
+        if not path.is_file() or sha256_file(path) != expected_hash:
+            raise BrainNetError(f"BrainNet source-science input differs: {name}")
+    families = science.get("families")
+    nodes, components, links = _validate_graphvar_tables(
+        node_map_path=science_dir / "selected-node-map.json",
+        components_path=science_dir / "components-all.csv",
+        links_path=science_dir / "component-member-links-all.csv",
+        graphvar_lock={"config": {"families": families}},
+    )
+    frozen_map = run_dir / "brainnet" / "selected-node-map.json"
+    if (
+        not frozen_map.is_file()
+        or frozen_map.read_bytes()
+        != (science_dir / "selected-node-map.json").read_bytes()
+    ):
+        raise BrainNetError("BrainNet frozen node map differs from source science")
+
+    selection_config = config.get("selection")
+    if not isinstance(selection_config, dict):
+        raise BrainNetError("BrainNet normalized selection config is invalid")
+    workspaces, policy, top_k = _selection_values(selection_config)
+    selections, top_links = _select_components_and_links(
+        selection_config, components, links
+    )
+    if canonical_json(lock.get("selection")) != canonical_json(selections):
+        raise BrainNetError("BrainNet locked component selection is not reproducible")
+    selected_path = run_dir / "brainnet" / "selected-components.json"
+    top_json_path = run_dir / "brainnet" / "top-links.json"
+    if canonical_json(
+        load_json(selected_path, "BrainNet selected components")
+    ) != canonical_json(selections):
+        raise BrainNetError("BrainNet selected-component manifest is not reproducible")
+    if canonical_json(
+        load_json(top_json_path, "BrainNet JSON top-link manifest")
+    ) != canonical_json(top_links):
+        raise BrainNetError("BrainNet JSON top links are not reproducible")
+    top_csv_path = run_dir / "brainnet" / "top-links.csv"
+    if top_csv_path.read_text(encoding="utf-8") != _top_csv_text(top_links):
+        raise BrainNetError("BrainNet CSV top links are not reproducible")
+
     packaged_matlab = lock.get("packaged_matlab")
     if not isinstance(packaged_matlab, dict) or set(packaged_matlab) != {
         "neurostat_brainnet_entry.m",
@@ -794,157 +1073,69 @@ def verify_brainnet_artifact_run(
             or sha256_file(resource) != expected_hash
         ):
             raise BrainNetError("BrainNet copied viewer resource differs")
-    nodes = _parse_node(run_dir / "brainnet" / "network.node")
-    frozen_nodes = _node_map(run_dir / "brainnet" / "selected-node-map.json")
-    styles = lock.get("config", {}).get("nodes", {}).get("styles", [])
-    if not isinstance(styles, list):
-        raise BrainNetError("BrainNet lock node styles are invalid")
-    style_by_identity = {
-        (
-            _text(style.get("connectivity_label"), "style connectivity label"),
-            _text(style.get("display_label"), "style display label"),
-        ): style
-        for style in styles
-        if isinstance(style, dict)
-    }
-    if len(nodes) != len(frozen_nodes) or len(style_by_identity) != len(frozen_nodes):
-        raise BrainNetError("BrainNet node file/map/style cardinalities differ")
-    for exported, frozen in zip(nodes, frozen_nodes, strict=True):
-        style = style_by_identity.get(
-            (frozen["connectivity_label"], frozen["display_label"])
-        )
-        if style is None:
-            raise BrainNetError("BrainNet node style does not cover frozen mapping")
-        expected = (
-            *frozen["coordinates"],
-            _float(style.get("color"), "style color"),
-            _float(style.get("size"), "style size"),
-        )
-        if exported[5] != frozen["display_label"] or any(
-            not math.isclose(observed, wanted, rel_tol=1e-9, abs_tol=1e-9)
-            for observed, wanted in zip(exported[:5], expected, strict=True)
-        ):
-            raise BrainNetError("BrainNet node file differs from frozen map/styles")
-    top_rows = _read_csv(
-        run_dir / "brainnet" / "top-links.csv",
-        TOP_LINK_FIELDS,
-        "BrainNet top-link manifest",
-    )
-    top_k = _integer(lock["config"]["selection"]["top_k"], "top_k", 1)
-    if len(top_rows) != len(workspaces) * top_k:
-        raise BrainNetError("BrainNet top-link manifest cardinality is invalid")
-    top_json = load_json(
-        run_dir / "brainnet" / "top-links.json", "BrainNet JSON top-link manifest"
-    )
-    if not isinstance(top_json, list) or len(top_json) != len(top_rows):
-        raise BrainNetError("BrainNet CSV/JSON top-link cardinalities differ")
-    for csv_row, json_row in zip(top_rows, top_json, strict=True):
-        if not isinstance(json_row, dict) or set(json_row) != set(TOP_LINK_FIELDS):
-            raise BrainNetError("BrainNet JSON top-link schema is invalid")
-        json_row = cast(dict[str, Any], json_row)
-        for field in TOP_LINK_FIELDS:
-            if field in {
-                "display_rank",
-                "roi1_result_index_1based",
-                "roi2_result_index_1based",
-                "component_node_count",
-                "component_link_count",
-            }:
-                equal = _integer(csv_row[field], field) == _integer(
-                    json_row[field], field
-                )
-            elif field in {
-                "signed_weight",
-                "permutation_p_uncorrected",
-                "paired_change_contrast_b",
-                "abs_b",
-                "f_statistic",
-                "primary_node_pfwe_plus_one",
-                "primary_node_holm_all_candidates",
-                "posthoc_nbs_edge_pfwe_plus_one",
-                "posthoc_nbs_edge_holm_all_candidates",
-            }:
-                equal = math.isclose(
-                    _float(csv_row[field], field),
-                    _float(json_row[field], field),
-                    rel_tol=5e-10,
-                    abs_tol=5e-12,
-                )
-            else:
-                equal = csv_row[field] == json_row[field]
-            if not equal:
-                raise BrainNetError("BrainNet CSV/JSON top-link values differ")
-    selected_components = load_json(
-        run_dir / "brainnet" / "selected-components.json",
-        "BrainNet selected components",
-    )
-    if (
-        not isinstance(selected_components, list)
-        or [
-            row.get("workspace") for row in selected_components if isinstance(row, dict)
-        ]
-        != workspaces
-        or any(
-            not isinstance(row, dict)
-            or row.get("policy")
-            != lock.get("config", {}).get("selection", {}).get("policy")
-            or row.get("primary_node_pfwe_supported") is not True
-            for row in selected_components
-        )
+    nodes_config = config.get("nodes")
+    styles = nodes_config.get("styles") if isinstance(nodes_config, dict) else None
+    if not isinstance(styles, list) or any(
+        not isinstance(style, dict) for style in styles
     ):
-        raise BrainNetError("BrainNet selected-component manifest is invalid")
+        raise BrainNetError("BrainNet lock node styles are invalid")
+    node_path = run_dir / "brainnet" / "network.node"
+    if node_path.read_text(encoding="utf-8") != _node_text(nodes, cast(Any, styles)):
+        raise BrainNetError("BrainNet node file is not reproducible")
+    _parse_node(node_path)
     for workspace in workspaces:
-        rows = [row for row in top_rows if row["workspace"] == workspace]
-        selected = next(
-            row for row in selected_components if row["workspace"] == workspace
-        )
-        if len({row["component_id"] for row in rows}) != 1 or rows[0][
-            "component_id"
-        ] != selected.get("component_id"):
-            raise BrainNetError("BrainNet top links map to the wrong component")
-        if [int(row["display_rank"]) for row in rows] != list(range(1, top_k + 1)):
-            raise BrainNetError("BrainNet display ranks are not contiguous")
-        edge = _parse_edge(
-            run_dir / "brainnet" / "edges" / f"{workspace}.edge",
-            len(nodes),
-            top_k,
-        )
-        expected_edges: set[tuple[int, int]] = set()
-        for row in rows:
-            first = (
-                _integer(row["roi1_result_index_1based"], "top-link ROI1 index", 1) - 1
-            )
-            second = (
-                _integer(row["roi2_result_index_1based"], "top-link ROI2 index", 1) - 1
-            )
-            if (
-                first >= second
-                or first >= len(nodes)
-                or second >= len(nodes)
-                or (first, second) in expected_edges
-            ):
-                raise BrainNetError("BrainNet top-link endpoint identity is invalid")
-            expected_edges.add((first, second))
-            weight = _float(row["signed_weight"], "top-link signed weight")
-            if weight == 0 or edge[first][second] != float(format(weight, ".4f")):
-                raise BrainNetError(
-                    "BrainNet edge weight differs from its top-link manifest"
-                )
-        observed_edges = {
-            (first, second)
-            for first in range(len(nodes))
-            for second in range(first + 1, len(nodes))
-            if edge[first][second] != 0
-        }
-        if observed_edges != expected_edges:
-            raise BrainNetError("BrainNet edge topology differs from top-link manifest")
+        rows = [row for row in top_links if row["workspace"] == workspace]
+        matrix = _matrix(len(nodes), rows, top_k)
+        edge_path = run_dir / "brainnet" / "edges" / f"{workspace}.edge"
+        if edge_path.read_text(encoding="utf-8") != _edge_text(matrix):
+            raise BrainNetError(f"BrainNet edge file is not reproducible: {workspace}")
+        _parse_edge(edge_path, len(nodes), top_k)
+
+    expected_status = {
+        "state": "prepared",
+        "rendered": 0,
+        "total": len(selections),
+    }
+    expected_validation = {
+        "status": "passed",
+        "state": "prepared",
+        "node_count": len(nodes),
+        "workspace_count": len(workspaces),
+        "top_k": top_k,
+        "unique_edges_per_workspace": top_k,
+        "source_components_validated": len(components),
+        "source_member_links_validated": len(links),
+        "primary_selection_policy": policy,
+        "nbs_qualifies_selection": False,
+        "links_are_corrected_inference": False,
+    }
+    status = load_json(run_dir / "brainnet" / "status.json", "BrainNet status")
+    validation = load_json(
+        run_dir / "brainnet" / "validation.json", "BrainNet validation"
+    )
+    if canonical_json(status) != canonical_json(expected_status):
+        raise BrainNetError("BrainNet prepared status is not reproducible")
+    if canonical_json(validation) != canonical_json(expected_validation):
+        raise BrainNetError("BrainNet prepared validation is not reproducible")
+
+    expected_manifest = {
+        "schema": SCHEMA,
+        "run_id": lock["run_id"],
+        "scientific_identity_sha256": scientific_sha,
+        "graphvar_run_id": graphvar["run_id"],
+        "graphvar_manifest_sha256": graphvar["manifest_sha256"],
+        "workspaces": list(workspaces),
+        "artifacts": _all_files(run_dir, {"brainnet/manifest.json"}),
+    }
+    if canonical_json(manifest) != canonical_json(expected_manifest):
+        raise BrainNetError("BrainNet artifact manifest fields are not reproducible")
     artifacts = tuple(run_dir / relative for relative in sorted(manifest["artifacts"]))
     return BrainNetArtifactRun(
         str(lock["run_id"]),
         run_dir,
         run_dir / "brainnet" / "manifest.json",
         True,
-        tuple(workspaces),
+        workspaces,
         artifacts,
     )
 
@@ -1007,6 +1198,8 @@ def build_brainnet_artifacts(
         raise BrainNetError("BrainNet resource changed after config parsing")
     source, nodes, components, links = load_verified_graphvar_tables(graphvar_run)
     source_lock = load_json(source.run_dir / "project.lock.json", "GraphVar lock")
+    if not isinstance(source_lock, dict):
+        raise BrainNetError("GraphVar lock is invalid")
     if canonical_json(_without_brainnet(source_lock.get("project"))) != canonical_json(
         _without_brainnet(project.normalized())
     ):
@@ -1015,23 +1208,32 @@ def build_brainnet_artifacts(
     from .runtime import matlab_resources
 
     resources = matlab_resources()
+    graphvar_dir = source.run_dir / "graphvar"
+    graphvar_identity = {
+        "run_id": source.run_id,
+        "manifest_sha256": sha256_file(source.manifest),
+        "components_sha256": sha256_file(graphvar_dir / "components-all.csv"),
+        "links_sha256": sha256_file(graphvar_dir / "component-member-links-all.csv"),
+        "node_map_sha256": sha256_file(graphvar_dir / "selected-node-map.json"),
+    }
+    source_science = {
+        "schema": SOURCE_SCIENCE_SCHEMA,
+        "graphvar_run_id": source.run_id,
+        "graphvar_manifest_sha256": graphvar_identity["manifest_sha256"],
+        "families": source_lock.get("config", {}).get("families"),
+        "artifacts": {
+            "selected-node-map.json": graphvar_identity["node_map_sha256"],
+            "components-all.csv": graphvar_identity["components_sha256"],
+            "component-member-links-all.csv": graphvar_identity["links_sha256"],
+        },
+    }
+    _families_by_identity({"config": {"families": source_science["families"]}})
     identity = {
         "stage": "brainnet_artifacts",
         "project": project.normalized(),
         "config": config.normalized(),
-        "graphvar": {
-            "run_id": source.run_id,
-            "manifest_sha256": sha256_file(source.manifest),
-            "components_sha256": sha256_file(
-                source.run_dir / "graphvar" / "components-all.csv"
-            ),
-            "links_sha256": sha256_file(
-                source.run_dir / "graphvar" / "component-member-links-all.csv"
-            ),
-            "node_map_sha256": sha256_file(
-                source.run_dir / "graphvar" / "selected-node-map.json"
-            ),
-        },
+        "graphvar": graphvar_identity,
+        "source_science": source_science,
         "selection": selections,
         "packaged_matlab": {
             resource.name: sha256_file(resource) for resource in resources
@@ -1044,7 +1246,11 @@ def build_brainnet_artifacts(
     runs_root.mkdir(parents=True, exist_ok=True)
     final = (runs_root / f"brainnet-artifacts-{run_id}").resolve()
     if final.exists():
-        return verify_brainnet_artifact_run(final, lock)
+        try:
+            return verify_brainnet_artifact_run(final, lock)
+        except (BrainNetError, RuntimeError, OSError):
+            quarantine = final.with_name(f".{final.name}.invalid-{uuid.uuid4().hex}")
+            os.replace(final, quarantine)
     staging = Path(
         tempfile.mkdtemp(prefix=f".brainnet-artifacts-{run_id}.staging-", dir=runs_root)
     ).resolve()
@@ -1052,6 +1258,8 @@ def build_brainnet_artifacts(
         brainnet = staging / "brainnet"
         (brainnet / "edges").mkdir(parents=True)
         (brainnet / "resources").mkdir()
+        science_dir = brainnet / "source-science"
+        science_dir.mkdir()
         atomic_json(staging / "project.lock.json", lock)
         shutil.copy2(config.resources.surface, brainnet / "resources" / "surface.nv")
         shutil.copy2(
@@ -1059,9 +1267,16 @@ def build_brainnet_artifacts(
             brainnet / "resources" / "viewer-config.mat",
         )
         shutil.copy2(
-            source.run_dir / "graphvar" / "selected-node-map.json",
+            graphvar_dir / "selected-node-map.json",
             brainnet / "selected-node-map.json",
         )
+        for name in (
+            "selected-node-map.json",
+            "components-all.csv",
+            "component-member-links-all.csv",
+        ):
+            shutil.copy2(graphvar_dir / name, science_dir / name)
+        atomic_json(science_dir / "analysis-contract.json", source_science)
         _write_node(brainnet / "network.node", nodes, config)
         for workspace in config.selection.workspaces:
             workspace_rows = [row for row in top_links if row["workspace"] == workspace]
@@ -1105,12 +1320,18 @@ def build_brainnet_artifacts(
                 "artifacts": artifacts,
             },
         )
+        verify_brainnet_artifact_run(staging, lock)
         if final.exists():
             raise BrainNetError(
                 f"BrainNet artifact final appeared concurrently: {final}"
             )
         os.replace(staging, final)
-        verified = verify_brainnet_artifact_run(final, lock)
+        try:
+            verified = verify_brainnet_artifact_run(final, lock)
+        except BaseException:
+            if final.exists() and not staging.exists():
+                os.replace(final, staging)
+            raise
         return BrainNetArtifactRun(
             verified.run_id,
             verified.run_dir,

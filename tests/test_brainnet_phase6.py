@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import json
 import os
+import shutil
 import struct
 import subprocess
 import sys
@@ -13,6 +14,8 @@ from typing import Any
 
 import pytest
 
+import neurostat.brainnet.artifacts as artifact_service
+import neurostat.brainnet.service as render_service
 from neurostat.brainnet import (
     BrainNetConfigError,
     BrainNetError,
@@ -194,7 +197,15 @@ def _links(component: dict[str, Any]) -> list[dict[str, Any]]:
             "f_statistic": f_value,
             "parametric_p_uncorrected": p_value,
             "permutation_p_uncorrected": p_value,
-            "effect_direction": "descriptive",
+            "effect_direction": (
+                "Positive: active has a more positive second-minus-first "
+                "change than control"
+                if b_value > 0
+                else "Negative: active has a more negative second-minus-first "
+                "change than control"
+                if b_value < 0
+                else "Zero configured paired-change contrast"
+            ),
             "inference_scope": (
                 "Member link is descriptive and uncorrected; corrected inference "
                 "applies only to the complete component."
@@ -231,6 +242,7 @@ def _graphvar_run(
     *,
     component: dict[str, Any] | None = None,
     components: list[dict[str, Any]] | None = None,
+    member_links: list[dict[str, Any]] | None = None,
 ) -> Path:
     if components is None:
         components = [_component() if component is None else component]
@@ -252,7 +264,11 @@ def _graphvar_run(
     _csv(
         graphvar / "component-member-links-all.csv",
         LINK_FIELDS,
-        [link for item in components for link in _links(item)],
+        (
+            [link for item in components for link in _links(item)]
+            if member_links is None
+            else member_links
+        ),
     )
     atomic_json(graphvar / "status.json", {"state": "succeeded"})
     atomic_json(graphvar / "validation.json", {"status": "passed"})
@@ -265,6 +281,10 @@ def _graphvar_run(
                     "name": "primary",
                     "holm_family": "sep-primary",
                     "familywise_alpha": 0.05,
+                    "effect": {
+                        "numerator_arm": "active",
+                        "denominator_arm": "control",
+                    },
                 }
             ]
         },
@@ -388,6 +408,107 @@ def test_build_exact_node_edge_manifest_reuse_and_tamper(tmp_path: Path) -> None
     edge_path.write_text(edge_path.read_text().replace("-3.0000", "-2.0000"))
     with pytest.raises((BrainNetError, RuntimeError), match="SHA-256|hash"):
         verify_brainnet_artifact_run(run.run_dir)
+    repaired = build_brainnet_artifacts(project, source)
+    assert verify_brainnet_artifact_run(repaired.run_dir).run_id == run.run_id
+    assert list((project.output_root / "runs").glob(f".{run.run_dir.name}.invalid-*"))
+
+
+def test_artifact_semantic_verifier_rejects_coherently_rehashed_science(
+    tmp_path: Path,
+) -> None:
+    project = _project(tmp_path)
+    source = _graphvar_run(tmp_path, project)
+    run = build_brainnet_artifacts(project, source)
+    forged = tmp_path / "forged-artifact"
+    shutil.copytree(run.run_dir, forged)
+    top_json_path = forged / "brainnet" / "top-links.json"
+    rows = json.loads(top_json_path.read_text(encoding="utf-8"))
+    target = rows[0]
+    target.update(
+        {
+            "paired_change_contrast_b": 4.0,
+            "abs_b": 4.0,
+            "f_statistic": 16.0,
+            "signed_weight": 4.0,
+        }
+    )
+    atomic_json(top_json_path, rows)
+    _csv(forged / "brainnet" / "top-links.csv", TOP_LINK_FIELDS, rows)
+    edge_path = forged / "brainnet" / "edges" / "ws-one.edge"
+    matrix = [
+        [float(value) for value in line.split("\t")]
+        for line in edge_path.read_text(encoding="utf-8").splitlines()
+    ]
+    first = target["roi1_result_index_1based"] - 1
+    second = target["roi2_result_index_1based"] - 1
+    matrix[first][second] = matrix[second][first] = 4.0
+    edge_path.write_text(
+        "".join(
+            "\t".join(format(value, ".4f") for value in row) + "\n" for row in matrix
+        ),
+        encoding="utf-8",
+        newline="\n",
+    )
+    _rehash_artifact_manifest(forged)
+    with pytest.raises(BrainNetError, match="reproducible"):
+        verify_brainnet_artifact_run(forged)
+
+
+def test_nonzero_edge_that_rounds_to_zero_never_publishes(
+    tmp_path: Path,
+) -> None:
+    section = _section(tmp_path, top_k=1)
+    project = _project(tmp_path, section)
+    component = _component()
+    member_links = _links(component)
+    member_links[1]["f_statistic"] = 1e-10
+    source = _graphvar_run(
+        tmp_path,
+        project,
+        component=component,
+        member_links=member_links,
+    )
+    with pytest.raises(BrainNetError, match="rounds to zero"):
+        build_brainnet_artifacts(project, source)
+    assert not list((project.output_root / "runs").glob("brainnet-artifacts-*"))
+
+    valid_links = _links(component)
+    valid_source = _graphvar_run(
+        tmp_path / "valid-source",
+        project,
+        component=component,
+        member_links=valid_links,
+    )
+    run = build_brainnet_artifacts(project, valid_source)
+    assert verify_brainnet_artifact_run(run.run_dir).run_id == run.run_id
+
+
+def test_artifact_post_publish_verification_failure_rolls_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = _project(tmp_path)
+    source = _graphvar_run(tmp_path, project)
+    original = artifact_service.verify_brainnet_artifact_run
+    injected = False
+
+    def fail_once(
+        run_dir: str | Path, expected_lock: dict[str, Any] | None = None
+    ) -> Any:
+        nonlocal injected
+        path = Path(run_dir)
+        if path.name.startswith("brainnet-artifacts-") and not injected:
+            injected = True
+            raise BrainNetError("injected artifact post-publish failure")
+        return original(run_dir, expected_lock)
+
+    monkeypatch.setattr(artifact_service, "verify_brainnet_artifact_run", fail_once)
+    with pytest.raises(BrainNetError, match="post-publish"):
+        build_brainnet_artifacts(project, source)
+    assert injected
+    assert not list((project.output_root / "runs").glob("brainnet-artifacts-*"))
+    monkeypatch.setattr(artifact_service, "verify_brainnet_artifact_run", original)
+    run = build_brainnet_artifacts(project, source)
+    assert verify_brainnet_artifact_run(run.run_dir).run_id == run.run_id
 
 
 def test_graphvar_schema_identity_and_style_coverage_fail_closed(
@@ -490,6 +611,43 @@ def _fake_matlab(
     return subprocess.CompletedProcess(args, 0, stdout="ok", stderr="")
 
 
+def _service_preflight(config: Any, output_dir: Path) -> BrainNetRuntimeMetadata:
+    return preflight_brainnet(config, output_dir, process_runner=_fake_matlab)
+
+
+def _service_runner(config: Any, **kwargs: Any) -> BrainNetExecution:
+    return run_brainnet_image(config, **kwargs, process_runner=_fake_matlab)
+
+
+def _rendered_fixture(tmp_path: Path) -> tuple[CleanProject, Path, Any]:
+    project = _project(tmp_path)
+    source = _graphvar_run(tmp_path, project)
+    prepared = build_brainnet_artifacts(project, source)
+    rendered = render_brainnet_artifacts(
+        project,
+        prepared,
+        preflight_function=_service_preflight,
+        image_runner=_service_runner,
+    )
+    return project, source, rendered
+
+
+def _rehash_artifact_manifest(run_dir: Path) -> None:
+    path = run_dir / "brainnet" / "manifest.json"
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    manifest["artifacts"] = _all_files(run_dir, {"brainnet/manifest.json"})
+    atomic_json(path, manifest)
+
+
+def _rehash_render_manifests(run_dir: Path, workspace: str = "ws-one") -> None:
+    image_dir = run_dir / "brainnet" / "renders" / workspace
+    inner_path = image_dir / "output-manifest.json"
+    inner = json.loads(inner_path.read_text(encoding="utf-8"))
+    inner["artifacts"] = _all_files(image_dir, {"output-manifest.json"})
+    atomic_json(inner_path, inner)
+    _rehash_artifact_manifest(run_dir)
+
+
 def test_runtime_preflight_render_and_false_success(tmp_path: Path) -> None:
     config = parse_brainnet_config(_project(tmp_path))
     preflight = preflight_brainnet(
@@ -560,9 +718,33 @@ def test_render_service_resume_final_reuse_and_tamper(tmp_path: Path) -> None:
 
     def fake_preflight(_: Any, output_dir: Path) -> BrainNetRuntimeMetadata:
         output_dir.mkdir(parents=True, exist_ok=True)
+        compat = output_dir / "compat"
+        compat.mkdir()
+        from neurostat.brainnet.runtime import matlab_resources
+
+        (compat / "whitebg.m").write_bytes(matlab_resources()[1].read_bytes())
         (output_dir / "preflight.stdout.log").write_text("ok", encoding="utf-8")
+        (output_dir / "preflight.stderr.log").write_text("", encoding="utf-8")
         mapcfg = config.runtime.brainnet_root / "BrainNet_MapCfg.m"
         gui = config.runtime.brainnet_root / "BrainNet.m"
+        atomic_json(
+            output_dir / "request.json",
+            {
+                "mode": "preflight",
+                "brainnet_root": str(config.runtime.brainnet_root),
+                "compat_dir": str(compat),
+                "metadata_path": str(output_dir / "preflight.json"),
+            },
+        )
+        atomic_json(
+            output_dir / "preflight.json",
+            {
+                "state": "passed",
+                "matlab_release": "2025b",
+                "brainnet_mapcfg": str(mapcfg),
+                "whitebg": str(compat / "whitebg.m"),
+            },
+        )
         return BrainNetRuntimeMetadata(
             Path(sys.executable).resolve(),
             "2025b",
@@ -574,19 +756,23 @@ def test_render_service_resume_final_reuse_and_tamper(tmp_path: Path) -> None:
             "% Version 1.52",
             "% Version 1.63",
             "Version 1.7",
-            "a" * 64,
-            "b" * 64,
+            sha256_file(matlab_resources()[0]),
+            sha256_file(matlab_resources()[1]),
         )
 
     calls: list[str] = []
     fail_second = True
 
     def fake_runner(
-        _: Any,
+        runner_config: Any,
         *,
+        surface: Path,
+        node: Path,
+        edge: Path,
+        viewer_config: Path,
+        compatibility_dir: Path,
         output_dir: Path,
         workspace: str,
-        **__: Any,
     ) -> BrainNetExecution:
         nonlocal fail_second
         calls.append(workspace)
@@ -601,7 +787,37 @@ def test_render_service_resume_final_reuse_and_tamper(tmp_path: Path) -> None:
         metadata = output_dir / "execution.json"
         stdout.write_text("ok", encoding="utf-8")
         stderr.write_text("", encoding="utf-8")
-        atomic_json(metadata, {"state": "succeeded"})
+        atomic_json(
+            output_dir / "request.json",
+            {
+                "mode": "render",
+                "brainnet_root": str(runner_config.runtime.brainnet_root),
+                "compat_dir": str(compatibility_dir.resolve()),
+                "surface": str(surface.resolve()),
+                "node": str(node.resolve()),
+                "edge": str(edge.resolve()),
+                "viewer_config": str(viewer_config.resolve()),
+                "output": str(image.resolve()),
+                "metadata_path": str(metadata.resolve()),
+                **runner_config.render.normalized(),
+            },
+        )
+        atomic_json(
+            metadata,
+            {
+                "state": "succeeded",
+                "output": str(image.resolve()),
+                "width_pixels": runner_config.render.width_pixels,
+                "height_pixels": runner_config.render.height_pixels,
+                "dpi": runner_config.render.dpi,
+                "text_objects": 4,
+                "axes_objects": 1,
+                "brainnet_mapcfg": str(
+                    runner_config.runtime.brainnet_root / "BrainNet_MapCfg.m"
+                ),
+                "whitebg": str(compatibility_dir.resolve() / "whitebg.m"),
+            },
+        )
         return BrainNetExecution(
             0,
             1.0,
@@ -648,6 +864,251 @@ def test_render_service_resume_final_reuse_and_tamper(tmp_path: Path) -> None:
     image.write_bytes(image.read_bytes()[:-1] + b"x")
     with pytest.raises((BrainNetError, RuntimeError), match="SHA-256|hash"):
         verify_brainnet_render_run(final.run_dir)
+    repaired = render_brainnet_artifacts(
+        project,
+        prepared,
+        preflight_function=fake_preflight,
+        image_runner=fake_runner,
+    )
+    assert verify_brainnet_render_run(repaired.run_dir).run_id == final.run_id
+    assert list((project.output_root / "runs").glob(f".{final.run_dir.name}.invalid-*"))
+
+
+def test_render_provenance_paths_are_portable_and_historical_paths_are_typed(
+    tmp_path: Path,
+) -> None:
+    _, _, rendered = _rendered_fixture(tmp_path)
+    provenance_paths = [
+        rendered.run_dir / "brainnet" / "runtime" / "preflight-provenance.json",
+        rendered.run_dir / "brainnet" / "renders" / "ws-one" / "render-provenance.json",
+    ]
+    for path in provenance_paths:
+        provenance = json.loads(path.read_text(encoding="utf-8"))
+        assert provenance["path_semantics"]["historical"].startswith(
+            "Exact execution-time"
+        )
+        assert provenance["path_semantics"]["current"].startswith(
+            "Canonical run-root-relative"
+        )
+        for relative in provenance["current_paths"].values():
+            assert not Path(relative).is_absolute()
+            assert "\\" not in relative
+            current = (rendered.run_dir / relative).resolve()
+            current.relative_to(rendered.run_dir)
+            assert current.is_file()
+        assert Path(provenance["historical_execution_root"]).is_absolute()
+        assert not Path(provenance["historical_execution_root"]).exists()
+    image_provenance = json.loads(provenance_paths[1].read_text(encoding="utf-8"))
+    assert Path(image_provenance["historical_run_root"]).is_absolute()
+    assert not Path(image_provenance["historical_run_root"]).exists()
+
+
+def test_render_semantic_verifier_rejects_coherently_rehashed_carriers(
+    tmp_path: Path,
+) -> None:
+    _, _, rendered = _rendered_fixture(tmp_path)
+    mutations = (
+        "request",
+        "execution",
+        "completion",
+        "qa",
+        "provenance",
+        "preflight",
+        "preflight_whitebg",
+        "index",
+        "status",
+        "validation",
+        "inner_file_set",
+        "manifest_source",
+    )
+    for mutation in mutations:
+        forged = tmp_path / f"forged-render-{mutation}"
+        shutil.copytree(rendered.run_dir, forged)
+        image_dir = forged / "brainnet" / "renders" / "ws-one"
+        if mutation == "request":
+            path = image_dir / "request.json"
+            value = json.loads(path.read_text(encoding="utf-8"))
+            value["width_pixels"] += 1
+            atomic_json(path, value)
+            provenance_path = image_dir / "render-provenance.json"
+            provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+            provenance["historical_carriers"]["request"]["sha256"] = sha256_file(path)
+            atomic_json(provenance_path, provenance)
+        elif mutation == "execution":
+            path = image_dir / "execution.json"
+            value = json.loads(path.read_text(encoding="utf-8"))
+            value["axes_objects"] = 0
+            atomic_json(path, value)
+            provenance_path = image_dir / "render-provenance.json"
+            provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+            provenance["historical_carriers"]["execution"]["sha256"] = sha256_file(path)
+            atomic_json(provenance_path, provenance)
+        elif mutation == "completion":
+            path = image_dir / "completion.json"
+            value = json.loads(path.read_text(encoding="utf-8"))
+            value["source_node_sha256"] = "0" * 64
+            atomic_json(path, value)
+        elif mutation == "qa":
+            path = image_dir / "image-qa.json"
+            value = json.loads(path.read_text(encoding="utf-8"))
+            value["bytes"] += 1
+            atomic_json(path, value)
+            index_path = forged / "brainnet" / "image-index.json"
+            index = json.loads(index_path.read_text(encoding="utf-8"))
+            index[0]["bytes"] = value["bytes"]
+            atomic_json(index_path, index)
+        elif mutation == "provenance":
+            path = image_dir / "render-provenance.json"
+            value = json.loads(path.read_text(encoding="utf-8"))
+            value["current_paths"]["image"] = str((image_dir / "ws-one.png").resolve())
+            atomic_json(path, value)
+        elif mutation == "preflight":
+            path = (
+                forged
+                / "brainnet"
+                / "runtime"
+                / "preflight-historical"
+                / "preflight.json"
+            )
+            value = json.loads(path.read_text(encoding="utf-8"))
+            value["matlab_release"] = "forged"
+            atomic_json(path, value)
+            provenance_path = (
+                forged / "brainnet" / "runtime" / "preflight-provenance.json"
+            )
+            provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+            provenance["historical_carriers"]["preflight.json"]["sha256"] = sha256_file(
+                path
+            )
+            atomic_json(provenance_path, provenance)
+        elif mutation == "preflight_whitebg":
+            path = (
+                forged
+                / "brainnet"
+                / "runtime"
+                / "preflight-historical"
+                / "compat"
+                / "whitebg.m"
+            )
+            path.write_bytes(path.read_bytes() + b"% forged\n")
+            provenance_path = (
+                forged / "brainnet" / "runtime" / "preflight-provenance.json"
+            )
+            provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+            provenance["historical_carriers"]["compat/whitebg.m"]["sha256"] = (
+                sha256_file(path)
+            )
+            atomic_json(provenance_path, provenance)
+        elif mutation == "index":
+            path = forged / "brainnet" / "image-index.json"
+            value = json.loads(path.read_text(encoding="utf-8"))
+            value[0]["bytes"] += 1
+            atomic_json(path, value)
+        elif mutation == "status":
+            path = forged / "brainnet" / "status.json"
+            value = json.loads(path.read_text(encoding="utf-8"))
+            value["completed"] = 0
+            atomic_json(path, value)
+        elif mutation == "validation":
+            path = forged / "brainnet" / "validation.json"
+            value = json.loads(path.read_text(encoding="utf-8"))
+            value["images"] = 0
+            atomic_json(path, value)
+        elif mutation == "inner_file_set":
+            (image_dir / "forged.txt").write_text("forged", encoding="utf-8")
+        elif mutation == "manifest_source":
+            path = forged / "brainnet" / "manifest.json"
+            value = json.loads(path.read_text(encoding="utf-8"))
+            value["artifact_run_id"] = "forged"
+            atomic_json(path, value)
+        _rehash_render_manifests(forged)
+        with pytest.raises(BrainNetError):
+            verify_brainnet_render_run(forged)
+
+
+def test_image_post_publish_verification_failure_rolls_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = _project(tmp_path)
+    source = _graphvar_run(tmp_path, project)
+    prepared = build_brainnet_artifacts(project, source)
+    original = render_service._verify_image_directory
+    injected = False
+
+    def fail_once(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        nonlocal injected
+        directory = Path(args[1])
+        if (
+            kwargs.get("published") is True
+            and directory.name == "ws-one"
+            and not injected
+        ):
+            injected = True
+            raise BrainNetError("injected image post-publish failure")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(render_service, "_verify_image_directory", fail_once)
+    with pytest.raises(BrainNetError, match="image post-publish"):
+        render_brainnet_artifacts(
+            project,
+            prepared,
+            preflight_function=_service_preflight,
+            image_runner=_service_runner,
+        )
+    runs = project.output_root / "runs"
+    assert injected
+    assert not list(runs.glob("brainnet-render-*"))
+    partial = next(runs.glob(".brainnet-render-*.partial"))
+    assert not (partial / "brainnet" / "renders" / "ws-one").exists()
+    monkeypatch.setattr(render_service, "_verify_image_directory", original)
+    run = render_brainnet_artifacts(
+        project,
+        prepared,
+        preflight_function=_service_preflight,
+        image_runner=_service_runner,
+    )
+    assert verify_brainnet_render_run(run.run_dir).run_id == run.run_id
+
+
+def test_outer_post_publish_verification_failure_rolls_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = _project(tmp_path)
+    source = _graphvar_run(tmp_path, project)
+    prepared = build_brainnet_artifacts(project, source)
+    original = render_service.verify_brainnet_render_run
+    injected = False
+
+    def fail_once(
+        run_dir: str | Path, expected_lock: dict[str, Any] | None = None
+    ) -> Any:
+        nonlocal injected
+        path = Path(run_dir)
+        if path.name.startswith("brainnet-render-") and not injected:
+            injected = True
+            raise BrainNetError("injected outer post-publish failure")
+        return original(run_dir, expected_lock)
+
+    monkeypatch.setattr(render_service, "verify_brainnet_render_run", fail_once)
+    with pytest.raises(BrainNetError, match="outer post-publish"):
+        render_brainnet_artifacts(
+            project,
+            prepared,
+            preflight_function=_service_preflight,
+            image_runner=_service_runner,
+        )
+    runs = project.output_root / "runs"
+    assert injected
+    assert not list(runs.glob("brainnet-render-*"))
+    assert list(runs.glob(".brainnet-render-*.partial"))
+    monkeypatch.setattr(render_service, "verify_brainnet_render_run", original)
+    run = render_brainnet_artifacts(
+        project,
+        prepared,
+        preflight_function=_service_preflight,
+        image_runner=_service_runner,
+    )
+    assert verify_brainnet_render_run(run.run_dir).run_id == run.run_id
 
 
 @pytest.mark.skipif(
