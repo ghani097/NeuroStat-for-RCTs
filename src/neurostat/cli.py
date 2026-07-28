@@ -63,6 +63,21 @@ def _build_parser() -> argparse.ArgumentParser:
                 help="One exact workspace-to-result mapping; repeat for every workspace.",
             )
         command.add_argument("--json", action="store_true", dest="as_json")
+    brainnet = commands.add_parser(
+        "brainnet",
+        help="Build deterministic BrainNet artifacts or render verified PNGs.",
+    )
+    brainnet_commands = brainnet.add_subparsers(
+        dest="brainnet_command", required=True
+    )
+    brainnet_build = brainnet_commands.add_parser("build")
+    brainnet_build.add_argument("project", metavar="PROJECT")
+    brainnet_build.add_argument("--graphvar-run", required=True, metavar="RUN_DIR")
+    brainnet_build.add_argument("--json", action="store_true", dest="as_json")
+    brainnet_render = brainnet_commands.add_parser("render")
+    brainnet_render.add_argument("project", metavar="PROJECT")
+    brainnet_render.add_argument("--artifact-run", required=True, metavar="RUN_DIR")
+    brainnet_render.add_argument("--json", action="store_true", dest="as_json")
     return parser
 
 
@@ -125,6 +140,29 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "artifacts": len(run.artifacts),
                 "reused": run.reused,
             }
+        elif args.command == "brainnet":
+            if args.brainnet_command == "build":
+                from .brainnet import build_brainnet_artifacts
+
+                run = build_brainnet_artifacts(project, args.graphvar_run)
+                result = {
+                    "run_id": run.run_id,
+                    "run_dir": str(run.run_dir),
+                    "workspaces": len(run.workspaces),
+                    "reused": run.reused,
+                    "state": "prepared",
+                }
+            else:
+                from .brainnet import render_brainnet_artifacts
+
+                run = render_brainnet_artifacts(project, args.artifact_run)
+                result = {
+                    "run_id": run.run_id,
+                    "run_dir": str(run.run_dir),
+                    "images": len(run.images),
+                    "reused": run.reused,
+                    "state": "rendered",
+                }
         elif args.graphvar_command == "build":
             from .graphvar import build_graphvar_workspaces
 
@@ -179,6 +217,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             elif args.command == "graphvar":
                 print(
                     f"GraphVar {args.graphvar_command}: {result['run_id']} "
+                    f"({result['run_dir']})"
+                )
+            elif args.command == "brainnet":
+                print(
+                    f"BrainNet {args.brainnet_command}: {result['run_id']} "
                     f"({result['run_dir']})"
                 )
             else:

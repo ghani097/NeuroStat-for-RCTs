@@ -194,6 +194,7 @@ Clean externally prepared recordings can be validated and ingested with the [v2 
 Source scouts and PLI can then be generated through the documented [fixed-operator/V7-compatible or MNE/continuous routes](docs/v2/source-connectivity.md).
 Completed connectivity runs can be summarized into exact-label networks and analysed with the reproducible [network mixed-model stage](docs/v2/network-models.md).
 Verified connectivity can also be exported to self-contained GraphVar 2.03a workspaces and analysed with the reproducible [GraphVar component-inference stage](docs/v2/graphvar.md).
+Verified GraphVar components can be converted into atlas-derived descriptive edge files and reproducibly rendered through the strict [BrainNet artifact and rendering stage](docs/v2/brainnet.md).
 
 ```bash
 python -m neurostat --version
