@@ -167,6 +167,11 @@ def test_dependency_closure_and_deterministic_order(
     )
 
 
+def test_empty_stage_selection_requires_explicit_all() -> None:
+    with pytest.raises(ValueError, match="pass 'all' explicitly"):
+        resolve_workflow_stages(())
+
+
 def test_brainnet_and_network_model_branches_are_separate(tmp_path: Path) -> None:
     calls: list[tuple[str, object | None]] = []
     services = _services(tmp_path, calls)

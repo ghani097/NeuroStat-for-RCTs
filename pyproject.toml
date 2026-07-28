@@ -30,11 +30,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-gui = ["PyQt5>=5.15.0"]
-dev = ["build>=1.0", "pytest>=8.0"]
+gui = ["PyQt6>=6.6.0"]
+dev = ["build>=1.0", "pytest>=8.0", "setuptools>=68"]
 
 [project.scripts]
 neurostat = "neurostat.cli:main"
+neurostat-gui = "neurostat.gui.app:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

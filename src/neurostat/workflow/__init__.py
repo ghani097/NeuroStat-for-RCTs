@@ -157,7 +157,11 @@ def _coerce_stage(value: StageName | str) -> StageName:
 def resolve_workflow_stages(stages: Iterable[StageName | str]) -> tuple[StageName, ...]:
     """Resolve requested stages into the ordered dependency closure."""
     requested_values = tuple(stages)
-    if not requested_values or any(value == "all" for value in requested_values):
+    if not requested_values:
+        raise ValueError(
+            "empty workflow stage selection; pass 'all' explicitly to run every stage"
+        )
+    if any(value == "all" for value in requested_values):
         return CANONICAL_STAGE_ORDER
     selected: set[StageName] = set()
     for value in requested_values:
