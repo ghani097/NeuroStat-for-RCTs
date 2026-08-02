@@ -7,5 +7,24 @@ study:
 input: {state: cleaned}
 records: {manifest: records.example.csv}
 analysis_profiles:
-  sensor_connectivity: {bands: [alpha]}
+  sensor_connectivity:
+    source:
+      backend: fixed_linear_operator
+      operator: sensor-to-scout.mat
+      operator_variable: SensorToScoutOperator
+      sensor_labels: [Fz, Cz, Pz]
+      scout_labels: [example-frontal-lh, example-frontal-rh]
+      epoch_reduction: mean
+      epoch_chunk_size: 32
+      output_chunk_samples: 4096
+      export_matlab: false
+    connectivity:
+      backend: evoked_average_hilbert_pli
+      filter_order: 4
+      bands:
+        delta: [0.5, 4.0]
+        theta: [4.0, 8.0]
+        alpha: [8.0, 13.0]
+        beta: [13.0, 30.0]
+        gamma: [30.0, 45.0]
 output: {root: outputs}
