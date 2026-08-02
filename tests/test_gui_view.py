@@ -80,6 +80,17 @@ def test_defaults_match_the_v1_form(monkeypatch: pytest.MonkeyPatch) -> None:
     # v2's normal case, and fsaverage is provisioned the way v1 did it.
     assert window.already_cleaned_checkbox.isChecked()
     assert window.auto_fsaverage_checkbox.isChecked()
+    assert window.selected_stages() == (
+        "ingest",
+        "scouts",
+        "connectivity",
+        "network_models",
+    )
+    assert window.stage_checks["graphvar"].isEnabled() is False
+    assert window.stage_checks["brainnet"].isEnabled() is False
+    assert window.network_checks["SN"].isChecked()
+    assert window.network_checks["CEN"].isChecked()
+    assert window.network_checks["DMN"].isChecked()
 
 
 def test_already_cleaned_toggle_shows_and_hides_preprocessing(
@@ -155,6 +166,39 @@ def test_scan_reports_an_unrecognised_folder(
     assert window.status.text()
 
 
+def test_graphvar_and_brainnet_stages_enable_after_resources_are_supplied(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    window = _window(monkeypatch)
+
+    assert not window.stage_checks["graphvar"].isEnabled()
+    assert not window.stage_checks["brainnet"].isEnabled()
+
+    window.graphvar_executable_input.setText("matlab")
+    window.graphvar_root_input.setText("GraphVar")
+    window.graphvar_workbook_input.setText("atlas.xlsx")
+    window.graphvar_viewer_config_input.setText("viewer.mat")
+
+    assert window.stage_checks["graphvar"].isEnabled()
+    assert not window.stage_checks["brainnet"].isEnabled()
+
+    window.brainnet_executable_input.setText("matlab")
+    window.brainnet_root_input.setText("BrainNet")
+    window.brainnet_surface_input.setText("surface.nv")
+    window.brainnet_viewer_config_input.setText("viewer.mat")
+
+    assert window.stage_checks["graphvar"].isEnabled()
+    assert window.stage_checks["brainnet"].isEnabled()
+    assert window.selected_stages() == (
+        "ingest",
+        "scouts",
+        "connectivity",
+        "network_models",
+        "graphvar",
+        "brainnet",
+    )
+
+
 def test_invalid_study_never_starts_a_worker(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -202,6 +246,48 @@ def test_fsaverage_progress_carries_a_real_stage(
     event = seen[0]
     assert isinstance(event.stage, StageName)
     assert event.message == "Fetching fsaverage"
+
+
+def test_results_are_prepopulated_and_progress_tracks_outcomes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    window = _window(monkeypatch)
+    plan = (
+        StageName.INGEST,
+        StageName.SCOUTS,
+        StageName.CONNECTIVITY,
+    )
+
+    window._prepopulate_results(plan)
+    window.stage_progress.setMaximum(len(plan))
+    window.stage_progress.setValue(0)
+
+    assert window.stage_progress.maximum() == 3
+    assert window.results.rowCount() == 3
+    assert [
+        window.results.item(row, 1).text() for row in range(window.results.rowCount())
+    ] == ["pending", "pending", "pending"]
+
+    window._append_outcome(
+        StageOutcome(
+            StageResult(StageName.INGEST, StageState.SUCCEEDED),
+            None,
+        )
+    )
+    assert window.stage_progress.value() == 1
+    assert window.results.item(0, 1).text() == "succeeded"
+
+    window._append_outcome(
+        StageOutcome(
+            StageResult(StageName.SCOUTS, StageState.FAILED),
+            None,
+        )
+    )
+
+    assert window.stage_progress.value() == 2
+    assert window.results.item(1, 1).text() == "failed"
+    assert window.results.item(2, 1).text() == "pending"
+    assert "failed at scouts" in window.stage_progress.format()
 
 
 def test_run_uses_the_study_form_and_fills_results(

@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 
 from neurostat.analysis_profiles import parse_analysis_profile
+from neurostat.atlas import DK68_LABELS
 from neurostat.contracts import ProgressEvent, StageName
 from neurostat.gui.controller import WorkflowController
 from neurostat.gui.discovery import (
@@ -19,6 +20,7 @@ from neurostat.gui.discovery import (
     detect_layout,
     discover_records,
 )
+from neurostat.gui.networks import PRESET_NETWORKS
 from neurostat.gui.study_builder import (
     AnalysisProfilePair,
     StudyForm,
@@ -26,6 +28,7 @@ from neurostat.gui.study_builder import (
     validate_form,
     write_project,
 )
+from neurostat.network_models.config import parse_network_model_config
 from neurostat.project import CleanProject, Study, load_project
 from neurostat.workflow import (
     WorkflowServices,
@@ -288,6 +291,70 @@ def test_build_project_document_round_trips_through_project_and_profiles(
     profile = parse_analysis_profile(project, "default")
     assert profile.source.backend == "fixed_linear_operator"
     assert profile.connectivity.backend == "evoked_average_hilbert_pli"
+
+
+def test_network_model_block_validates_through_typed_parser(
+    tmp_path: Path,
+) -> None:
+    form = _form(tmp_path)
+    records = (_record(tmp_path),)
+    document = build_project_document(form, records, stages=("network_models",))
+    project = write_project(document, form.resolved_project_file)
+
+    config = parse_network_model_config(project)
+
+    assert set(config.networks_by_name) == {"SN", "DMN", "CEN"}
+    family = config.families[0]
+    assert family.condition == "rest"
+    assert [item.name for item in family.between_arm_contrasts] == [
+        "active-minus-comparison-baseline",
+        "active-minus-comparison-followup",
+    ]
+    assert [item.name for item in family.within_arm_contrasts] == [
+        "followup-minus-baseline",
+    ]
+
+
+def test_network_model_contrast_counts_follow_arms_and_sessions(
+    tmp_path: Path,
+) -> None:
+    form = _form(tmp_path, sessions=("baseline", "week4", "week8"))
+    document = build_project_document(
+        form,
+        (_record(tmp_path),),
+        stages=("network_models",),
+    )
+    project = write_project(document, form.resolved_project_file)
+    family = parse_network_model_config(project).families[0]
+
+    assert [item.name for item in family.between_arm_contrasts] == [
+        "active-minus-comparison-baseline",
+        "active-minus-comparison-week4",
+        "active-minus-comparison-week8",
+    ]
+    assert [item.name for item in family.within_arm_contrasts] == [
+        "week4-minus-baseline",
+        "week8-minus-baseline",
+    ]
+
+
+def test_network_presets_are_dk68_labels_with_at_least_two_members() -> None:
+    dk68 = set(DK68_LABELS)
+
+    assert set(PRESET_NETWORKS) == {"SN", "DMN", "CEN"}
+    for labels in PRESET_NETWORKS.values():
+        assert len(labels) >= 2
+        assert set(labels) <= dk68
+
+
+def test_network_models_requires_a_selected_network(tmp_path: Path) -> None:
+    problems = validate_form(
+        _form(tmp_path, networks={}),
+        (_record(tmp_path),),
+        stages=("network_models",),
+    )
+
+    assert any("Select at least one network" in problem for problem in problems)
 
 
 def test_validate_form_requires_exactly_two_arms(tmp_path: Path) -> None:

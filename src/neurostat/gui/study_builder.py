@@ -15,6 +15,7 @@ from neurostat.analysis_profiles import parse_analysis_profile
 from neurostat.project import CleanProject, load_project
 
 from .discovery import DiscoveredRecord, format_for_path, slugify
+from .networks import default_networks
 
 
 class AnalysisProfilePair(str, Enum):
@@ -71,6 +72,7 @@ class StudyForm:
     mne_n_jobs: int = 1
     preprocessing_output_root: Path | None = None
     preprocessing_settings: Mapping[str, Any] = field(default_factory=dict)
+    networks: Mapping[str, tuple[str, ...]] = field(default_factory=default_networks)
     project_file: Path | None = None
 
     @property
@@ -91,6 +93,7 @@ class StudyForm:
 def validate_form(
     form: StudyForm,
     records: tuple[DiscoveredRecord, ...],
+    stages: Iterable[Any] = (),
 ) -> tuple[str, ...]:
     """Return actionable setup problems before project YAML is written."""
     problems: list[str] = []
@@ -100,13 +103,24 @@ def validate_form(
         problems.append("Enter at least 2 sessions.")
     if not records:
         problems.append("No EEG records were discovered in the selected study folder.")
+    if _requests_stage(stages, "network_models"):
+        if not form.networks:
+            problems.append(
+                "Select at least one network before running network models."
+            )
+        for name, labels in form.networks.items():
+            if len(labels) < 2:
+                problems.append(
+                    f"Network {name!r} must contain at least 2 labels.",
+                )
 
     participant_arms: dict[str, str] = {}
     for record in records:
         previous = participant_arms.setdefault(record.participant_id, record.arm)
         if previous != record.arm:
             problems.append(
-                f"Participant {record.participant_id!r} appears under more than one arm.",
+                f"Participant {record.participant_id!r} appears under more than "
+                "one arm.",
             )
             break
 
@@ -140,11 +154,13 @@ def validate_form(
             )
         if record.session not in declared[1]:
             problems.append(
-                f"Record {record.record_id!r} uses undeclared session {record.session!r}.",
+                f"Record {record.record_id!r} uses undeclared session "
+                f"{record.session!r}.",
             )
         if record.condition not in declared[2]:
             problems.append(
-                f"Record {record.record_id!r} uses undeclared condition {record.condition!r}.",
+                f"Record {record.record_id!r} uses undeclared condition "
+                f"{record.condition!r}.",
             )
         if not record.path.is_file():
             problems.append(
@@ -153,7 +169,8 @@ def validate_form(
         actual_format = format_for_path(record.path)
         if actual_format != record.format:
             problems.append(
-                f"Record {record.record_id!r} format {record.format!r} does not match its file extension.",
+                f"Record {record.record_id!r} format {record.format!r} does not "
+                "match its file extension.",
             )
     return tuple(problems)
 
@@ -161,9 +178,10 @@ def validate_form(
 def build_project_document(
     form: StudyForm,
     records: tuple[DiscoveredRecord, ...],
+    stages: Iterable[Any] = (),
 ) -> dict[str, Any]:
     """Build the v2 project mapping for a validated study setup."""
-    return {
+    document: dict[str, Any] = {
         "schema_version": 1,
         "study": {
             "id": form.study_id,
@@ -175,6 +193,54 @@ def build_project_document(
         "analysis_profiles": {"default": _analysis_profile(form)},
         "records": [_record_document(record) for record in records],
         "output": {"root": str(form.output_root)},
+    }
+    if _requests_stage(stages, "network_models"):
+        document["network_models"] = build_network_models_block(form, form.networks)
+    return document
+
+
+def build_network_models_block(
+    form: StudyForm,
+    networks: Mapping[str, tuple[str, ...]],
+) -> dict[str, Any]:
+    """Build the strict network-model stage block from study-form values."""
+    network_names = list(networks)
+    bands = list(form.frequency_bands)
+    families = [
+        _network_model_family(form, condition, bands, network_names)
+        for condition in form.conditions
+    ]
+    return {
+        "networks": {name: list(labels) for name, labels in networks.items()},
+        "families": families,
+        "model": {
+            "reml": True,
+            "optimizer": "nloptwrap",
+            "maxfun": 100000,
+            "arm_contrasts": "sum",
+            "session_contrasts": "poly",
+            "df_method": "satterthwaite",
+        },
+        "diagnostics": {
+            "residuals": True,
+            "raw_scale": True,
+            "winsorized": True,
+            "winsor_robust_z": 3.5,
+            "all_fit": False,
+            "influence": False,
+            "leave_one_out": False,
+        },
+        "runtime": {
+            "executable": "Rscript",
+            "library_paths": [],
+            "dependency_contract": "builtin",
+            "strict_renv": False,
+            "timeout_seconds": 3600,
+        },
+        "validation": {
+            "absolute_tolerance": 1.0e-10,
+            "relative_tolerance": 1.0e-8,
+        },
     }
 
 
@@ -190,6 +256,88 @@ def write_project(document: Mapping[str, Any], path: str | Path) -> CleanProject
     for name in project.analysis_profiles:
         parse_analysis_profile(project, name)
     return project
+
+
+def _network_model_family(
+    form: StudyForm,
+    condition: str,
+    bands: list[str],
+    network_names: list[str],
+) -> dict[str, Any]:
+    arms = form.arms
+    first_session = form.sessions[0]
+    between_names = [
+        f"{arms[0]}-minus-{arms[1]}-{session}" for session in form.sessions
+    ]
+    within_names = [f"{session}-minus-{first_session}" for session in form.sessions[1:]]
+    return {
+        "name": f"{slugify(condition)}-primary",
+        "condition": condition,
+        "bands": bands,
+        "networks": network_names,
+        "sessions": list(form.sessions),
+        "boundary_observation_count": "scout_samples",
+        "between_arm_contrasts": [
+            {
+                "name": name,
+                "session": session,
+                "numerator_arm": arms[0],
+                "denominator_arm": arms[1],
+            }
+            for name, session in zip(between_names, form.sessions, strict=True)
+        ],
+        "within_arm_contrasts": [
+            {
+                "name": name,
+                "arms": list(arms),
+                "numerator_session": session,
+                "denominator_session": first_session,
+            }
+            for name, session in zip(within_names, form.sessions[1:], strict=True)
+        ],
+        "correction_families": [
+            {
+                "name": "all-arm-tests",
+                "target": "anova",
+                "terms": ["arm"],
+                "bands": bands,
+                "networks": network_names,
+                "methods": ["BH", "holm"],
+            },
+            {
+                "name": "all-session-tests",
+                "target": "anova",
+                "terms": ["session"],
+                "bands": bands,
+                "networks": network_names,
+                "methods": ["BH", "holm"],
+            },
+            {
+                "name": "all-interaction-tests",
+                "target": "anova",
+                "terms": ["arm:session"],
+                "bands": bands,
+                "networks": network_names,
+                "methods": ["BH", "holm"],
+            },
+            {
+                "name": "all-primary-between",
+                "target": "between",
+                "contrasts": between_names,
+                "bands": bands,
+                "networks": network_names,
+                "methods": ["BH", "holm", "bonferroni"],
+            },
+            {
+                "name": "all-primary-within",
+                "target": "within",
+                "contrasts": within_names,
+                "bands": bands,
+                "networks": network_names,
+                "methods": ["BH", "holm", "bonferroni"],
+            },
+        ],
+    }
 
 
 def _analysis_profile(form: StudyForm) -> dict[str, Any]:
@@ -285,9 +433,18 @@ def _duplicates(values: Iterable[T]) -> list[T]:
     return [value for value, count in counts.items() if count > 1]
 
 
+def _requests_stage(stages: Iterable[Any], stage_name: str) -> bool:
+    for stage in stages:
+        value = getattr(stage, "value", stage)
+        if value == "all" or value == stage_name:
+            return True
+    return False
+
+
 __all__ = [
     "AnalysisProfilePair",
     "StudyForm",
+    "build_network_models_block",
     "build_project_document",
     "default_frequency_bands",
     "validate_form",

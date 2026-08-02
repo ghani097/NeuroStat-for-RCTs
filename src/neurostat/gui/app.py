@@ -7,6 +7,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+from neurostat.atlas import DK68_LABELS
 from neurostat.contracts import ProgressEvent, StageName
 from neurostat.gui.controller import ControllerWorkflowError, WorkflowController
 from neurostat.gui.discovery import (
@@ -16,6 +17,7 @@ from neurostat.gui.discovery import (
     discover_records,
 )
 from neurostat.gui.fsaverage import MNEResourcePaths, provision_fsaverage
+from neurostat.gui.networks import PRESET_NETWORKS
 from neurostat.gui.study_builder import (
     AnalysisProfilePair,
     StudyForm,
@@ -140,21 +142,25 @@ class MainWindow(QtWidgets.QMainWindow):
         self._worker: object | None = None
         self._run_mode = "study"
         self._last_records: tuple[DiscoveredRecord, ...] = ()
+        self._custom_network_labels: tuple[str, ...] = ()
+        self._result_rows: dict[str, int] = {}
         self.setWindowTitle("NeuroStat v2 workflow")
         self.resize(1180, 780)
         self._build_ui()
         self._connect()
         self._refresh_profile_controls()
         self._refresh_preprocessing_visibility()
+        self._refresh_network_counts()
+        self._refresh_stage_availability()
         self._refresh_plan()
 
     def selected_stages(self) -> tuple[str, ...]:
         if self.all_stages.isChecked():
-            return ("all",)
+            return self._available_stage_names()
         return tuple(
             stage
             for stage, checkbox in self.stage_checks.items()
-            if checkbox.isChecked()
+            if checkbox.isEnabled() and checkbox.isChecked()
         )
 
     def set_project_path(self, path: str) -> None:
@@ -166,6 +172,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.all_stages.setChecked("all" in stage_set)
         for stage, checkbox in self.stage_checks.items():
             checkbox.setChecked(stage in stage_set)
+        self._refresh_stage_availability()
         self._refresh_plan()
 
     def _build_ui(self) -> None:
@@ -205,6 +212,7 @@ class MainWindow(QtWidgets.QMainWindow):
         content_layout.addWidget(self.preprocessing_pipeline_group)
         content_layout.addWidget(self.advanced_options_group)
         content_layout.addWidget(self._create_analysis_group())
+        content_layout.addWidget(self._create_networks_group())
         content_layout.addStretch(1)
 
         scroll.setWidget(content)
@@ -411,6 +419,51 @@ class MainWindow(QtWidgets.QMainWindow):
             self.frequency_table.setItem(row, 2, QtWidgets.QTableWidgetItem(str(high)))
         layout.addWidget(QtWidgets.QLabel("Frequency Bands:"), 9, 0)
         layout.addWidget(self.frequency_table, 9, 1, 1, 3)
+
+        self.graphvar_executable_input = self._path_row(layout, 10, "GraphVar MATLAB")
+        self.graphvar_root_input = self._path_row(
+            layout, 11, "GraphVar root", directory=True
+        )
+        self.graphvar_workbook_input = self._path_row(
+            layout, 12, "GraphVar atlas workbook"
+        )
+        self.graphvar_viewer_config_input = self._path_row(
+            layout, 13, "GraphVar viewer config"
+        )
+        self.brainnet_executable_input = self._path_row(layout, 14, "BrainNet MATLAB")
+        self.brainnet_root_input = self._path_row(
+            layout, 15, "BrainNet root", directory=True
+        )
+        self.brainnet_surface_input = self._path_row(layout, 16, "BrainNet surface")
+        self.brainnet_viewer_config_input = self._path_row(
+            layout, 17, "BrainNet viewer config"
+        )
+        return group
+
+    def _create_networks_group(self) -> object:
+        group = QtWidgets.QGroupBox("Networks")
+        layout = QtWidgets.QGridLayout(group)
+        layout.setSpacing(8)
+        self.network_checks: dict[str, object] = {}
+        self.network_count_labels: dict[str, object] = {}
+        for row, name in enumerate(("SN", "CEN", "DMN")):
+            checkbox = QtWidgets.QCheckBox(name)
+            checkbox.setChecked(True)
+            self.network_checks[name] = checkbox
+            layout.addWidget(checkbox, row, 0)
+            count = QtWidgets.QLabel()
+            self.network_count_labels[name] = count
+            layout.addWidget(count, row, 1)
+
+        self.custom_network_check = QtWidgets.QCheckBox("Custom...")
+        self.network_checks["Custom"] = self.custom_network_check
+        layout.addWidget(self.custom_network_check, 3, 0)
+        self.custom_network_count = QtWidgets.QLabel("0 labels")
+        self.network_count_labels["Custom"] = self.custom_network_count
+        layout.addWidget(self.custom_network_count, 3, 1)
+        self.custom_network_button = QtWidgets.QPushButton("Choose labels...")
+        layout.addWidget(self.custom_network_button, 3, 2)
+        layout.setColumnStretch(3, 1)
         return group
 
     def _path_row(
@@ -474,6 +527,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
         progress_group = QtWidgets.QGroupBox("Progress")
         progress_layout = QtWidgets.QVBoxLayout(progress_group)
+        self.stage_progress = QtWidgets.QProgressBar()
+        self.stage_progress.setMinimum(0)
+        self.stage_progress.setValue(0)
+        self.stage_progress.setFormat("0 of 0 stages")
+        progress_layout.addWidget(self.stage_progress)
         self.progress_list = QtWidgets.QListWidget()
         progress_layout.addWidget(self.progress_list)
         layout.addWidget(progress_group, 1)
@@ -540,6 +598,21 @@ class MainWindow(QtWidgets.QMainWindow):
             self._refresh_profile_controls
         )
         self.auto_fsaverage_checkbox.toggled.connect(self._refresh_profile_controls)
+        for field in (
+            self.graphvar_executable_input,
+            self.graphvar_root_input,
+            self.graphvar_workbook_input,
+            self.graphvar_viewer_config_input,
+            self.brainnet_executable_input,
+            self.brainnet_root_input,
+            self.brainnet_surface_input,
+            self.brainnet_viewer_config_input,
+        ):
+            field.textChanged.connect(self._refresh_stage_availability)
+        for checkbox in self.network_checks.values():
+            checkbox.toggled.connect(self._refresh_network_counts)
+        self.custom_network_check.toggled.connect(self._custom_network_toggled)
+        self.custom_network_button.clicked.connect(self._choose_custom_network)
         self.scan_button.clicked.connect(self._scan_records)
         self.run_button.clicked.connect(self._start_run)
         self.open_project_button.clicked.connect(self._choose_project)
@@ -606,6 +679,112 @@ class MainWindow(QtWidgets.QMainWindow):
             self.plan_list.addItem(stage.value)
         self._set_status(f"{len(plan)} stage(s) selected")
 
+    def _available_stage_names(self) -> tuple[str, ...]:
+        return tuple(
+            stage
+            for stage, checkbox in self.stage_checks.items()
+            if checkbox.isEnabled()
+        )
+
+    def _refresh_stage_availability(self) -> None:
+        graphvar_ready = self._graphvar_resources_supplied()
+        brainnet_ready = graphvar_ready and self._brainnet_resources_supplied()
+        self._set_stage_available(
+            "graphvar",
+            graphvar_ready,
+            "Requires MATLAB, GraphVar root, an atlas workbook, and viewer "
+            "config. Configure under Analysis.",
+        )
+        self._set_stage_available(
+            "brainnet",
+            brainnet_ready,
+            "Requires MATLAB, GraphVar resources, BrainNet root, surface file, "
+            "and viewer config. Configure under Analysis.",
+        )
+        self._refresh_plan()
+
+    def _set_stage_available(
+        self,
+        stage: str,
+        available: bool,
+        disabled_tooltip: str,
+    ) -> None:
+        checkbox = self.stage_checks[stage]
+        checkbox.setEnabled(available)
+        checkbox.setToolTip("" if available else disabled_tooltip)
+        if not available:
+            checkbox.setChecked(False)
+
+    def _graphvar_resources_supplied(self) -> bool:
+        return all(
+            self._has_text(field)
+            for field in (
+                self.graphvar_executable_input,
+                self.graphvar_root_input,
+                self.graphvar_workbook_input,
+                self.graphvar_viewer_config_input,
+            )
+        )
+
+    def _brainnet_resources_supplied(self) -> bool:
+        return all(
+            self._has_text(field)
+            for field in (
+                self.brainnet_executable_input,
+                self.brainnet_root_input,
+                self.brainnet_surface_input,
+                self.brainnet_viewer_config_input,
+            )
+        )
+
+    def _refresh_network_counts(self) -> None:
+        for name, labels in PRESET_NETWORKS.items():
+            self.network_count_labels[name].setText(f"{len(labels)} labels")
+        self.custom_network_count.setText(f"{len(self._custom_network_labels)} labels")
+        self._refresh_plan()
+
+    def _custom_network_toggled(self, checked: bool) -> None:
+        if checked and not self._custom_network_labels:
+            self._choose_custom_network()
+
+    def _choose_custom_network(self) -> None:
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle("Custom network labels")
+        layout = QtWidgets.QVBoxLayout(dialog)
+        scroll = QtWidgets.QScrollArea()
+        scroll.setWidgetResizable(True)
+        content = QtWidgets.QWidget()
+        grid = QtWidgets.QGridLayout(content)
+        chosen = set(self._custom_network_labels)
+        boxes: list[tuple[str, QtWidgets.QCheckBox]] = []
+        for row, index in enumerate(range(0, len(DK68_LABELS), 2)):
+            left = DK68_LABELS[index]
+            right = DK68_LABELS[index + 1]
+            parcel = left.removesuffix("-lh")
+            grid.addWidget(QtWidgets.QLabel(parcel), row, 0)
+            for column, label in enumerate((left, right), 1):
+                checkbox = QtWidgets.QCheckBox(label)
+                checkbox.setChecked(label in chosen)
+                boxes.append((label, checkbox))
+                grid.addWidget(checkbox, row, column)
+        scroll.setWidget(content)
+        layout.addWidget(scroll)
+        buttons = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.StandardButton.Ok
+            | QtWidgets.QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        if dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted:
+            self._custom_network_labels = tuple(
+                label for label, checkbox in boxes if checkbox.isChecked()
+            )
+            self.custom_network_check.setChecked(bool(self._custom_network_labels))
+        elif not self._custom_network_labels:
+            self.custom_network_check.setChecked(False)
+        self._refresh_network_counts()
+
     def _refresh_preprocessing_visibility(self) -> None:
         visible = not self.already_cleaned_checkbox.isChecked()
         self.preprocessing_settings_group.setVisible(visible)
@@ -648,6 +827,15 @@ class MainWindow(QtWidgets.QMainWindow):
     def _selected_profile_pair(self) -> AnalysisProfilePair:
         value = self.profile_pair_combo.currentData()
         return AnalysisProfilePair(str(value))
+
+    def _selected_networks(self) -> dict[str, tuple[str, ...]]:
+        networks: dict[str, tuple[str, ...]] = {}
+        for name, labels in PRESET_NETWORKS.items():
+            if self.network_checks[name].isChecked():
+                networks[name] = tuple(labels)
+        if self.custom_network_check.isChecked():
+            networks["Custom"] = self._custom_network_labels
+        return networks
 
     def _scan_records(self) -> None:
         try:
@@ -703,7 +891,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _start_run(self) -> None:
         stages = self.selected_stages()
         try:
-            self._controller.resolve_plan(stages)
+            plan = self._controller.resolve_plan(stages)
         except ValueError as exc:
             self._set_status(str(exc))
             self._log(str(exc))
@@ -731,7 +919,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         self._fill_records_table(records)
         self._last_records = records
-        problems = validate_form(form, records)
+        problems = validate_form(form, records, plan)
         if problems:
             message = "Study setup is not valid: " + "; ".join(problems)
             self._set_status(message)
@@ -763,6 +951,7 @@ class MainWindow(QtWidgets.QMainWindow):
             mne_source_space=self._optional_path(self.source_space_input.text()),
             mne_bem=self._optional_path(self.bem_input.text()),
             preprocessing_settings=self._preprocessing_settings(),
+            networks=self._selected_networks(),
         )
 
     def _frequency_bands(self) -> Mapping[str, tuple[float, float]]:
@@ -811,9 +1000,14 @@ class MainWindow(QtWidgets.QMainWindow):
         project: str | None = None,
         auto_fsaverage: bool = False,
     ) -> None:
+        plan = self._controller.resolve_plan(stages)
         self.run_button.setEnabled(False)
-        self.results.setRowCount(0)
+        self._prepopulate_results(plan)
         self.progress_list.clear()
+        self.stage_progress.setMaximum(len(plan))
+        self.stage_progress.setValue(0)
+        self.stage_progress.setStyleSheet("")
+        self.stage_progress.setFormat("%v of %m stages - pending")
         self._set_status("running")
         self._log("Workflow started.")
 
@@ -843,17 +1037,33 @@ class MainWindow(QtWidgets.QMainWindow):
         self._worker = worker
         thread.start()
 
+    def _prepopulate_results(self, plan: tuple[StageName, ...]) -> None:
+        self.results.setRowCount(0)
+        self._result_rows = {}
+        for stage in plan:
+            row = self.results.rowCount()
+            self.results.insertRow(row)
+            self._result_rows[stage.value] = row
+            values = (stage.value, "pending", "", "")
+            for column, value in enumerate(values):
+                self.results.setItem(row, column, QtWidgets.QTableWidgetItem(value))
+
     def _append_progress(self, event: ProgressEvent) -> None:
         stage = event.stage.value if hasattr(event.stage, "value") else str(event.stage)
         text = f"{stage}: {event.message}"
         if event.completed is not None and event.total is not None:
             text += f" ({event.completed}/{event.total})"
+        if str(event.message).endswith("started"):
+            self.stage_progress.setFormat(f"%v of %m stages - Running {stage}...")
         self.progress_list.addItem(text)
         self._log(text)
 
     def _append_outcome(self, outcome: StageOutcome) -> None:
-        row = self.results.rowCount()
-        self.results.insertRow(row)
+        row = self._result_rows.get(outcome.stage.value)
+        if row is None:
+            row = self.results.rowCount()
+            self.results.insertRow(row)
+            self._result_rows[outcome.stage.value] = row
         values = (
             outcome.stage.value,
             outcome.state.value,
@@ -862,6 +1072,28 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         for column, value in enumerate(values):
             self.results.setItem(row, column, QtWidgets.QTableWidgetItem(value))
+        self._update_stage_progress(outcome.stage.value)
+
+    def _update_stage_progress(self, current_stage: str) -> None:
+        completed = 0
+        failed = False
+        for row in range(self.results.rowCount()):
+            item = self.results.item(row, 1)
+            state = "" if item is None else item.text()
+            if state in {"succeeded", "failed"}:
+                completed += 1
+            if state == "failed":
+                failed = True
+        self.stage_progress.setValue(completed)
+        if failed:
+            self.stage_progress.setStyleSheet(
+                "QProgressBar::chunk { background-color: #b3261e; }"
+            )
+            self.stage_progress.setFormat(
+                f"%v of %m stages - failed at {current_stage}"
+            )
+        else:
+            self.stage_progress.setFormat(f"%v of %m stages - {current_stage}")
 
     def _apply_fsaverage_paths(self, resources: MNEResourcePaths) -> None:
         self.subjects_dir_input.setText(str(resources.subjects_dir))
@@ -871,6 +1103,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _run_completed(self, result: WorkflowResult) -> None:
         message = "workflow succeeded" if result.success else "workflow ended"
+        self.stage_progress.setValue(self.stage_progress.maximum())
+        self.stage_progress.setFormat("%v of %m stages - complete")
         self._set_status(message)
         self.run_button.setEnabled(True)
         if self._run_mode == "study":
@@ -889,6 +1123,10 @@ class MainWindow(QtWidgets.QMainWindow):
         if succeeded:
             prefix += f"; succeeded: {', '.join(succeeded)}"
         status = f"{prefix}; {message}"
+        self.stage_progress.setStyleSheet(
+            "QProgressBar::chunk { background-color: #b3261e; }"
+        )
+        self.stage_progress.setFormat(f"%v of %m stages - failed at {stage}")
         self._set_status(status)
         self._log(status)
         self.run_button.setEnabled(True)
@@ -935,6 +1173,10 @@ class MainWindow(QtWidgets.QMainWindow):
     def _optional_path(text: str) -> Path | None:
         value = text.strip()
         return Path(value).expanduser() if value else None
+
+    @staticmethod
+    def _has_text(field: QtWidgets.QLineEdit) -> bool:
+        return bool(field.text().strip())
 
     def closeEvent(self, event: object) -> None:
         thread = self._thread

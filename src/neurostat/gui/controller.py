@@ -129,6 +129,8 @@ class WorkflowController:
         outcome: OutcomeHandler | None = None,
     ) -> WorkflowResult:
         """Generate a project from a study form, then run the workflow."""
+        requested = tuple(stages)
+        plan = self.resolve_plan(requested)
         base_folder = Path(form.base_folder)
         if not form.already_cleaned:
             base_folder = self._preprocessor(form, _legacy_log_adapter(progress))
@@ -138,13 +140,13 @@ class WorkflowController:
             form.sessions,
             form.conditions,
         )
-        problems = validate_form(form, records)
+        problems = validate_form(form, records, plan)
         if problems:
             message = "Study setup is not valid:\n- " + "\n- ".join(problems)
             raise ValueError(message)
-        document = build_project_document(form, records)
+        document = build_project_document(form, records, stages=plan)
         project = self._project_writer(document, form.resolved_project_file)
-        return self.run(project, stages, progress=progress, outcome=outcome)
+        return self.run(project, requested, progress=progress, outcome=outcome)
 
     def _run_engine(
         self,
