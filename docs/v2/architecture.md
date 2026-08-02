@@ -29,3 +29,14 @@ services rather than each owning a processing implementation, is realised in
 controller in `neurostat.gui.controller` imports no Qt, so orchestration stays
 testable without a display, and the Qt view layer is confined to
 `neurostat.gui.app`.
+
+The GUI does not ask for a project file. `neurostat.gui.discovery` recognises the
+common on-disk study layouts and returns one record per input file;
+`neurostat.gui.study_builder` turns the collected study details into a project
+document and validates it through both `load_project` and
+`parse_analysis_profile`, since a profile can satisfy the project schema and
+still be rejected by the analysis layer. `neurostat.gui.fsaverage` provisions the
+MNE resources automatically, and `neurostat.gui.legacy_bridge` runs the
+unmodified v1 preprocessor through the `neurostat.legacy` seam when the inputs
+are not yet cleaned. All four are Qt-free, so the whole path from typed study
+details to a validated project is testable without a display.

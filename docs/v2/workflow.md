@@ -114,11 +114,71 @@ Every workspace needs its own mapping, and workspace names must be unique.
 neurostat-gui
 ```
 
-Choose a project YAML, tick the stages you want, and press Run. The resolved plan
-appears before anything executes, so you can see that asking for BrainNet also runs
-ingest, scouts, connectivity, and GraphVar. Progress arrives per stage while the run
-is in flight, and finished stages populate a table with their state, run id, and
-reuse flag.
+You do not write a project file. You describe the study the way v1 asked for it,
+and the GUI generates the project for you.
+
+### Study Setup
+
+Point **Base Folder** at your data, then type **Groups** and **Sessions** as
+comma-separated lists, exactly as in v1. Add **Conditions** (v1 had no condition
+concept; a single `rest` is the normal case) and an **Output Folder**.
+
+Three on-disk layouts are recognised automatically:
+
+| Layout | Example |
+|---|---|
+| `Group/Session/file` | `study/GroupA/pre/subject-01.set` |
+| `Group/Subject/Session/file` | `study/GroupA/Subject 1/pre/data_ft.mat` |
+| `Group/Session/Subject/file` | `study/GroupA/pre/subject-01/preprocessed_raw.fif` |
+
+The last is what v1 preprocessing itself writes, so cleaned output is discovered
+without rearranging anything. `.set`, `.fif` and FieldTrip `.mat` are all
+recognised, and `*_cleaned` files are skipped the way v1 skipped them.
+
+The middle two layouts are the same shape on disk, so the session names you type
+are what tells them apart. If a folder does not match any layout the GUI says so
+rather than guessing.
+
+Participants are namespaced by group, because subject folders are usually
+numbered per group and `GroupA/Subject 1` is not the same person as
+`GroupB/Subject 1`.
+
+### Already cleaned, or not
+
+**My data is already cleaned** is ticked by default, matching v2's contract.
+
+Untick it and v1's preprocessing controls appear with their original defaults:
+bandpass 1-40 Hz, notch 50/100 Hz, Traditional (ASR + ICLabel) or GEDAI, bad
+channel interpolation, ICA method and component count. The GUI then runs the
+unmodified v1 cleaning pipeline first, writes `preprocessed_raw.fif` per subject,
+and feeds that straight into the v2 stages. Raw data in, statistics out, in one
+run.
+
+### Source localization
+
+The default pairing is MNE with fsaverage, and **Auto (fetch fsaverage)** is on,
+so the subject directory, transform, source space and BEM are provisioned for you
+exactly as v1 did. Untick it to supply your own paths, or switch to the fixed
+linear operator pairing if you have a precomputed sensor-to-scout matrix.
+
+Only two source/connectivity pairings are valid, so they are offered as a single
+choice rather than two menus that could be combined illegally.
+
+### Pipeline
+
+Press **Scan** to see every discovered record in a table before anything runs.
+Tick the stages you want; the resolved plan shows the full dependency closure, so
+asking for BrainNet visibly pulls in ingest, scouts, connectivity and GraphVar.
+Progress arrives per stage, and finished stages fill a table with their state,
+run id and reuse flag.
+
+The generated `project.yaml` is written into your output folder and its path is
+logged. Nothing about it is hidden: you can read it, edit it, commit it, or feed
+it straight to `neurostat run`. That is the reproducibility v1 never had, without
+asking you to author anything.
+
+**Open existing project.yaml…** runs a project you already have, including one the
+GUI generated earlier.
 
 All engine work happens on a worker thread, so the window stays responsive. Failures
 report the failing stage together with the stages that succeeded before it.
