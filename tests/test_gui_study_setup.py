@@ -181,6 +181,71 @@ def test_discovery_maps_fields_and_sorts_deterministically(tmp_path: Path) -> No
     assert records[2].samples_per_epoch == 200
 
 
+def test_recommended_profile_pair_follows_the_data(tmp_path: Path) -> None:
+    """The scout stage accepts only one pairing per data shape.
+
+    `mne_fsaverage` needs continuous raw SET/FIF; `fixed_linear_operator` needs
+    epochs. Mixed data satisfies neither.
+    """
+    from neurostat.gui.study_builder import recommended_profile_pair
+
+    raw = _record(tmp_path, data_kind="raw", format="fif")
+    epoched = _record(
+        tmp_path,
+        record_id="epoched",
+        data_kind="epochs",
+        format="fieldtrip_mat",
+        path=_touch(tmp_path / "data_ft.mat"),
+    )
+
+    assert (
+        recommended_profile_pair((raw,)) is AnalysisProfilePair.MNE_FSAVERAGE_CONTINUOUS
+    )
+    assert recommended_profile_pair((epoched,)) is AnalysisProfilePair.FIXED_EVOKED
+    assert recommended_profile_pair((raw, epoched)) is None
+    assert recommended_profile_pair(()) is None
+
+
+def test_mismatched_source_backend_is_caught_before_running(tmp_path: Path) -> None:
+    """Otherwise the run ingests every file and only fails at the scout stage.
+
+    On a real study that is minutes of wasted work for a knowable error.
+    """
+    epoched = _record(
+        tmp_path,
+        data_kind="epochs",
+        format="fieldtrip_mat",
+        path=_touch(tmp_path / "data_ft.mat"),
+    )
+    form = _form(
+        tmp_path,
+        profile_pair=AnalysisProfilePair.MNE_FSAVERAGE_CONTINUOUS,
+        fixed_operator=None,
+    )
+
+    problems = validate_form(form, (epoched,))
+
+    assert any("MNE fsaverage source needs continuous raw" in item for item in problems)
+
+
+def test_fixed_operator_pairing_requires_an_operator_file(tmp_path: Path) -> None:
+    epoched = _record(
+        tmp_path,
+        data_kind="epochs",
+        format="fieldtrip_mat",
+        path=_touch(tmp_path / "data_ft.mat"),
+    )
+    form = _form(
+        tmp_path,
+        profile_pair=AnalysisProfilePair.FIXED_EVOKED,
+        fixed_operator=None,
+    )
+
+    problems = validate_form(form, (epoched,))
+
+    assert any("sensor-to-scout operator" in item for item in problems)
+
+
 def test_discovery_skips_macos_appledouble_sidecars(tmp_path: Path) -> None:
     """Mac-copied data carries a `._name` fork beside every real file.
 
@@ -448,7 +513,10 @@ def test_run_study_yields_same_stage_results_as_workflow(tmp_path: Path) -> None
         project_writer=lambda _document, _path: project,
     )
 
-    controlled = controller.run_study(_form(tmp_path), ["scouts"])
+    controlled = controller.run_study(
+        _form(tmp_path, profile_pair=AnalysisProfilePair.MNE_FSAVERAGE_CONTINUOUS),
+        ["scouts"],
+    )
     direct = run_workflow(
         project, ["scouts"], services=_services(tmp_path, engine_calls)
     )
@@ -472,7 +540,14 @@ def test_run_study_skips_preprocessing_when_already_cleaned(tmp_path: Path) -> N
         preprocessor=fail_preprocessor,
         discoverer=lambda *_args: records,
         project_writer=lambda _document, _path: project,
-    ).run_study(_form(tmp_path, already_cleaned=True), ["ingest"])
+    ).run_study(
+        _form(
+            tmp_path,
+            already_cleaned=True,
+            profile_pair=AnalysisProfilePair.MNE_FSAVERAGE_CONTINUOUS,
+        ),
+        ["ingest"],
+    )
 
     assert [outcome.stage for outcome in result.outcomes] == [StageName.INGEST]
 
@@ -502,7 +577,14 @@ def test_run_study_preprocesses_once_then_discovers_fif_records(tmp_path: Path) 
         services=_services(tmp_path, []),
         preprocessor=preprocessor,
         project_writer=writer,
-    ).run_study(_form(tmp_path, already_cleaned=False), ["ingest"])
+    ).run_study(
+        _form(
+            tmp_path,
+            already_cleaned=False,
+            profile_pair=AnalysisProfilePair.MNE_FSAVERAGE_CONTINUOUS,
+        ),
+        ["ingest"],
+    )
 
     assert calls == [str(tmp_path / "inputs")]
     assert documents[0]["records"][0]["format"] == "fif"

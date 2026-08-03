@@ -103,6 +103,7 @@ def validate_form(
         problems.append("Enter at least 2 sessions.")
     if not records:
         problems.append("No EEG records were discovered in the selected study folder.")
+    problems.extend(_profile_pair_problems(form, records))
     if _requests_stage(stages, "network_models"):
         if not form.networks:
             problems.append(
@@ -171,6 +172,70 @@ def validate_form(
             problems.append(
                 f"Record {record.record_id!r} format {record.format!r} does not "
                 "match its file extension.",
+            )
+    return tuple(problems)
+
+
+def recommended_profile_pair(
+    records: Iterable[DiscoveredRecord],
+) -> AnalysisProfilePair | None:
+    """Return the only source pairing the discovered data can actually use.
+
+    The scout stage is strict: `mne_fsaverage` needs continuous raw SET/FIF,
+    because FieldTrip coordinate units are not canonicalized, while
+    `fixed_linear_operator` needs retained epochs. Data that is all one shape has
+    exactly one legal pairing; mixed data has none.
+    """
+    kinds = {record.data_kind for record in records}
+    formats = {record.format for record in records}
+    if not kinds:
+        return None
+    if kinds == {"raw"} and formats <= {"set", "fif"}:
+        return AnalysisProfilePair.MNE_FSAVERAGE_CONTINUOUS
+    if kinds == {"epochs"}:
+        return AnalysisProfilePair.FIXED_EVOKED
+    return None
+
+
+def _profile_pair_problems(
+    form: StudyForm,
+    records: tuple[DiscoveredRecord, ...],
+) -> tuple[str, ...]:
+    """Catch a source backend the data cannot satisfy, before anything runs.
+
+    Without this the run ingests every file first and only fails at the scout
+    stage, which on a real study is minutes of wasted work.
+    """
+    if not records:
+        return ()
+    problems: list[str] = []
+    if form.profile_pair is AnalysisProfilePair.MNE_FSAVERAGE_CONTINUOUS:
+        epoched = sorted({r.record_id for r in records if r.data_kind != "raw"})
+        wrong_format = sorted(
+            {r.record_id for r in records if r.format not in {"set", "fif"}}
+        )
+        if epoched or wrong_format:
+            problems.append(
+                "The MNE fsaverage source needs continuous raw SET or FIF data, but "
+                f"{len(epoched or wrong_format)} discovered record(s) are not "
+                "(for example "
+                f"{(epoched or wrong_format)[0]}). Switch Source/Connectivity to the "
+                "fixed linear operator pairing and supply a sensor-to-scout operator, "
+                "or ingest raw SET/FIF instead."
+            )
+    elif form.profile_pair is AnalysisProfilePair.FIXED_EVOKED:
+        continuous = sorted({r.record_id for r in records if r.data_kind != "epochs"})
+        if continuous:
+            problems.append(
+                "The fixed linear operator source needs epoched data, but "
+                f"{len(continuous)} discovered record(s) are continuous (for example "
+                f"{continuous[0]}). Switch Source/Connectivity to the MNE fsaverage "
+                "pairing."
+            )
+        if form.fixed_operator is None:
+            problems.append(
+                "The fixed linear operator source needs a sensor-to-scout operator "
+                ".mat file. Set it under Analysis."
             )
     return tuple(problems)
 

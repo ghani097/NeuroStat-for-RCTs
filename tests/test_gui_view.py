@@ -47,11 +47,16 @@ def _touch(path: Path) -> Path:
 
 
 def _study_tree(root: Path) -> Path:
-    """Build a two-arm, two-session tree in the subject-then-session shape."""
+    """Build a two-arm, two-session tree in the subject-then-session shape.
+
+    Files are continuous FIF so the default MNE source pairing applies. Epoched
+    FieldTrip data is steered to the fixed-operator pairing, which then needs a
+    sensor-to-scout operator these view tests are not about.
+    """
     for arm in ("GroupA", "GroupB"):
         for subject in ("Subject 1", "Subject 2"):
             for session in ("pre", "post"):
-                _touch(root / arm / subject / session / "data_ft.mat")
+                _touch(root / arm / subject / session / "clean.fif")
     return root
 
 

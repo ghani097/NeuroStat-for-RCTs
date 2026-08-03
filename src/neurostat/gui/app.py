@@ -22,6 +22,7 @@ from neurostat.gui.study_builder import (
     AnalysisProfilePair,
     StudyForm,
     default_frequency_bands,
+    recommended_profile_pair,
     validate_form,
 )
 from neurostat.workflow import StageOutcome, WorkflowResult
@@ -848,6 +849,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._last_records = records
         if records:
             message = f"Detected layout {layout.value}; found {len(records)} record(s)."
+            message += self._align_profile_pair(records)
         else:
             message = (
                 "No EEG records found. Supported layouts: Group/Session/file, "
@@ -855,6 +857,28 @@ class MainWindow(QtWidgets.QMainWindow):
             )
         self._set_status(message)
         self._log(message)
+
+    def _align_profile_pair(self, records: tuple[DiscoveredRecord, ...]) -> str:
+        """Select the only source pairing the scanned data can use.
+
+        Epoched FieldTrip data cannot go through the MNE fsaverage backend, and
+        continuous raw cannot go through the fixed operator. Choosing here means
+        the mismatch is caught at scan time rather than after a long ingest.
+        """
+        recommended = recommended_profile_pair(records)
+        if recommended is None or recommended is self._selected_profile_pair():
+            return ""
+        label = (
+            _MNE_LABEL
+            if recommended is AnalysisProfilePair.MNE_FSAVERAGE_CONTINUOUS
+            else _FIXED_LABEL
+        )
+        index = self.profile_pair_combo.findText(label)
+        if index < 0:
+            return ""
+        self.profile_pair_combo.setCurrentIndex(index)
+        self._refresh_profile_controls()
+        return f" Source set to {label} to match the discovered data."
 
     def _discover_from_widgets(self) -> tuple[tuple[DiscoveredRecord, ...], Layout]:
         base = Path(self.base_input.text().strip()).expanduser()
@@ -913,23 +937,37 @@ class MainWindow(QtWidgets.QMainWindow):
                 form.sessions,
                 form.conditions,
             )
+            # Fields can change after a scan, so align the source pairing against
+            # what is actually on disk and rebuild the form from the result.
+            if self._align_profile_pair(records):
+                form = self._build_form()
         except ValueError as exc:
-            self._set_status(str(exc))
-            self._log(str(exc))
+            self._report_refusal(str(exc))
             return
         self._fill_records_table(records)
         self._last_records = records
         problems = validate_form(form, records, plan)
         if problems:
-            message = "Study setup is not valid: " + "; ".join(problems)
-            self._set_status(message)
-            self._log(message)
+            self._report_refusal(
+                "Study setup is not valid: " + "; ".join(problems),
+            )
             return
         self._start_worker(
             form=form,
             stages=stages,
             auto_fsaverage=self.auto_fsaverage_checkbox.isChecked(),
         )
+
+    def _report_refusal(self, message: str) -> None:
+        """Report a run that was refused before any worker started.
+
+        `run_finished` still has to fire, otherwise anything waiting on the run
+        waits forever for a run that will never happen.
+        """
+        self._set_status(message)
+        self._log(message)
+        self.run_button.setEnabled(True)
+        self.run_finished.emit()
 
     def _build_form(self) -> StudyForm:
         profile_pair = self._selected_profile_pair()
