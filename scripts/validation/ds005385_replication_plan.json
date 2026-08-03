@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "registered_date": "2026-08-03",
+  "dataset_screening": [
+    {
+      "dataset": "OpenNeuro ds005385 v1.0.3",
+      "decision": "selected",
+      "reason": "Longitudinal 64-channel continuous eyes-open and eyes-closed resting-state EEG at baseline and approximately five-year follow-up; CC0; versioned DOI."
+    },
+    {
+      "dataset": "OpenNeuro ds004166 v1.0.0",
+      "decision": "excluded",
+      "reason": "Longitudinal randomized controlled trial, but the EEG recordings are task ERP rather than continuous resting state."
+    },
+    {
+      "dataset": "PhysioNet auditory-eeg v1.0.0",
+      "decision": "fallback_not_selected",
+      "reason": "Continuous rest and a DOI are available, but recordings are repeated on one day rather than longitudinal and contain only four EEG channels."
+    }
+  ],
+  "selected_dataset": {
+    "accession": "ds005385",
+    "version": "1.0.3",
+    "doi": "10.18112/openneuro.ds005385.v1.0.3",
+    "license": "CC0",
+    "title": "Resting-state EEG data before and after cognitive activity across the adult lifespan and a 5-year follow-up"
+  },
+  "pilot_sample": {
+    "subjects": [
+      "001",
+      "028",
+      "033",
+      "038",
+      "044",
+      "046",
+      "047",
+      "050",
+      "053",
+      "054",
+      "059",
+      "073"
+    ],
+    "selection_rule": "Among participants with session2=yes and late_ses1=late_ses2=0, sort by participant_id and take the first two women and first two men in each baseline age band 20-39, 40-54, and 55-70 years.",
+    "recordings_per_subject": 4,
+    "recordings": "acq-pre eyes-open and eyes-closed continuous EEG from sessions 1 and 2"
+  },
+  "primary_endpoint": {
+    "metric": "Mean upper-triangle posterior-region alpha-band (8-13 Hz) Phase Lag Index after NeuroStat Traditional preprocessing",
+    "contrast": "Eyes closed minus eyes open, averaged within subject across sessions before inferential testing",
+    "posterior_channels": [
+      "O1",
+      "Oz",
+      "O2",
+      "PO7",
+      "PO3",
+      "POz",
+      "PO4",
+      "PO8",
+      "P3",
+      "Pz",
+      "P4",
+      "P7",
+      "P8"
+    ]
+  },
+  "pre_registered_gate": {
+    "integrity": "All 48 planned EDF recordings must be present, SHA-256 hashed, and processed successfully; at least 12 subjects must have all four recordings.",
+    "primary_effect": "Across-session subject-average EC minus EO must be positive with a paired two-sided t-test p < 0.05 and paired Cohen's d >= 0.50.",
+    "session_consistency": "The mean EC minus EO contrast must be positive in both sessions, with at least 8 of 12 subjects positive in each session.",
+    "decision": "PASS only if integrity, primary_effect, and session_consistency all pass. Otherwise report FAIL without changing preprocessing or endpoints."
+  },
+  "exploratory_endpoints": [
+    "Five-year Pearson and Spearman correlations for eyes-open, eyes-closed, and EC-minus-EO posterior alpha PLI.",
+    "Two-way absolute-agreement single-measure ICC(A,1) with deterministic bootstrap confidence intervals.",
+    "Session-specific paired state effects and subject-level processing QC."
+  ],
+  "analysis_parameters": {
+    "resample_hz": 250,
+    "bandpass_hz": [
+      1,
+      40
+    ],
+    "notch_hz": [
+      50
+    ],
+    "preprocessing": "Traditional: bad-channel interpolation plus 15-component FastICA/ICLabel; ASR disabled",
+    "iclabel_brain_threshold": 0.5,
+    "epoch_seconds": 2,
+    "epoch_overlap": 0.5,
+    "connectivity": "NeuroStat compute_pli(method='pli')",
+    "random_seed": 42
+  },
+  "interpretation_limits": [
+    "This is a representative pipeline-validation subset, not the publication-powered analysis of all 208 follow-up participants.",
+    "The primary endpoint is sensor-space PLI and does not independently validate source localization.",
+    "Longitudinal reliability estimates from 12 subjects are exploratory and expected to have wide confidence intervals."
+  ]
+}

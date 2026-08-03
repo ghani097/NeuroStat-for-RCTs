@@ -1,0 +1,188 @@
+{
+  "analysis_parameters": {
+    "alpha_band_hz": [
+      8.0,
+      13.0
+    ],
+    "bandpass_hz": [
+      1.0,
+      40.0
+    ],
+    "epoch_overlap": 0.5,
+    "epoch_seconds": 2.0,
+    "ica_components": 15,
+    "iclabel_brain_threshold": 0.5,
+    "notch_hz": [
+      50.0
+    ],
+    "posterior_channels": [
+      "O1",
+      "Oz",
+      "O2",
+      "PO7",
+      "PO3",
+      "POz",
+      "PO4",
+      "PO8",
+      "P3",
+      "Pz",
+      "P4",
+      "P7",
+      "P8"
+    ],
+    "preprocessing": "Traditional (bad-channel interpolation + FastICA/ICLabel; ASR disabled)",
+    "random_seed": 42,
+    "resample_hz": 250.0
+  },
+  "artifacts": {
+    "analysis_script_sha256": "98796fe62617ce0ae096e43d434d7044b894f3c54cc24eca37e1b2543f56f861",
+    "pipeline_sha256": "e2a4287d0b4f1584edc6177a58db7823805bdf428070f69da095eb9684b10632",
+    "pre_registration_sha256": "ff57644eddcab6ab760da709e8240613d4b3ac6744915f713d46cc81ee5e39c2",
+    "subject_recording_results_csv_sha256": "5ce703eba7084ea1d071eef8504c0b5b9c243abf9d68b6afbed2a1ae7a658191"
+  },
+  "created_utc": "2026-08-03T07:35:35+00:00",
+  "dataset": {
+    "accession": "ds005385",
+    "doi": "10.18112/openneuro.ds005385.v1.0.3",
+    "version": "1.0.3"
+  },
+  "elapsed_minutes": 4.192510195573171,
+  "environment": {
+    "git_branch": "validation/ds005385-replication",
+    "git_commit": "cb1863ce36f53b129a4fb55b5e511f05fd90f0cc",
+    "packages": {
+      "mne": "1.11.0",
+      "mne-connectivity": "0.7.0",
+      "mne-icalabel": "0.8.1",
+      "numpy": "2.4.1",
+      "pandas": "2.3.3",
+      "scikit-learn": "1.8.0",
+      "scipy": "1.17.0",
+      "torch": "2.10.0"
+    },
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.14.2 (tags/v3.14.2:df79316, Dec  5 2025, 17:18:21) [MSC v.1944 64 bit (AMD64)]"
+  },
+  "exploratory_longitudinal": {
+    "EC_minus_EO": {
+      "icc_a1": 0.8891390845021485,
+      "icc_a1_bootstrap_95_ci": [
+        0.4426568532610273,
+        0.9707510803907604
+      ],
+      "mean_change": 0.00884327096783104,
+      "n": 12,
+      "pearson_p": 0.0001443140933502925,
+      "pearson_r": 0.8825072188792668,
+      "session1_mean": 0.15130928693660314,
+      "session2_mean": 0.1601525579044342,
+      "session_change_p": 0.6506237413421196,
+      "session_change_t": 0.46554356198055774,
+      "spearman_p": 0.0019003677255282697,
+      "spearman_rho": 0.7972027972027973
+    },
+    "EyesClosed": {
+      "icc_a1": 0.8447448389189532,
+      "icc_a1_bootstrap_95_ci": [
+        0.4433687576565254,
+        0.9751166351384578
+      ],
+      "mean_change": 0.005054656108335488,
+      "n": 12,
+      "pearson_p": 0.000727579291825283,
+      "pearson_r": 0.8348760222345636,
+      "session1_mean": 0.3062426908647952,
+      "session2_mean": 0.31129734697313066,
+      "session_change_p": 0.8370742500328553,
+      "session_change_t": 0.2105679093251103,
+      "spearman_p": 0.00011413359814618021,
+      "spearman_rho": 0.8881118881118882
+    },
+    "EyesOpen": {
+      "icc_a1": 0.6562155170938865,
+      "icc_a1_bootstrap_95_ci": [
+        0.3103537137539814,
+        0.8566189632341971
+      ],
+      "mean_change": -0.0037886148594955503,
+      "n": 12,
+      "pearson_p": 0.023411574553344028,
+      "pearson_r": 0.6454125363587685,
+      "session1_mean": 0.15493340392819202,
+      "session2_mean": 0.15114478906869652,
+      "session_change_p": 0.7974132998278389,
+      "session_change_t": -0.26299765085846594,
+      "spearman_p": 0.0009513628555555001,
+      "spearman_rho": 0.8251748251748254
+    }
+  },
+  "pre_registered_gate": {
+    "integrity_pass": true,
+    "overall": "PASS",
+    "primary_effect_pass": true,
+    "session_consistency_pass": true
+  },
+  "primary_across_session_average": {
+    "cohens_d": 1.1835546996367126,
+    "difference_mean": 0.15573092242051867,
+    "difference_sd": 0.13157898191635728,
+    "eyes_closed_mean": 0.3087700189189629,
+    "eyes_closed_sd": 0.1379939492723726,
+    "eyes_open_mean": 0.15303909649844427,
+    "eyes_open_sd": 0.05305533050734433,
+    "n": 12,
+    "paired_t": 4.099953746615416,
+    "paired_t_p": 0.0017595311158955175,
+    "positive_subjects": 12,
+    "wilcoxon_p": 0.00048828125,
+    "wilcoxon_w": 0.0
+  },
+  "recordings_processed": 48,
+  "schema_version": 1,
+  "state_effect_by_session": {
+    "1": {
+      "cohens_d": 1.127624192127532,
+      "difference_mean": 0.15130928693660314,
+      "difference_sd": 0.134184143966548,
+      "eyes_closed_mean": 0.3062426908647952,
+      "eyes_closed_sd": 0.1399979576263631,
+      "eyes_open_mean": 0.15493340392819202,
+      "eyes_open_sd": 0.053946845426209755,
+      "n": 12,
+      "paired_t": 3.9062047852173905,
+      "paired_t_p": 0.002450278218320366,
+      "positive_subjects": 12,
+      "wilcoxon_p": 0.00048828125,
+      "wilcoxon_w": 0.0
+    },
+    "2": {
+      "cohens_d": 1.1684781322850457,
+      "difference_mean": 0.1601525579044342,
+      "difference_sd": 0.1370608088242473,
+      "eyes_closed_mean": 0.31129734697313066,
+      "eyes_closed_sd": 0.14813046869049237,
+      "eyes_open_mean": 0.15114478906869652,
+      "eyes_open_sd": 0.06296495919655526,
+      "n": 12,
+      "paired_t": 4.047726985301774,
+      "paired_t_p": 0.0019229861362756381,
+      "positive_subjects": 12,
+      "wilcoxon_p": 0.00048828125,
+      "wilcoxon_w": 0.0
+    }
+  },
+  "subjects": [
+    "001",
+    "028",
+    "033",
+    "038",
+    "044",
+    "046",
+    "047",
+    "050",
+    "053",
+    "054",
+    "059",
+    "073"
+  ]
+}
