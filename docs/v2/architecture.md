@@ -18,4 +18,25 @@ Phase 2 adds strict externally-cleaned project files and resumable canonical ing
 Phase 5 adds self-contained GraphVar workspaces and all-candidate component
 inference described in [GraphVar component inference](graphvar.md). Phase 6
 adds atlas-derived BrainNet artifacts and a separately immutable, resumable
-render boundary described in [BrainNet rendering](brainnet.md).
+render boundary described in [BrainNet rendering](brainnet.md). Phase 7 adds the
+shared workflow engine that resolves stage dependencies and threads run objects
+between stages, plus the high-level `neurostat run` command and the PyQt6 GUI,
+described in [high-level workflow, CLI, and GUI](workflow.md).
+
+The intent stated above, that CLI and GUI interfaces call shared application
+services rather than each owning a processing implementation, is realised in
+`neurostat.workflow`. Both front ends call `run_workflow` directly. The GUI
+controller in `neurostat.gui.controller` imports no Qt, so orchestration stays
+testable without a display, and the Qt view layer is confined to
+`neurostat.gui.app`.
+
+The GUI does not ask for a project file. `neurostat.gui.discovery` recognises the
+common on-disk study layouts and returns one record per input file;
+`neurostat.gui.study_builder` turns the collected study details into a project
+document and validates it through both `load_project` and
+`parse_analysis_profile`, since a profile can satisfy the project schema and
+still be rejected by the analysis layer. `neurostat.gui.fsaverage` provisions the
+MNE resources automatically, and `neurostat.gui.legacy_bridge` runs the
+unmodified v1 preprocessor through the `neurostat.legacy` seam when the inputs
+are not yet cleaned. All four are Qt-free, so the whole path from typed study
+details to a validated project is testable without a display.

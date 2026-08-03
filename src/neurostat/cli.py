@@ -6,8 +6,19 @@ import argparse
 import json
 import sys
 from collections.abc import Sequence
+from typing import Any
 
 from . import __version__
+
+_RUN_STAGE_CHOICES = (
+    "ingest",
+    "scouts",
+    "connectivity",
+    "network_models",
+    "graphvar",
+    "brainnet",
+    "all",
+)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -24,7 +35,20 @@ def _build_parser() -> argparse.ArgumentParser:
         version=f"neurostat-rcts {__version__}",
         help="Print the installed NeuroStat version and exit.",
     )
-    commands = parser.add_subparsers(dest="command")
+    commands = parser.add_subparsers(
+        dest="command",
+        metavar="{validate,ingest,scouts,connectivity,network-models,graphvar,brainnet}",
+    )
+    run = commands.add_parser("run")
+    run.add_argument("project", metavar="PROJECT")
+    run.add_argument(
+        "--stage",
+        action="append",
+        choices=_RUN_STAGE_CHOICES,
+        metavar="STAGE",
+        help="Workflow stage to run; repeat to include multiple stages.",
+    )
+    run.add_argument("--json", action="store_true", dest="as_json")
     for name in ("validate", "ingest"):
         command = commands.add_parser(name)
         command.add_argument("project", metavar="PROJECT")
@@ -68,7 +92,8 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Build deterministic BrainNet artifacts or render verified PNGs.",
     )
     brainnet_commands = brainnet.add_subparsers(
-        dest="brainnet_command", required=True
+        dest="brainnet_command",
+        required=True,
     )
     brainnet_build = brainnet_commands.add_parser("build")
     brainnet_build.add_argument("project", metavar="PROJECT")
@@ -81,12 +106,49 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _workflow_json(result: Any) -> dict[str, Any]:
+    stages = []
+    for outcome in result.outcomes:
+        item = {
+            "stage": outcome.stage.value,
+            "state": outcome.state.value,
+            "run_id": outcome.run_id,
+            "run_dir": None if outcome.run_dir is None else str(outcome.run_dir),
+        }
+        if outcome.reused is not None:
+            item["reused"] = outcome.reused
+        stages.append(item)
+    return {"stages": stages, "success": result.success}
+
+
+def _print_workflow(result: Any) -> None:
+    for outcome in result.outcomes:
+        line = f"{outcome.stage.value}: {outcome.state.value}"
+        if outcome.run_id is not None:
+            line += f" {outcome.run_id}"
+        if outcome.run_dir is not None:
+            line += f" ({outcome.run_dir})"
+        if outcome.reused is not None:
+            line += f" reused={outcome.reused}"
+        print(line)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the foundation CLI and return a process status code."""
     args = _build_parser().parse_args(argv)
     if not args.command:
         return 0
     try:
+        if args.command == "run":
+            from .workflow import run_workflow
+
+            workflow = run_workflow(args.project, args.stage or ("all",))
+            if args.as_json:
+                print(json.dumps(_workflow_json(workflow), sort_keys=True))
+            else:
+                _print_workflow(workflow)
+            return 0
+
         from .project import load_project
 
         project = load_project(args.project)
@@ -186,7 +248,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     workspace, path = item.split("=", 1)
                     if not workspace or not path or workspace in imported:
                         raise ValueError(
-                            "--result mappings must have unique nonblank workspaces"
+                            "--result mappings must have unique nonblank workspaces",
                         )
                     imported[workspace] = path
             run = run_graphvar_analysis(
@@ -217,18 +279,22 @@ def main(argv: Sequence[str] | None = None) -> int:
             elif args.command == "graphvar":
                 print(
                     f"GraphVar {args.graphvar_command}: {result['run_id']} "
-                    f"({result['run_dir']})"
+                    f"({result['run_dir']})",
                 )
             elif args.command == "brainnet":
                 print(
                     f"BrainNet {args.brainnet_command}: {result['run_id']} "
-                    f"({result['run_dir']})"
+                    f"({result['run_dir']})",
                 )
             else:
                 print(
-                    f"{verbs[args.command]} {result['records']} record(s): {result['run_id']}"
+                    f"{verbs[args.command]} {result['records']} record(s): "
+                    f"{result['run_id']}",
                 )
         return 0
     except (ValueError, RuntimeError, OSError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
+
+
+__all__ = ["main"]

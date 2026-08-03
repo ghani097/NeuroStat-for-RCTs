@@ -21,6 +21,7 @@ dependencies = [
     "asrpy>=0.0.3",
     "meegkit>=0.1.0",
     "mne-icalabel>=0.4",
+    "onnxruntime>=1.16.0",
     "pywavelets>=1.4.0",
     "scikit-learn>=1.2.0",
     "h5py>=3.8.0",
@@ -30,11 +31,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-gui = ["PyQt5>=5.15.0"]
-dev = ["build>=1.0", "pytest>=8.0"]
+gui = ["PyQt6>=6.6.0"]
+dev = ["build>=1.0", "pytest>=8.0", "setuptools>=68"]
 
 [project.scripts]
 neurostat = "neurostat.cli:main"
+neurostat-gui = "neurostat.gui.app:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

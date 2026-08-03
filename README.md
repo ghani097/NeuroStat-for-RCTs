@@ -33,7 +33,7 @@ pip install mne numpy scipy pandas matplotlib openpyxl mne-connectivity PyQt5
 
 Optional (recommended):
 ```
-pip install mne-icalabel asrpy gedai
+pip install mne-icalabel onnxruntime asrpy gedai
 ```
 
 Optional (GPU acceleration):
@@ -206,7 +206,7 @@ python -m neurostat --version
 - **fsaverage:** The pipeline uses `fsaverage` for source localisation. If offline, set `PipelineConfig.source.subjects_dir` to a local FreeSurfer subjects directory.
 - **GPU:** If CuPy is detected, PLI computation uses GPU. Otherwise falls back to CPU.
 - **GEDAI:** Requires `pip install gedai`. Uses leadfield-based reference covariance for physics-informed artifact removal (Ros et al., 2025).
-- **ICLabel:** Requires `pip install mne-icalabel`. Components classified as non-brain (probability < threshold) are rejected.
+- **ICLabel:** Requires `mne-icalabel` plus either `onnxruntime` or PyTorch. The packaged v2 dependencies use ONNX Runtime.
 
 
 ## Citation
