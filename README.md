@@ -33,7 +33,7 @@ pip install mne numpy scipy pandas matplotlib openpyxl mne-connectivity PyQt5
 
 Optional (recommended):
 ```
-pip install mne-icalabel asrpy gedai
+pip install mne-icalabel onnxruntime asrpy gedai
 ```
 
 Optional (GPU acceleration):
@@ -113,6 +113,28 @@ Simulated 64-channel EEG with three planted connectivity patterns (alpha, beta, 
 
 Replicated the well-established eyes-closed > eyes-open alpha connectivity effect using 20 subjects from the PhysioNet database. Both pathways detected the effect with large effect sizes (Traditional: *d* = 0.83; GEDAI: *d* = 0.89; both *p* < .002).
 
+### V2 Public Biological Confirmation
+
+The actual V2 high-level workflow independently confirmed the published
+source-level DK68 alpha-PLI eye-state direction in a held-out 89-person
+PhysioNet cohort (S021-S109): eyes-closed minus eyes-open global alpha PLI
+= 0.011522, paired *dz* = 0.706, 67/89 positive, one-sided sign-flip
+*p* < .00001. The target paper used source reconstruction, DK68, PLI, and
+8-13 Hz alpha ([Scientific Reports 2024](https://doi.org/10.1038/s41598-024-68532-2)).
+
+[![V2 PhysioNet confirmation dashboard](scripts/validation/physionet_eoec_v2/results/physionet_eoec_v2_dashboard.png)](scripts/validation/physionet_eoec_v2/results/README.md)
+
+A separate 60-person LEMON age-connectivity test did **not** replicate its
+frozen global alpha-PLI hypothesis, although its alpha-peak-frequency positive
+control passed. The negative outcome and debiased-wPLI sensitivity are retained
+in the public bundle rather than omitted.
+
+[![LEMON replication dashboard](scripts/validation/lemon_discover_eeg/results/lemon_v2_replication_dashboard.png)](scripts/validation/lemon_discover_eeg/results/README.md)
+
+The V2 protocol, aggregate results, visible plots, and SHA-256 manifests are in
+[`scripts/validation/README.md`](scripts/validation/README.md). Raw public EEG
+and intermediate source artifacts remain outside Git.
+
 ### Run Validation
 
 ```bash
@@ -124,6 +146,9 @@ python scripts/validation/physionet_validation.py
 
 # GEDAI vs Traditional comparison on real data
 python scripts/validation/physionet_method_comparison.py
+
+# V2 held-out public biological confirmation
+python scripts/validation/physionet_eoec_v2.py all --cohort confirmation
 ```
 
 
@@ -187,13 +212,26 @@ The application features a modern PyQt5 interface with a dark theme and threaded
 | `scripts/validation/` | Validation scripts (simulated + PhysioNet) |
 | `docs/paper/` | Publication-ready Methods and Results sections |
 
+## NeuroStat v2 foundation
+
+The installable v2 package is being introduced alongside the supported v1 launchers. Its staged architecture and compatibility boundary are described in [the v2 architecture notes](docs/v2/architecture.md).
+Clean externally prepared recordings can be validated and ingested with the [v2 clean-data project format](docs/v2/clean-data-ingestion.md).
+Source scouts and PLI can then be generated through the documented [fixed-operator/V7-compatible or MNE/continuous routes](docs/v2/source-connectivity.md).
+Completed connectivity runs can be summarized into exact-label networks and analysed with the reproducible [network mixed-model stage](docs/v2/network-models.md).
+Verified connectivity can also be exported to self-contained GraphVar 2.03a workspaces and analysed with the reproducible [GraphVar component-inference stage](docs/v2/graphvar.md).
+Verified GraphVar components can be converted into atlas-derived descriptive edge files and reproducibly rendered through the strict [BrainNet artifact and rendering stage](docs/v2/brainnet.md).
+
+```bash
+python -m neurostat --version
+```
+
 
 ## Notes
 
 - **fsaverage:** The pipeline uses `fsaverage` for source localisation. If offline, set `PipelineConfig.source.subjects_dir` to a local FreeSurfer subjects directory.
 - **GPU:** If CuPy is detected, PLI computation uses GPU. Otherwise falls back to CPU.
 - **GEDAI:** Requires `pip install gedai`. Uses leadfield-based reference covariance for physics-informed artifact removal (Ros et al., 2025).
-- **ICLabel:** Requires `pip install mne-icalabel`. Components classified as non-brain (probability < threshold) are rejected.
+- **ICLabel:** Requires `mne-icalabel` plus either `onnxruntime` or PyTorch. The packaged v2 dependencies use ONNX Runtime.
 
 
 ## Citation

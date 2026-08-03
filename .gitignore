@@ -6,6 +6,11 @@ processed*/
 __pycache__/
 *.pyc
 *.pyo
+*.egg-info/
+
+# Packaging output, produced by the wheel/sdist tests
+build/
+dist/
 
 # Virtual environment
 venv/

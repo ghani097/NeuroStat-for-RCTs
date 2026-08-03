@@ -1,0 +1,444 @@
+{
+  "cohort": "replication",
+  "connectivity": {
+    "backend": "mne-connectivity multitaper",
+    "bands_hz": {
+      "alpha": [
+        8.0,
+        13.0
+      ],
+      "beta": [
+        13.0,
+        30.0
+      ],
+      "gamma": [
+        30.0,
+        45.0
+      ],
+      "theta": [
+        4.0,
+        8.0
+      ]
+    },
+    "bandwidth_hz": 2.0,
+    "measure": "PLI",
+    "window_seconds": 2.0
+  },
+  "dataset": {
+    "condition": "eyes closed",
+    "doi": "10.1038/sdata.2018.308",
+    "name": "MPI Leipzig Mind-Brain-Body (LEMON)",
+    "page": "http://fcon_1000.projects.nitrc.org/indi/retro/MPI_LEMON/MPI_LEMON.html",
+    "public_derivative": "preprocessed EEGLAB .set/.fdt"
+  },
+  "frozen_before_outcomes": true,
+  "input_eligibility": {
+    "amendment": "Minimum duration changed from the draft 420 s guard to 400 s before replication connectivity was run, after an otherwise valid official recording was found to last 413.392 s.",
+    "channel_geometry_required": true,
+    "finite_eeg_required": true,
+    "minimum_complete_connectivity_windows": 200,
+    "minimum_duration_seconds": 400.0,
+    "minimum_eeg_channels": 50
+  },
+  "participants": [
+    {
+      "age_bin": "20-25",
+      "age_group": "young",
+      "participant_id": "sub-032302",
+      "sex": "female"
+    },
+    {
+      "age_bin": "65-70",
+      "age_group": "old",
+      "participant_id": "sub-032303",
+      "sex": "female"
+    },
+    {
+      "age_bin": "65-70",
+      "age_group": "old",
+      "participant_id": "sub-032305",
+      "sex": "female"
+    },
+    {
+      "age_bin": "25-30",
+      "age_group": "young",
+      "participant_id": "sub-032307",
+      "sex": "male"
+    },
+    {
+      "age_bin": "60-65",
+      "age_group": "old",
+      "participant_id": "sub-032308",
+      "sex": "female"
+    },
+    {
+      "age_bin": "25-30",
+      "age_group": "young",
+      "participant_id": "sub-032316",
+      "sex": "female"
+    },
+    {
+      "age_bin": "20-25",
+      "age_group": "young",
+      "participant_id": "sub-032317",
+      "sex": "male"
+    },
+    {
+      "age_bin": "25-30",
+      "age_group": "young",
+      "participant_id": "sub-032320",
+      "sex": "female"
+    },
+    {
+      "age_bin": "30-35",
+      "age_group": "young",
+      "participant_id": "sub-032321",
+      "sex": "female"
+    },
+    {
+      "age_bin": "20-25",
+      "age_group": "young",
+      "participant_id": "sub-032323",
+      "sex": "female"
+    },
+    {
+      "age_bin": "30-35",
+      "age_group": "young",
+      "participant_id": "sub-032334",
+      "sex": "female"
+    },
+    {
+      "age_bin": "65-70",
+      "age_group": "old",
+      "participant_id": "sub-032337",
+      "sex": "female"
+    },
+    {
+      "age_bin": "65-70",
+      "age_group": "old",
+      "participant_id": "sub-032338",
+      "sex": "male"
+    },
+    {
+      "age_bin": "75-80",
+      "age_group": "old",
+      "participant_id": "sub-032339",
+      "sex": "female"
+    },
+    {
+      "age_bin": "65-70",
+      "age_group": "old",
+      "participant_id": "sub-032340",
+      "sex": "female"
+    },
+    {
+      "age_bin": "70-75",
+      "age_group": "old",
+      "participant_id": "sub-032341",
+      "sex": "female"
+    },
+    {
+      "age_bin": "60-65",
+      "age_group": "old",
+      "participant_id": "sub-032342",
+      "sex": "female"
+    },
+    {
+      "age_bin": "65-70",
+      "age_group": "old",
+      "participant_id": "sub-032343",
+      "sex": "male"
+    },
+    {
+      "age_bin": "75-80",
+      "age_group": "old",
+      "participant_id": "sub-032347",
+      "sex": "male"
+    },
+    {
+      "age_bin": "25-30",
+      "age_group": "young",
+      "participant_id": "sub-032349",
+      "sex": "male"
+    },
+    {
+      "age_bin": "20-25",
+      "age_group": "young",
+      "participant_id": "sub-032355",
+      "sex": "male"
+    },
+    {
+      "age_bin": "25-30",
+      "age_group": "young",
+      "participant_id": "sub-032356",
+      "sex": "female"
+    },
+    {
+      "age_bin": "20-25",
+      "age_group": "young",
+      "participant_id": "sub-032370",
+      "sex": "female"
+    },
+    {
+      "age_bin": "65-70",
+      "age_group": "old",
+      "participant_id": "sub-032373",
+      "sex": "female"
+    },
+    {
+      "age_bin": "65-70",
+      "age_group": "old",
+      "participant_id": "sub-032375",
+      "sex": "male"
+    },
+    {
+      "age_bin": "60-65",
+      "age_group": "old",
+      "participant_id": "sub-032376",
+      "sex": "male"
+    },
+    {
+      "age_bin": "65-70",
+      "age_group": "old",
+      "participant_id": "sub-032377",
+      "sex": "female"
+    },
+    {
+      "age_bin": "30-35",
+      "age_group": "young",
+      "participant_id": "sub-032381",
+      "sex": "female"
+    },
+    {
+      "age_bin": "20-25",
+      "age_group": "young",
+      "participant_id": "sub-032386",
+      "sex": "female"
+    },
+    {
+      "age_bin": "65-70",
+      "age_group": "old",
+      "participant_id": "sub-032392",
+      "sex": "female"
+    },
+    {
+      "age_bin": "60-65",
+      "age_group": "old",
+      "participant_id": "sub-032393",
+      "sex": "male"
+    },
+    {
+      "age_bin": "60-65",
+      "age_group": "old",
+      "participant_id": "sub-032395",
+      "sex": "female"
+    },
+    {
+      "age_bin": "20-25",
+      "age_group": "young",
+      "participant_id": "sub-032396",
+      "sex": "female"
+    },
+    {
+      "age_bin": "25-30",
+      "age_group": "young",
+      "participant_id": "sub-032399",
+      "sex": "female"
+    },
+    {
+      "age_bin": "20-25",
+      "age_group": "young",
+      "participant_id": "sub-032400",
+      "sex": "female"
+    },
+    {
+      "age_bin": "20-25",
+      "age_group": "young",
+      "participant_id": "sub-032402",
+      "sex": "female"
+    },
+    {
+      "age_bin": "25-30",
+      "age_group": "young",
+      "participant_id": "sub-032411",
+      "sex": "male"
+    },
+    {
+      "age_bin": "20-25",
+      "age_group": "young",
+      "participant_id": "sub-032414",
+      "sex": "female"
+    },
+    {
+      "age_bin": "65-70",
+      "age_group": "old",
+      "participant_id": "sub-032430",
+      "sex": "female"
+    },
+    {
+      "age_bin": "25-30",
+      "age_group": "young",
+      "participant_id": "sub-032440",
+      "sex": "male"
+    },
+    {
+      "age_bin": "25-30",
+      "age_group": "young",
+      "participant_id": "sub-032441",
+      "sex": "male"
+    },
+    {
+      "age_bin": "30-35",
+      "age_group": "young",
+      "participant_id": "sub-032444",
+      "sex": "male"
+    },
+    {
+      "age_bin": "70-75",
+      "age_group": "old",
+      "participant_id": "sub-032452",
+      "sex": "female"
+    },
+    {
+      "age_bin": "70-75",
+      "age_group": "old",
+      "participant_id": "sub-032453",
+      "sex": "male"
+    },
+    {
+      "age_bin": "60-65",
+      "age_group": "old",
+      "participant_id": "sub-032454",
+      "sex": "male"
+    },
+    {
+      "age_bin": "65-70",
+      "age_group": "old",
+      "participant_id": "sub-032456",
+      "sex": "female"
+    },
+    {
+      "age_bin": "70-75",
+      "age_group": "old",
+      "participant_id": "sub-032459",
+      "sex": "male"
+    },
+    {
+      "age_bin": "55-60",
+      "age_group": "old",
+      "participant_id": "sub-032463",
+      "sex": "male"
+    },
+    {
+      "age_bin": "20-25",
+      "age_group": "young",
+      "participant_id": "sub-032467",
+      "sex": "male"
+    },
+    {
+      "age_bin": "65-70",
+      "age_group": "old",
+      "participant_id": "sub-032475",
+      "sex": "male"
+    },
+    {
+      "age_bin": "25-30",
+      "age_group": "young",
+      "participant_id": "sub-032480",
+      "sex": "male"
+    },
+    {
+      "age_bin": "70-75",
+      "age_group": "old",
+      "participant_id": "sub-032490",
+      "sex": "male"
+    },
+    {
+      "age_bin": "70-75",
+      "age_group": "old",
+      "participant_id": "sub-032491",
+      "sex": "male"
+    },
+    {
+      "age_bin": "70-75",
+      "age_group": "old",
+      "participant_id": "sub-032495",
+      "sex": "male"
+    },
+    {
+      "age_bin": "60-65",
+      "age_group": "old",
+      "participant_id": "sub-032497",
+      "sex": "male"
+    },
+    {
+      "age_bin": "20-25",
+      "age_group": "young",
+      "participant_id": "sub-032505",
+      "sex": "male"
+    },
+    {
+      "age_bin": "20-25",
+      "age_group": "young",
+      "participant_id": "sub-032507",
+      "sex": "male"
+    },
+    {
+      "age_bin": "25-30",
+      "age_group": "young",
+      "participant_id": "sub-032508",
+      "sex": "male"
+    },
+    {
+      "age_bin": "25-30",
+      "age_group": "young",
+      "participant_id": "sub-032509",
+      "sex": "male"
+    },
+    {
+      "age_bin": "20-25",
+      "age_group": "young",
+      "participant_id": "sub-032510",
+      "sex": "male"
+    }
+  ],
+  "primary_contrast": "old minus young",
+  "primary_endpoint": "mean upper-triangle DK68 alpha PLI",
+  "primary_hypothesis": "old < young",
+  "primary_test": {
+    "alpha": 0.05,
+    "method": "one-sided label permutation",
+    "pass": "effect < 0 and p < 0.05",
+    "permutations": 100000,
+    "seed": 20260804
+  },
+  "published_target": {
+    "code_commit": "b92295d5b2dd0a496c3340fc95ddfa54e40236e9",
+    "code_path": "examples/fig5_lemon_young_old.m",
+    "finding": "older adults have reduced source-space phase connectivity, predominantly in alpha, and lower alpha peak frequency",
+    "paper_doi": "10.1038/s41597-023-02525-0"
+  },
+  "replication_scope": "directional/conceptual, not exact numerical reproduction; atlas, inverse method, and phase metric differ from DISCOVER-EEG",
+  "schema": "neurostat.lemon_replication_protocol.v1",
+  "selection_salt": "neurostat-v2-lemon-replication-v1",
+  "session_contract_note": "V2's RCT project schema requires at least two declared sessions. LEMON is cross-sectional, so not_observed_contract_slot is declared but has no records and is never analyzed. EEG is not duplicated.",
+  "software": {
+    "mne": "1.12.1",
+    "mne-connectivity": "0.8.1",
+    "neurostat-rcts": "2.0.0a1",
+    "numpy": "2.5.1",
+    "scipy": "1.18.0"
+  },
+  "source_model": {
+    "atlas": "aparc_DK68",
+    "inverse": "MNE",
+    "snr": 3.0,
+    "spacing": "ico3",
+    "template": "fsaverage"
+  },
+  "supporting_endpoints": [
+    "fraction of negative alpha edge effects > 0.5",
+    "alpha Cohen d is more negative than other bands",
+    "sensor-space alpha peak frequency old < young"
+  ]
+}

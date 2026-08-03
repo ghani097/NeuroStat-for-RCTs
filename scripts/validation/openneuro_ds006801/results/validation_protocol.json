@@ -1,0 +1,112 @@
+{
+  "cohort": "full",
+  "cohort_selection": "All participants assigned to the active-learning or control arm with both pre and post recordings in the pinned release.",
+  "condition": "mixed_rest",
+  "condition_definition": "The complete recording combines two eyes-open and two eyes-closed rest blocks. Block markers are absent, so no block-level condition labels are inferred.",
+  "connectivity": {
+    "bands_hz": {
+      "alpha": [
+        8.0,
+        13.0
+      ],
+      "beta": [
+        13.0,
+        30.0
+      ],
+      "theta": [
+        4.0,
+        8.0
+      ]
+    },
+    "method": "continuous_multitaper_pli",
+    "multitaper_bandwidth_hz": 4.0,
+    "tail_policy": "drop",
+    "window_seconds": 4.0
+  },
+  "dataset_doi": "10.18112/openneuro.ds006801.v1.0.0",
+  "dataset_id": "ds006801",
+  "dataset_version": "1.0.0",
+  "group_summary": {
+    "contrast": "active pre/post change minus control pre/post change",
+    "effect_size": "pooled-SD Cohen's d on participant change scores",
+    "inference": "two-sided exact label permutation conditional on arm sizes",
+    "measure": "mean upper-triangle DK68 PLI",
+    "multiplicity": "Benjamini-Hochberg FDR across three bands"
+  },
+  "groups": {
+    "active": [
+      "sub-01",
+      "sub-05",
+      "sub-07",
+      "sub-10",
+      "sub-15",
+      "sub-16"
+    ],
+    "control": [
+      "sub-02",
+      "sub-09",
+      "sub-12",
+      "sub-14",
+      "sub-17",
+      "sub-18",
+      "sub-22"
+    ]
+  },
+  "inferential_status": "exploratory; no directional connectivity hypothesis was preregistered",
+  "preprocessing": {
+    "bad_channel_rule": "absolute log-variance robust z > 6",
+    "bandpass_hz": [
+      1.0,
+      45.0
+    ],
+    "ica_components": 25,
+    "ica_fit_reject_peak_to_peak_uv": 200.0,
+    "ica_method": "extended_infomax",
+    "ica_random_state": 42,
+    "iclabel_excluded_classes": [
+      "channel noise",
+      "eye blink",
+      "heart beat",
+      "line noise",
+      "muscle artifact"
+    ],
+    "iclabel_frequency_caveat": "Native 50 Hz low-pass prevents meeting ICLabel's 1-100 Hz training recommendation.",
+    "maximum_interpolated_channels": 3,
+    "minimum_retained_fraction": 0.5,
+    "minimum_retained_windows": 60,
+    "native_lowpass_hz": 50.0,
+    "native_sampling_hz": 500.0,
+    "qc_absolute_peak_limit_uv": 150.0,
+    "qc_log_rms_robust_z_limit": 8.0,
+    "qc_peak_to_peak_limit_uv": 150.0,
+    "qc_window_seconds": 4.0,
+    "reference": "average_applied",
+    "resample_hz": 200.0
+  },
+  "primary_validation_claim": "public two-arm longitudinal V2 workflow feasibility and artifact integrity",
+  "schema": "neurostat.ds006801_protocol.v1",
+  "sessions": [
+    "pre",
+    "post"
+  ],
+  "snapshot": "c4e91b19132fed86ee24a42ec5105bf14f961011",
+  "software": {
+    "mne": "1.12.1",
+    "mne-connectivity": "0.8.1",
+    "mne-icalabel": "0.9.0",
+    "neurostat-rcts": "2.0.0a1",
+    "numpy": "2.5.1",
+    "onnxruntime": "1.28.0",
+    "scipy": "1.18.0"
+  },
+  "source_model": {
+    "atlas": "aparc_DK68",
+    "inverse_method": "MNE",
+    "label_mode": "mean_flip",
+    "noise_covariance": "empirical",
+    "orientation": "normal",
+    "snr": 3.0,
+    "spacing": "ico3",
+    "template": "fsaverage"
+  }
+}
