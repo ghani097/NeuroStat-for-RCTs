@@ -155,3 +155,5 @@ def test_tracked_publication_bundle_matches_its_manifest() -> None:
     assert results["records_verified"] == 26
     assert results["source_data_included"] is False
     assert "E:\\" not in json.dumps(results)
+    attributes = (validation.PROJECT_ROOT / ".gitattributes").read_text()
+    assert "openneuro_ds006801/results/*.json -text" in attributes

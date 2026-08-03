@@ -1,0 +1,2 @@
+# Publication hashes cover exact bytes; do not rewrite JSON line endings on checkout.
+scripts/validation/openneuro_ds006801/results/*.json -text
