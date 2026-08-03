@@ -1,0 +1,11 @@
+{
+  "dataset_doi": "10.18112/openneuro.ds006801.v1.0.0",
+  "files": {
+    "band_change_summary.csv": "56a7ed0793eb59b40898713098a10cbae84c3c3a0d3016eabc6c2a66090693aa",
+    "global_pli_pre_post.png": "084c8d2b0c5ce176c6782c969476b453e06b4de9da4aac161c6089018a4e69a3",
+    "subject_band_results.csv": "50b7b2531d5c7632c70a043063f06be3a6ae4ea485189fa3d7fa5b7b48c5b39e",
+    "validation_protocol.json": "ce648f40a2d7c9385c119756fa856a48c5ca42cd5eab7d7334c492089836c563",
+    "validation_results.json": "db03ffb143ca5ac74873d78032f4021f46a1d24940c7fcfc10d1446df664a7dc"
+  },
+  "schema": "neurostat.ds006801_publication_bundle.v1"
+}

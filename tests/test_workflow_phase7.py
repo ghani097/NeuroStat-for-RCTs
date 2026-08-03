@@ -287,6 +287,256 @@ def test_progress_events_are_emitted_in_order(tmp_path: Path) -> None:
     ]
 
 
+def _synthetic_workflow_project(tmp_path: Path) -> Path:
+    import mne
+    import numpy as np
+
+    sfreq = 64.0
+    samples = 192
+    times = np.arange(samples, dtype=np.float64) / sfreq
+    data = np.vstack(
+        (
+            np.sin(2 * np.pi * 10 * times),
+            np.sin(2 * np.pi * 10 * times + np.pi / 4),
+        )
+    )
+    raw = mne.io.RawArray(
+        data,
+        mne.create_info(["Fz", "Cz"], sfreq, "eeg"),
+        verbose="ERROR",
+    )
+    raw.set_montage(
+        mne.channels.make_dig_montage(
+            ch_pos={"Fz": (0.0, 0.03, 0.08), "Cz": (0.0, 0.0, 0.09)},
+            coord_frame="head",
+        )
+    )
+    raw.save(tmp_path / "clean-raw.fif", overwrite=True, verbose="ERROR")
+
+    label_dir = tmp_path / "subjects" / "fsaverage" / "label"
+    label_dir.mkdir(parents=True)
+    for resource in (
+        tmp_path / "trans.fif",
+        tmp_path / "source-src.fif",
+        tmp_path / "bem-sol.fif",
+        label_dir / "lh.aparc.annot",
+        label_dir / "rh.aparc.annot",
+    ):
+        resource.write_bytes(f"synthetic:{resource.name}".encode())
+
+    project = tmp_path / "project.yaml"
+    project.write_text(
+        """schema_version: 1
+study: {id: synthetic-workflow, arms: [active, comparison], sessions: [baseline, followup], conditions: [rest]}
+input: {state: cleaned}
+records:
+  - {record_id: rest-1, participant_id: p1, arm: active, session: baseline, condition: rest, data_kind: raw, format: fif, path: clean-raw.fif, analysis_profile: rest}
+analysis_profiles:
+  rest:
+    source:
+      backend: mne_fsaverage
+      subject: fsaverage
+      subjects_dir: subjects
+      trans: trans.fif
+      source_space: source-src.fif
+      bem: bem-sol.fif
+      atlas: aparc
+      inverse_method: MNE
+      snr: 3.0
+      pick_orientation: normal
+      label_mode: mean_flip
+      chunk_samples: 64
+      output_chunk_samples: 64
+      depth: 0.8
+      loose: 0.2
+      mindist_mm: 5.0
+      noise_covariance: empirical
+      average_reference_projection: true
+      coordinate_frame: head
+      export_matlab: false
+    connectivity:
+      backend: continuous_multitaper_pli
+      bands: {alpha: [8, 12]}
+      window_seconds: 1.0
+      tail_policy: drop
+      mt_bandwidth: 4
+      mt_adaptive: false
+      mt_low_bias: true
+      n_jobs: 1
+output: {root: output}
+network_models: {}
+graphvar: {}
+brainnet: {}
+""",
+        encoding="utf-8",
+    )
+    return project
+
+
+def test_all_runs_real_local_artifact_stages_and_reuses_them(tmp_path: Path) -> None:
+    from neurostat.connectivity import run_connectivity
+    from neurostat.ingest import ingest_project
+    from neurostat.scouts import ScoutStream, run_scouts
+
+    project_path = _synthetic_workflow_project(tmp_path)
+    projector_calls = 0
+    connectivity_calls = 0
+    external_calls: list[str] = []
+
+    class SyntheticProjector:
+        def project(self, canonical_path, config):
+            import h5py
+            import numpy as np
+
+            nonlocal projector_calls
+            projector_calls += 1
+            with h5py.File(canonical_path, "r") as file:
+                times = np.asarray(file["times"][:], dtype=np.float64)
+                sfreq = float(file.attrs["sfreq"])
+            values = np.vstack((np.sin(times * 5), np.cos(times * 7)))
+
+            def chunks():
+                for start in range(0, values.shape[1], config.chunk_samples):
+                    yield start, values[:, start : start + config.chunk_samples]
+
+            return ScoutStream(
+                ("left", "right"),
+                times,
+                sfreq,
+                chunks(),
+                {"backend": "mne_fsaverage", "acceptance_boundary": True},
+            )
+
+    class DenseConnectivity:
+        def get_data(self, output: str):
+            import numpy as np
+
+            assert output == "dense"
+            matrix = np.zeros((2, 2, 1), dtype=np.float64)
+            matrix[1, 0, 0] = 0.5
+            return matrix
+
+    def spectral_connectivity(windows, **_kwargs):
+        nonlocal connectivity_calls
+        connectivity_calls += 1
+        assert len(tuple(windows)) == 3
+        return DenseConnectivity()
+
+    projector = SyntheticProjector()
+
+    def ingest(project, progress=None):
+        return ingest_project(project, progress)
+
+    def scouts(project, ingest_run, progress=None):
+        return run_scouts(
+            project,
+            ingest_run,
+            progress,
+            mne_projector=projector,
+        )
+
+    def connectivity(project, scouts_run, progress=None):
+        return run_connectivity(
+            project,
+            scouts_run,
+            progress,
+            connectivity_function=spectral_connectivity,
+        )
+
+    def external(name: str, run_id: str):
+        def execute(*args):
+            upstream = args[1]
+            assert upstream is not None
+            external_calls.append(name)
+            return FakeRun(run_id, tmp_path / run_id)
+
+        return execute
+
+    services = WorkflowServices(
+        ingest=ingest,
+        scouts=scouts,
+        connectivity=connectivity,
+        network_models=external("network_models", "network-models"),
+        graphvar_build=external("graphvar_build", "graphvar-workspaces"),
+        graphvar_analyse=external("graphvar_analyse", "graphvar"),
+        brainnet_build=external("brainnet_build", "brainnet-artifacts"),
+        brainnet_render=external("brainnet_render", "brainnet-render"),
+    )
+    progress: list[ProgressEvent] = []
+
+    first = run_workflow(
+        project_path,
+        ["all"],
+        progress=progress.append,
+        services=services,
+    )
+    second = run_workflow(project_path, ["all"], services=services)
+
+    assert tuple(outcome.stage for outcome in first.outcomes) == CANONICAL_STAGE_ORDER
+    assert first.success and second.success
+    assert first[StageName.INGEST].reused == 0
+    assert first[StageName.SCOUTS].reused == 0
+    assert first[StageName.CONNECTIVITY].reused == 0
+    assert second[StageName.INGEST].reused == 1
+    assert second[StageName.SCOUTS].reused == 1
+    assert second[StageName.CONNECTIVITY].reused == 1
+    assert projector_calls == 1
+    assert connectivity_calls == 1
+    assert (
+        external_calls
+        == [
+            "network_models",
+            "graphvar_build",
+            "graphvar_analyse",
+            "brainnet_build",
+            "brainnet_render",
+        ]
+        * 2
+    )
+    assert progress[0] == ProgressEvent(StageName.INGEST, "ingest started")
+    assert progress[-1] == ProgressEvent(StageName.BRAINNET, "brainnet succeeded")
+
+
+@pytest.mark.skipif(
+    not os.environ.get("NEUROSTAT_TEST_DS006801_PROJECT"),
+    reason="set NEUROSTAT_TEST_DS006801_PROJECT to a prepared public pilot or full project",
+)
+def test_public_ds006801_runs_through_the_high_level_connectivity_workflow() -> None:
+    from neurostat.connectivity import verify_connectivity_artifact
+    from neurostat.project import load_project
+    from neurostat.stage_io import load_json
+
+    project = load_project(os.environ["NEUROSTAT_TEST_DS006801_PROJECT"])
+    assert project.study.id == "openneuro-ds006801-v2-validation"
+    assert project.study.arms == ("active", "control")
+    assert project.study.sessions == ("pre", "post")
+    assert project.study.conditions == ("mixed_rest",)
+    assert len(project.records) >= 4
+    assert {record.key.arm for record in project.records} == {"active", "control"}
+    assert {record.key.session for record in project.records} == {"pre", "post"}
+
+    result = run_workflow(project, ["connectivity"])
+
+    assert tuple(outcome.stage for outcome in result.outcomes) == (
+        StageName.INGEST,
+        StageName.SCOUTS,
+        StageName.CONNECTIVITY,
+    )
+    assert result.success
+    connectivity_run = result[StageName.CONNECTIVITY]
+    assert connectivity_run.run_dir is not None
+    manifest = load_json(
+        connectivity_run.run_dir / "connectivity" / "manifest.json",
+        "public validation connectivity manifest",
+    )
+    assert len(manifest["records"]) == len(project.records)
+    for entry in manifest["records"]:
+        header = verify_connectivity_artifact(Path(entry["path"]))
+        assert header.record_id == entry["record_id"]
+        assert header.labels
+        assert header.bands == ("theta", "alpha", "beta")
+
+
 def test_missing_config_block_is_clear(tmp_path: Path) -> None:
     with pytest.raises(WorkflowError) as raised:
         run_workflow(

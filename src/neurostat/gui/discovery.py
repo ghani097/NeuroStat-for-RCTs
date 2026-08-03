@@ -123,7 +123,7 @@ def discover_records(
         if fmt is None:
             continue
         # Namespace the participant by arm. Subject folders are numbered per
-        # group, so `GroupY/Subject 1` and `GroupZ/Subject 1` are different
+        # group, so `ArmA/Subject 1` and `ArmB/Subject 1` are different
         # people; merging them would break the rule that one participant maps
         # to exactly one arm.
         participant_source = f"{candidate.arm}-{candidate.participant_source}"

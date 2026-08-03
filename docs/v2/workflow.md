@@ -249,6 +249,12 @@ records:
   manifest: records.csv
 ```
 
+For a public, reproducible example of this contract on randomized pre/post
+resting-state EEG, see
+[`scripts/validation/openneuro_ds006801_v2.py`](../../scripts/validation/openneuro_ds006801_v2.py).
+It prepares checksum-pinned OpenNeuro data as cleaned FIF, generates the project,
+and calls this same high-level workflow through `connectivity`.
+
 Add a `network_models:`, `graphvar:`, or `brainnet:` block to configure those
 stages. Requesting a stage whose block is missing fails immediately with a message
 naming the block, before any work starts, rather than partway through a long run.
