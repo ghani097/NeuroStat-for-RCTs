@@ -1,0 +1,2574 @@
+{
+  "created_utc": "2026-08-03T07:31:04+00:00",
+  "dataset": {
+    "accession": "ds005385",
+    "doi": "10.18112/openneuro.ds005385.v1.0.3",
+    "license": "CC0",
+    "source": "https://s3.amazonaws.com/openneuro.org",
+    "title": "Resting-state EEG data before and after cognitive activity across the adult lifespan and a 5-year follow-up",
+    "version": "1.0.3"
+  },
+  "edf_count": 48,
+  "file_count": 269,
+  "files": [
+    {
+      "bytes": 180,
+      "downloaded": true,
+      "etag": "a3c16e6e20d2965fc2606f6b204c0137",
+      "last_modified": "Mon, 05 May 2025 12:05:25 GMT",
+      "object_key": "ds005385/CHANGES",
+      "relative_path": "CHANGES",
+      "sha256": "e76d743c856b50aa26cc2ede8a040ff2750d378b23c450e264640b5a43e633da"
+    },
+    {
+      "bytes": 7904,
+      "downloaded": true,
+      "etag": "216c6a2798f58a8c1abb3cf38db3ce52",
+      "last_modified": "Mon, 05 May 2025 12:05:25 GMT",
+      "object_key": "ds005385/README.md",
+      "relative_path": "README.md",
+      "sha256": "d7f82a9bce6c3e718a52fc474a9fd0d3849c8d6d9d61e856ecbf3ecc45d70bda"
+    },
+    {
+      "bytes": 1807,
+      "downloaded": true,
+      "etag": "02901f0284dfa50ee607b52d8dbbcde9",
+      "last_modified": "Mon, 05 May 2025 12:05:26 GMT",
+      "object_key": "ds005385/dataset_description.json",
+      "relative_path": "dataset_description.json",
+      "sha256": "8c6e3312796ab681ab02a418228b2322d8f466c208d22ea96190bcff6f7fcbfa"
+    },
+    {
+      "bytes": 962,
+      "downloaded": true,
+      "etag": "53c5b2eac4255064c4d1279cfc29d1db",
+      "last_modified": "Wed, 31 Jul 2024 06:39:17 GMT",
+      "object_key": "ds005385/participants.json",
+      "relative_path": "participants.json",
+      "sha256": "ce8aebc5383bd354ce949a22a180b2ca1c8808896f707fa9fe13d2d04db7357a"
+    },
+    {
+      "bytes": 19398,
+      "downloaded": true,
+      "etag": "d8901ec7043aa9b3fb50814ec2b78202",
+      "last_modified": "Wed, 31 Jul 2024 06:39:17 GMT",
+      "object_key": "ds005385/participants.tsv",
+      "relative_path": "participants.tsv",
+      "sha256": "945841a49ec26c58b82644cdfa07ec2635dc9fa46b0ba17c873c20f1c534f730"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:39:21 GMT",
+      "object_key": "ds005385/sub-001/ses-1/eeg/sub-001_ses-1_task-EyesClosed_acq-pre_channels.tsv",
+      "relative_path": "sub-001/ses-1/eeg/sub-001_ses-1_task-EyesClosed_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 23936896,
+      "downloaded": false,
+      "etag": "d19ba5b7956e9aa5ac0ea3a87cb094d3",
+      "last_modified": "Wed, 31 Jul 2024 06:39:21 GMT",
+      "object_key": "ds005385/sub-001/ses-1/eeg/sub-001_ses-1_task-EyesClosed_acq-pre_eeg.edf",
+      "relative_path": "sub-001/ses-1/eeg/sub-001_ses-1_task-EyesClosed_acq-pre_eeg.edf",
+      "sha256": "a9ef4f8bcc7b3fff6568b7a441e14230ec287faa23212713e32f37bf8a8710a7"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "2d1ea974d98648d2ec5e023ab85d7501",
+      "last_modified": "Wed, 31 Jul 2024 06:39:23 GMT",
+      "object_key": "ds005385/sub-001/ses-1/eeg/sub-001_ses-1_task-EyesClosed_acq-pre_eeg.json",
+      "relative_path": "sub-001/ses-1/eeg/sub-001_ses-1_task-EyesClosed_acq-pre_eeg.json",
+      "sha256": "e018a6ad5845ef8c03db68044fb5bc496e309e7aaafa1d68142ee2cd799fe1df"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:39:23 GMT",
+      "object_key": "ds005385/sub-001/ses-1/eeg/sub-001_ses-1_task-EyesClosed_acq-pre_events.json",
+      "relative_path": "sub-001/ses-1/eeg/sub-001_ses-1_task-EyesClosed_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:39:24 GMT",
+      "object_key": "ds005385/sub-001/ses-1/eeg/sub-001_ses-1_task-EyesClosed_acq-pre_events.tsv",
+      "relative_path": "sub-001/ses-1/eeg/sub-001_ses-1_task-EyesClosed_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:39:27 GMT",
+      "object_key": "ds005385/sub-001/ses-1/eeg/sub-001_ses-1_task-EyesOpen_acq-pre_channels.tsv",
+      "relative_path": "sub-001/ses-1/eeg/sub-001_ses-1_task-EyesOpen_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 23936896,
+      "downloaded": true,
+      "etag": "7c5fbc7c6e41a240fa19eba9f66011f0",
+      "last_modified": "Wed, 31 Jul 2024 06:39:27 GMT",
+      "object_key": "ds005385/sub-001/ses-1/eeg/sub-001_ses-1_task-EyesOpen_acq-pre_eeg.edf",
+      "relative_path": "sub-001/ses-1/eeg/sub-001_ses-1_task-EyesOpen_acq-pre_eeg.edf",
+      "sha256": "54a963b953ace2810c5f70cd99d76781bd70c1b90aaa0e44d2790e82d5fea534"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "19f86a7fc56e6c84882307bb481844b1",
+      "last_modified": "Wed, 31 Jul 2024 06:39:29 GMT",
+      "object_key": "ds005385/sub-001/ses-1/eeg/sub-001_ses-1_task-EyesOpen_acq-pre_eeg.json",
+      "relative_path": "sub-001/ses-1/eeg/sub-001_ses-1_task-EyesOpen_acq-pre_eeg.json",
+      "sha256": "46fb8c9afd77adbb808c6bc755cd7efb8d415a8f8ecc6458296a4b259acbdcfc"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:39:29 GMT",
+      "object_key": "ds005385/sub-001/ses-1/eeg/sub-001_ses-1_task-EyesOpen_acq-pre_events.json",
+      "relative_path": "sub-001/ses-1/eeg/sub-001_ses-1_task-EyesOpen_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:39:29 GMT",
+      "object_key": "ds005385/sub-001/ses-1/eeg/sub-001_ses-1_task-EyesOpen_acq-pre_events.tsv",
+      "relative_path": "sub-001/ses-1/eeg/sub-001_ses-1_task-EyesOpen_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:39:32 GMT",
+      "object_key": "ds005385/sub-001/ses-2/eeg/sub-001_ses-2_task-EyesClosed_acq-pre_channels.tsv",
+      "relative_path": "sub-001/ses-2/eeg/sub-001_ses-2_task-EyesClosed_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 23546896,
+      "downloaded": true,
+      "etag": "49f283ee6c3fb3d3b43084f40b931955",
+      "last_modified": "Wed, 31 Jul 2024 06:39:33 GMT",
+      "object_key": "ds005385/sub-001/ses-2/eeg/sub-001_ses-2_task-EyesClosed_acq-pre_eeg.edf",
+      "relative_path": "sub-001/ses-2/eeg/sub-001_ses-2_task-EyesClosed_acq-pre_eeg.edf",
+      "sha256": "19c49f4e7cf9e1859d0d833900e9d086d052397e28c0f0d37b844708f8fbc148"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "a88988a682dcb6f97079dd493097cdc8",
+      "last_modified": "Wed, 31 Jul 2024 06:39:35 GMT",
+      "object_key": "ds005385/sub-001/ses-2/eeg/sub-001_ses-2_task-EyesClosed_acq-pre_eeg.json",
+      "relative_path": "sub-001/ses-2/eeg/sub-001_ses-2_task-EyesClosed_acq-pre_eeg.json",
+      "sha256": "47ca3eadcdbb1b8d1d740c48f7d00edaacd62b25be685c8aa6cfd9bb114a73f7"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:39:35 GMT",
+      "object_key": "ds005385/sub-001/ses-2/eeg/sub-001_ses-2_task-EyesClosed_acq-pre_events.json",
+      "relative_path": "sub-001/ses-2/eeg/sub-001_ses-2_task-EyesClosed_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:39:35 GMT",
+      "object_key": "ds005385/sub-001/ses-2/eeg/sub-001_ses-2_task-EyesClosed_acq-pre_events.tsv",
+      "relative_path": "sub-001/ses-2/eeg/sub-001_ses-2_task-EyesClosed_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:39:38 GMT",
+      "object_key": "ds005385/sub-001/ses-2/eeg/sub-001_ses-2_task-EyesOpen_acq-pre_channels.tsv",
+      "relative_path": "sub-001/ses-2/eeg/sub-001_ses-2_task-EyesOpen_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 24976896,
+      "downloaded": true,
+      "etag": "7b59be975cb1a9e7590b82bf4de820a5",
+      "last_modified": "Wed, 31 Jul 2024 06:39:39 GMT",
+      "object_key": "ds005385/sub-001/ses-2/eeg/sub-001_ses-2_task-EyesOpen_acq-pre_eeg.edf",
+      "relative_path": "sub-001/ses-2/eeg/sub-001_ses-2_task-EyesOpen_acq-pre_eeg.edf",
+      "sha256": "4836ed602a1028a7078cbc67532e1d8dd1817ac50d0b4f97719cff17565fd725"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "5745d0460cd608a70afbb5a78c3571a8",
+      "last_modified": "Wed, 31 Jul 2024 06:39:40 GMT",
+      "object_key": "ds005385/sub-001/ses-2/eeg/sub-001_ses-2_task-EyesOpen_acq-pre_eeg.json",
+      "relative_path": "sub-001/ses-2/eeg/sub-001_ses-2_task-EyesOpen_acq-pre_eeg.json",
+      "sha256": "d6f4dbf63da11aa5b43b321ce85f6816a1a4b98f027a7e65a027a9ddf77e615f"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:39:41 GMT",
+      "object_key": "ds005385/sub-001/ses-2/eeg/sub-001_ses-2_task-EyesOpen_acq-pre_events.json",
+      "relative_path": "sub-001/ses-2/eeg/sub-001_ses-2_task-EyesOpen_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:39:41 GMT",
+      "object_key": "ds005385/sub-001/ses-2/eeg/sub-001_ses-2_task-EyesOpen_acq-pre_events.tsv",
+      "relative_path": "sub-001/ses-2/eeg/sub-001_ses-2_task-EyesOpen_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 206,
+      "downloaded": true,
+      "etag": "b8f2bc17292c74a3e17c0816f452f4a9",
+      "last_modified": "Wed, 31 Jul 2024 06:39:41 GMT",
+      "object_key": "ds005385/sub-001/sub-001_sessions.json",
+      "relative_path": "sub-001/sub-001_sessions.json",
+      "sha256": "bbbc0bbebda663beecb66f74bbc4f254b539d10ef78a8d8e729e49c24717d08e"
+    },
+    {
+      "bytes": 48,
+      "downloaded": true,
+      "etag": "808ce6e06959d9096d525f78939599df",
+      "last_modified": "Wed, 31 Jul 2024 06:39:41 GMT",
+      "object_key": "ds005385/sub-001/sub-001_sessions.tsv",
+      "relative_path": "sub-001/sub-001_sessions.tsv",
+      "sha256": "3e685a8b0905bcad0a01afcd2b8f503a4a228ead0b01e5757b65f7cda5eac41e"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:43:36 GMT",
+      "object_key": "ds005385/sub-028/ses-1/eeg/sub-028_ses-1_task-EyesClosed_acq-pre_channels.tsv",
+      "relative_path": "sub-028/ses-1/eeg/sub-028_ses-1_task-EyesClosed_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 24976896,
+      "downloaded": true,
+      "etag": "0ea068cf5cbe26bc6f8c7b3bb8e9b925",
+      "last_modified": "Wed, 31 Jul 2024 06:43:36 GMT",
+      "object_key": "ds005385/sub-028/ses-1/eeg/sub-028_ses-1_task-EyesClosed_acq-pre_eeg.edf",
+      "relative_path": "sub-028/ses-1/eeg/sub-028_ses-1_task-EyesClosed_acq-pre_eeg.edf",
+      "sha256": "f66d2c4cefe1ea15e6820c997a2534bf9129d30194102995aa6d722a04acfdbb"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "5745d0460cd608a70afbb5a78c3571a8",
+      "last_modified": "Wed, 31 Jul 2024 06:43:37 GMT",
+      "object_key": "ds005385/sub-028/ses-1/eeg/sub-028_ses-1_task-EyesClosed_acq-pre_eeg.json",
+      "relative_path": "sub-028/ses-1/eeg/sub-028_ses-1_task-EyesClosed_acq-pre_eeg.json",
+      "sha256": "d6f4dbf63da11aa5b43b321ce85f6816a1a4b98f027a7e65a027a9ddf77e615f"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:43:37 GMT",
+      "object_key": "ds005385/sub-028/ses-1/eeg/sub-028_ses-1_task-EyesClosed_acq-pre_events.json",
+      "relative_path": "sub-028/ses-1/eeg/sub-028_ses-1_task-EyesClosed_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:43:37 GMT",
+      "object_key": "ds005385/sub-028/ses-1/eeg/sub-028_ses-1_task-EyesClosed_acq-pre_events.tsv",
+      "relative_path": "sub-028/ses-1/eeg/sub-028_ses-1_task-EyesClosed_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:43:40 GMT",
+      "object_key": "ds005385/sub-028/ses-1/eeg/sub-028_ses-1_task-EyesOpen_acq-pre_channels.tsv",
+      "relative_path": "sub-028/ses-1/eeg/sub-028_ses-1_task-EyesOpen_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 26276896,
+      "downloaded": true,
+      "etag": "da882e4c1ec3ed4fa0c1401d80f5192a",
+      "last_modified": "Wed, 31 Jul 2024 06:43:40 GMT",
+      "object_key": "ds005385/sub-028/ses-1/eeg/sub-028_ses-1_task-EyesOpen_acq-pre_eeg.edf",
+      "relative_path": "sub-028/ses-1/eeg/sub-028_ses-1_task-EyesOpen_acq-pre_eeg.edf",
+      "sha256": "8e61e6d26c60490fd7235c8cf541861ed06ec2d19ae4507b1b7399e111102241"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "ed4bff2d32d060f7271c2ea48be0b0dc",
+      "last_modified": "Wed, 31 Jul 2024 06:43:41 GMT",
+      "object_key": "ds005385/sub-028/ses-1/eeg/sub-028_ses-1_task-EyesOpen_acq-pre_eeg.json",
+      "relative_path": "sub-028/ses-1/eeg/sub-028_ses-1_task-EyesOpen_acq-pre_eeg.json",
+      "sha256": "e7b31975f1835f3b37eac6b53c4f5be2e64ea3c7b7836b578c95d438a92b0235"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:43:41 GMT",
+      "object_key": "ds005385/sub-028/ses-1/eeg/sub-028_ses-1_task-EyesOpen_acq-pre_events.json",
+      "relative_path": "sub-028/ses-1/eeg/sub-028_ses-1_task-EyesOpen_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:43:42 GMT",
+      "object_key": "ds005385/sub-028/ses-1/eeg/sub-028_ses-1_task-EyesOpen_acq-pre_events.tsv",
+      "relative_path": "sub-028/ses-1/eeg/sub-028_ses-1_task-EyesOpen_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:43:44 GMT",
+      "object_key": "ds005385/sub-028/ses-2/eeg/sub-028_ses-2_task-EyesClosed_acq-pre_channels.tsv",
+      "relative_path": "sub-028/ses-2/eeg/sub-028_ses-2_task-EyesClosed_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 24066896,
+      "downloaded": true,
+      "etag": "54e96b9567dfa23d991ff9f8edf23376",
+      "last_modified": "Wed, 31 Jul 2024 06:43:44 GMT",
+      "object_key": "ds005385/sub-028/ses-2/eeg/sub-028_ses-2_task-EyesClosed_acq-pre_eeg.edf",
+      "relative_path": "sub-028/ses-2/eeg/sub-028_ses-2_task-EyesClosed_acq-pre_eeg.edf",
+      "sha256": "8d40463fbfa99cdd89ecd2a909fd0215c8701b97f440f22bc0343f6b1085bcda"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "2d1ea974d98648d2ec5e023ab85d7501",
+      "last_modified": "Wed, 31 Jul 2024 06:43:45 GMT",
+      "object_key": "ds005385/sub-028/ses-2/eeg/sub-028_ses-2_task-EyesClosed_acq-pre_eeg.json",
+      "relative_path": "sub-028/ses-2/eeg/sub-028_ses-2_task-EyesClosed_acq-pre_eeg.json",
+      "sha256": "e018a6ad5845ef8c03db68044fb5bc496e309e7aaafa1d68142ee2cd799fe1df"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:43:45 GMT",
+      "object_key": "ds005385/sub-028/ses-2/eeg/sub-028_ses-2_task-EyesClosed_acq-pre_events.json",
+      "relative_path": "sub-028/ses-2/eeg/sub-028_ses-2_task-EyesClosed_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:43:45 GMT",
+      "object_key": "ds005385/sub-028/ses-2/eeg/sub-028_ses-2_task-EyesClosed_acq-pre_events.tsv",
+      "relative_path": "sub-028/ses-2/eeg/sub-028_ses-2_task-EyesClosed_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:43:48 GMT",
+      "object_key": "ds005385/sub-028/ses-2/eeg/sub-028_ses-2_task-EyesOpen_acq-pre_channels.tsv",
+      "relative_path": "sub-028/ses-2/eeg/sub-028_ses-2_task-EyesOpen_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 23936896,
+      "downloaded": true,
+      "etag": "0a0aef6671a5a2f44bdc231d53be14b3",
+      "last_modified": "Wed, 31 Jul 2024 06:43:48 GMT",
+      "object_key": "ds005385/sub-028/ses-2/eeg/sub-028_ses-2_task-EyesOpen_acq-pre_eeg.edf",
+      "relative_path": "sub-028/ses-2/eeg/sub-028_ses-2_task-EyesOpen_acq-pre_eeg.edf",
+      "sha256": "90f4cdd2c928743a0be15f1945b34019e4a3fc6f05887a1de3dddc5a08959192"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "2d1ea974d98648d2ec5e023ab85d7501",
+      "last_modified": "Wed, 31 Jul 2024 06:43:49 GMT",
+      "object_key": "ds005385/sub-028/ses-2/eeg/sub-028_ses-2_task-EyesOpen_acq-pre_eeg.json",
+      "relative_path": "sub-028/ses-2/eeg/sub-028_ses-2_task-EyesOpen_acq-pre_eeg.json",
+      "sha256": "e018a6ad5845ef8c03db68044fb5bc496e309e7aaafa1d68142ee2cd799fe1df"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:43:49 GMT",
+      "object_key": "ds005385/sub-028/ses-2/eeg/sub-028_ses-2_task-EyesOpen_acq-pre_events.json",
+      "relative_path": "sub-028/ses-2/eeg/sub-028_ses-2_task-EyesOpen_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:43:49 GMT",
+      "object_key": "ds005385/sub-028/ses-2/eeg/sub-028_ses-2_task-EyesOpen_acq-pre_events.tsv",
+      "relative_path": "sub-028/ses-2/eeg/sub-028_ses-2_task-EyesOpen_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 206,
+      "downloaded": true,
+      "etag": "b8f2bc17292c74a3e17c0816f452f4a9",
+      "last_modified": "Wed, 31 Jul 2024 06:43:49 GMT",
+      "object_key": "ds005385/sub-028/sub-028_sessions.json",
+      "relative_path": "sub-028/sub-028_sessions.json",
+      "sha256": "bbbc0bbebda663beecb66f74bbc4f254b539d10ef78a8d8e729e49c24717d08e"
+    },
+    {
+      "bytes": 48,
+      "downloaded": true,
+      "etag": "808ce6e06959d9096d525f78939599df",
+      "last_modified": "Wed, 31 Jul 2024 06:43:50 GMT",
+      "object_key": "ds005385/sub-028/sub-028_sessions.tsv",
+      "relative_path": "sub-028/sub-028_sessions.tsv",
+      "sha256": "3e685a8b0905bcad0a01afcd2b8f503a4a228ead0b01e5757b65f7cda5eac41e"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:44:26 GMT",
+      "object_key": "ds005385/sub-033/ses-1/eeg/sub-033_ses-1_task-EyesClosed_acq-pre_channels.tsv",
+      "relative_path": "sub-033/ses-1/eeg/sub-033_ses-1_task-EyesClosed_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 24066896,
+      "downloaded": true,
+      "etag": "2cd2a851ff8d64e47a2c30f8de779a0a",
+      "last_modified": "Wed, 31 Jul 2024 06:44:27 GMT",
+      "object_key": "ds005385/sub-033/ses-1/eeg/sub-033_ses-1_task-EyesClosed_acq-pre_eeg.edf",
+      "relative_path": "sub-033/ses-1/eeg/sub-033_ses-1_task-EyesClosed_acq-pre_eeg.edf",
+      "sha256": "40fbee796b5bd9154eddde4d3e2905dbbfab929fcef0fc9cfb22576a9a5ab42f"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "2d1ea974d98648d2ec5e023ab85d7501",
+      "last_modified": "Wed, 31 Jul 2024 06:44:27 GMT",
+      "object_key": "ds005385/sub-033/ses-1/eeg/sub-033_ses-1_task-EyesClosed_acq-pre_eeg.json",
+      "relative_path": "sub-033/ses-1/eeg/sub-033_ses-1_task-EyesClosed_acq-pre_eeg.json",
+      "sha256": "e018a6ad5845ef8c03db68044fb5bc496e309e7aaafa1d68142ee2cd799fe1df"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:44:28 GMT",
+      "object_key": "ds005385/sub-033/ses-1/eeg/sub-033_ses-1_task-EyesClosed_acq-pre_events.json",
+      "relative_path": "sub-033/ses-1/eeg/sub-033_ses-1_task-EyesClosed_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:44:28 GMT",
+      "object_key": "ds005385/sub-033/ses-1/eeg/sub-033_ses-1_task-EyesClosed_acq-pre_events.tsv",
+      "relative_path": "sub-033/ses-1/eeg/sub-033_ses-1_task-EyesClosed_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:44:30 GMT",
+      "object_key": "ds005385/sub-033/ses-1/eeg/sub-033_ses-1_task-EyesOpen_acq-pre_channels.tsv",
+      "relative_path": "sub-033/ses-1/eeg/sub-033_ses-1_task-EyesOpen_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 23806896,
+      "downloaded": true,
+      "etag": "fbbb908be0fc0d78401a5b0a7f4d372c",
+      "last_modified": "Wed, 31 Jul 2024 06:44:30 GMT",
+      "object_key": "ds005385/sub-033/ses-1/eeg/sub-033_ses-1_task-EyesOpen_acq-pre_eeg.edf",
+      "relative_path": "sub-033/ses-1/eeg/sub-033_ses-1_task-EyesOpen_acq-pre_eeg.edf",
+      "sha256": "976efbe4b9069e0491b55e599c77793124ceebad8a313b3563d67f0c879cf04f"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "19f86a7fc56e6c84882307bb481844b1",
+      "last_modified": "Wed, 31 Jul 2024 06:44:31 GMT",
+      "object_key": "ds005385/sub-033/ses-1/eeg/sub-033_ses-1_task-EyesOpen_acq-pre_eeg.json",
+      "relative_path": "sub-033/ses-1/eeg/sub-033_ses-1_task-EyesOpen_acq-pre_eeg.json",
+      "sha256": "46fb8c9afd77adbb808c6bc755cd7efb8d415a8f8ecc6458296a4b259acbdcfc"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:44:32 GMT",
+      "object_key": "ds005385/sub-033/ses-1/eeg/sub-033_ses-1_task-EyesOpen_acq-pre_events.json",
+      "relative_path": "sub-033/ses-1/eeg/sub-033_ses-1_task-EyesOpen_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:44:32 GMT",
+      "object_key": "ds005385/sub-033/ses-1/eeg/sub-033_ses-1_task-EyesOpen_acq-pre_events.tsv",
+      "relative_path": "sub-033/ses-1/eeg/sub-033_ses-1_task-EyesOpen_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:44:34 GMT",
+      "object_key": "ds005385/sub-033/ses-2/eeg/sub-033_ses-2_task-EyesClosed_acq-pre_channels.tsv",
+      "relative_path": "sub-033/ses-2/eeg/sub-033_ses-2_task-EyesClosed_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 24066896,
+      "downloaded": true,
+      "etag": "983954b766eee477df18843cf7dc1114",
+      "last_modified": "Wed, 31 Jul 2024 06:44:34 GMT",
+      "object_key": "ds005385/sub-033/ses-2/eeg/sub-033_ses-2_task-EyesClosed_acq-pre_eeg.edf",
+      "relative_path": "sub-033/ses-2/eeg/sub-033_ses-2_task-EyesClosed_acq-pre_eeg.edf",
+      "sha256": "c30ff4d873818059bd64a9566d8e8456f6cc4534a1adf2f0ceeb0fd817206548"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "1aeb2a826dc14ff8bad1e9886b353840",
+      "last_modified": "Wed, 31 Jul 2024 06:44:35 GMT",
+      "object_key": "ds005385/sub-033/ses-2/eeg/sub-033_ses-2_task-EyesClosed_acq-pre_eeg.json",
+      "relative_path": "sub-033/ses-2/eeg/sub-033_ses-2_task-EyesClosed_acq-pre_eeg.json",
+      "sha256": "a98d158f2fbab8239e37e3927f2a42c994d09aee45151fbbe80bb0f1f04c0ba1"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:44:35 GMT",
+      "object_key": "ds005385/sub-033/ses-2/eeg/sub-033_ses-2_task-EyesClosed_acq-pre_events.json",
+      "relative_path": "sub-033/ses-2/eeg/sub-033_ses-2_task-EyesClosed_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:44:36 GMT",
+      "object_key": "ds005385/sub-033/ses-2/eeg/sub-033_ses-2_task-EyesClosed_acq-pre_events.tsv",
+      "relative_path": "sub-033/ses-2/eeg/sub-033_ses-2_task-EyesClosed_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:44:39 GMT",
+      "object_key": "ds005385/sub-033/ses-2/eeg/sub-033_ses-2_task-EyesOpen_acq-pre_channels.tsv",
+      "relative_path": "sub-033/ses-2/eeg/sub-033_ses-2_task-EyesOpen_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 23936896,
+      "downloaded": true,
+      "etag": "ab22fa05ceab6b8d0555e79cd1f39a11",
+      "last_modified": "Wed, 31 Jul 2024 06:44:39 GMT",
+      "object_key": "ds005385/sub-033/ses-2/eeg/sub-033_ses-2_task-EyesOpen_acq-pre_eeg.edf",
+      "relative_path": "sub-033/ses-2/eeg/sub-033_ses-2_task-EyesOpen_acq-pre_eeg.edf",
+      "sha256": "51da7e267434fd610c537068c582ab8c76d3302f682f83b9b0f5e9883d63b040"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "2d1ea974d98648d2ec5e023ab85d7501",
+      "last_modified": "Wed, 31 Jul 2024 06:44:40 GMT",
+      "object_key": "ds005385/sub-033/ses-2/eeg/sub-033_ses-2_task-EyesOpen_acq-pre_eeg.json",
+      "relative_path": "sub-033/ses-2/eeg/sub-033_ses-2_task-EyesOpen_acq-pre_eeg.json",
+      "sha256": "e018a6ad5845ef8c03db68044fb5bc496e309e7aaafa1d68142ee2cd799fe1df"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:44:40 GMT",
+      "object_key": "ds005385/sub-033/ses-2/eeg/sub-033_ses-2_task-EyesOpen_acq-pre_events.json",
+      "relative_path": "sub-033/ses-2/eeg/sub-033_ses-2_task-EyesOpen_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:44:40 GMT",
+      "object_key": "ds005385/sub-033/ses-2/eeg/sub-033_ses-2_task-EyesOpen_acq-pre_events.tsv",
+      "relative_path": "sub-033/ses-2/eeg/sub-033_ses-2_task-EyesOpen_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 206,
+      "downloaded": true,
+      "etag": "b8f2bc17292c74a3e17c0816f452f4a9",
+      "last_modified": "Wed, 31 Jul 2024 06:44:40 GMT",
+      "object_key": "ds005385/sub-033/sub-033_sessions.json",
+      "relative_path": "sub-033/sub-033_sessions.json",
+      "sha256": "bbbc0bbebda663beecb66f74bbc4f254b539d10ef78a8d8e729e49c24717d08e"
+    },
+    {
+      "bytes": 48,
+      "downloaded": true,
+      "etag": "34da961fe335573275e198c63fdd784b",
+      "last_modified": "Wed, 31 Jul 2024 06:44:41 GMT",
+      "object_key": "ds005385/sub-033/sub-033_sessions.tsv",
+      "relative_path": "sub-033/sub-033_sessions.tsv",
+      "sha256": "4a5a4e8f9cd0cb4e4f634bfb25ed613e8033a22a846285582f60623d4c21a8e4"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:45:17 GMT",
+      "object_key": "ds005385/sub-038/ses-1/eeg/sub-038_ses-1_task-EyesClosed_acq-pre_channels.tsv",
+      "relative_path": "sub-038/ses-1/eeg/sub-038_ses-1_task-EyesClosed_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 23676896,
+      "downloaded": true,
+      "etag": "d87242ad0753844b4794cab74cc4bc74",
+      "last_modified": "Wed, 31 Jul 2024 06:45:18 GMT",
+      "object_key": "ds005385/sub-038/ses-1/eeg/sub-038_ses-1_task-EyesClosed_acq-pre_eeg.edf",
+      "relative_path": "sub-038/ses-1/eeg/sub-038_ses-1_task-EyesClosed_acq-pre_eeg.edf",
+      "sha256": "99ddf430737e366c6e9cd37e315ada457908e685eb09e3a1c26307d2985d3a56"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "a88988a682dcb6f97079dd493097cdc8",
+      "last_modified": "Wed, 31 Jul 2024 06:45:19 GMT",
+      "object_key": "ds005385/sub-038/ses-1/eeg/sub-038_ses-1_task-EyesClosed_acq-pre_eeg.json",
+      "relative_path": "sub-038/ses-1/eeg/sub-038_ses-1_task-EyesClosed_acq-pre_eeg.json",
+      "sha256": "47ca3eadcdbb1b8d1d740c48f7d00edaacd62b25be685c8aa6cfd9bb114a73f7"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:45:19 GMT",
+      "object_key": "ds005385/sub-038/ses-1/eeg/sub-038_ses-1_task-EyesClosed_acq-pre_events.json",
+      "relative_path": "sub-038/ses-1/eeg/sub-038_ses-1_task-EyesClosed_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 68,
+      "downloaded": true,
+      "etag": "67e167ab87c1c678ae16b2d10a03e3ee",
+      "last_modified": "Wed, 31 Jul 2024 06:45:19 GMT",
+      "object_key": "ds005385/sub-038/ses-1/eeg/sub-038_ses-1_task-EyesClosed_acq-pre_events.tsv",
+      "relative_path": "sub-038/ses-1/eeg/sub-038_ses-1_task-EyesClosed_acq-pre_events.tsv",
+      "sha256": "469c9bed2cf957d81be6d441a6cdd0e977d3597e0203743ba5b251cc3091e9f9"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:45:22 GMT",
+      "object_key": "ds005385/sub-038/ses-1/eeg/sub-038_ses-1_task-EyesOpen_acq-pre_channels.tsv",
+      "relative_path": "sub-038/ses-1/eeg/sub-038_ses-1_task-EyesOpen_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 23676896,
+      "downloaded": true,
+      "etag": "c27ae644e1c2ad7e4763f11f1d864a18",
+      "last_modified": "Wed, 31 Jul 2024 06:45:22 GMT",
+      "object_key": "ds005385/sub-038/ses-1/eeg/sub-038_ses-1_task-EyesOpen_acq-pre_eeg.edf",
+      "relative_path": "sub-038/ses-1/eeg/sub-038_ses-1_task-EyesOpen_acq-pre_eeg.edf",
+      "sha256": "05d8e1b9ca42ce90b3c8f1f983c19bd339636b7a4e861483f8827795814e89b1"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "c8dbd14a2096ff1973a3d40c8a043373",
+      "last_modified": "Wed, 31 Jul 2024 06:45:24 GMT",
+      "object_key": "ds005385/sub-038/ses-1/eeg/sub-038_ses-1_task-EyesOpen_acq-pre_eeg.json",
+      "relative_path": "sub-038/ses-1/eeg/sub-038_ses-1_task-EyesOpen_acq-pre_eeg.json",
+      "sha256": "a8eaefb2053ab066971a875e639575e2c8b886aceadbbfb5da1c3bb75c960b4c"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:45:24 GMT",
+      "object_key": "ds005385/sub-038/ses-1/eeg/sub-038_ses-1_task-EyesOpen_acq-pre_events.json",
+      "relative_path": "sub-038/ses-1/eeg/sub-038_ses-1_task-EyesOpen_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 68,
+      "downloaded": true,
+      "etag": "67e167ab87c1c678ae16b2d10a03e3ee",
+      "last_modified": "Wed, 31 Jul 2024 06:45:25 GMT",
+      "object_key": "ds005385/sub-038/ses-1/eeg/sub-038_ses-1_task-EyesOpen_acq-pre_events.tsv",
+      "relative_path": "sub-038/ses-1/eeg/sub-038_ses-1_task-EyesOpen_acq-pre_events.tsv",
+      "sha256": "469c9bed2cf957d81be6d441a6cdd0e977d3597e0203743ba5b251cc3091e9f9"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:45:28 GMT",
+      "object_key": "ds005385/sub-038/ses-2/eeg/sub-038_ses-2_task-EyesClosed_acq-pre_channels.tsv",
+      "relative_path": "sub-038/ses-2/eeg/sub-038_ses-2_task-EyesClosed_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 23806896,
+      "downloaded": true,
+      "etag": "01501b2bdcd3e9f2b61cd75634e84b9a",
+      "last_modified": "Wed, 31 Jul 2024 06:45:28 GMT",
+      "object_key": "ds005385/sub-038/ses-2/eeg/sub-038_ses-2_task-EyesClosed_acq-pre_eeg.edf",
+      "relative_path": "sub-038/ses-2/eeg/sub-038_ses-2_task-EyesClosed_acq-pre_eeg.edf",
+      "sha256": "3285959f2ad600dc2ab245c2ac33b29f55996937ec720e60425faec74b5799cf"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "c8dbd14a2096ff1973a3d40c8a043373",
+      "last_modified": "Wed, 31 Jul 2024 06:45:29 GMT",
+      "object_key": "ds005385/sub-038/ses-2/eeg/sub-038_ses-2_task-EyesClosed_acq-pre_eeg.json",
+      "relative_path": "sub-038/ses-2/eeg/sub-038_ses-2_task-EyesClosed_acq-pre_eeg.json",
+      "sha256": "a8eaefb2053ab066971a875e639575e2c8b886aceadbbfb5da1c3bb75c960b4c"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:45:30 GMT",
+      "object_key": "ds005385/sub-038/ses-2/eeg/sub-038_ses-2_task-EyesClosed_acq-pre_events.json",
+      "relative_path": "sub-038/ses-2/eeg/sub-038_ses-2_task-EyesClosed_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:45:30 GMT",
+      "object_key": "ds005385/sub-038/ses-2/eeg/sub-038_ses-2_task-EyesClosed_acq-pre_events.tsv",
+      "relative_path": "sub-038/ses-2/eeg/sub-038_ses-2_task-EyesClosed_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:45:33 GMT",
+      "object_key": "ds005385/sub-038/ses-2/eeg/sub-038_ses-2_task-EyesOpen_acq-pre_channels.tsv",
+      "relative_path": "sub-038/ses-2/eeg/sub-038_ses-2_task-EyesOpen_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 23806896,
+      "downloaded": true,
+      "etag": "1dc6180de51a72b74ebfec08b82d4da5",
+      "last_modified": "Wed, 31 Jul 2024 06:45:33 GMT",
+      "object_key": "ds005385/sub-038/ses-2/eeg/sub-038_ses-2_task-EyesOpen_acq-pre_eeg.edf",
+      "relative_path": "sub-038/ses-2/eeg/sub-038_ses-2_task-EyesOpen_acq-pre_eeg.edf",
+      "sha256": "bddea5d7e8077bc8c378761eab423e0eb8a55d76966df0905e4a9e4e45410326"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "19f86a7fc56e6c84882307bb481844b1",
+      "last_modified": "Wed, 31 Jul 2024 06:45:34 GMT",
+      "object_key": "ds005385/sub-038/ses-2/eeg/sub-038_ses-2_task-EyesOpen_acq-pre_eeg.json",
+      "relative_path": "sub-038/ses-2/eeg/sub-038_ses-2_task-EyesOpen_acq-pre_eeg.json",
+      "sha256": "46fb8c9afd77adbb808c6bc755cd7efb8d415a8f8ecc6458296a4b259acbdcfc"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:45:35 GMT",
+      "object_key": "ds005385/sub-038/ses-2/eeg/sub-038_ses-2_task-EyesOpen_acq-pre_events.json",
+      "relative_path": "sub-038/ses-2/eeg/sub-038_ses-2_task-EyesOpen_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:45:35 GMT",
+      "object_key": "ds005385/sub-038/ses-2/eeg/sub-038_ses-2_task-EyesOpen_acq-pre_events.tsv",
+      "relative_path": "sub-038/ses-2/eeg/sub-038_ses-2_task-EyesOpen_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 206,
+      "downloaded": true,
+      "etag": "b8f2bc17292c74a3e17c0816f452f4a9",
+      "last_modified": "Wed, 31 Jul 2024 06:45:35 GMT",
+      "object_key": "ds005385/sub-038/sub-038_sessions.json",
+      "relative_path": "sub-038/sub-038_sessions.json",
+      "sha256": "bbbc0bbebda663beecb66f74bbc4f254b539d10ef78a8d8e729e49c24717d08e"
+    },
+    {
+      "bytes": 48,
+      "downloaded": true,
+      "etag": "34da961fe335573275e198c63fdd784b",
+      "last_modified": "Wed, 31 Jul 2024 06:45:36 GMT",
+      "object_key": "ds005385/sub-038/sub-038_sessions.tsv",
+      "relative_path": "sub-038/sub-038_sessions.tsv",
+      "sha256": "4a5a4e8f9cd0cb4e4f634bfb25ed613e8033a22a846285582f60623d4c21a8e4"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:46:32 GMT",
+      "object_key": "ds005385/sub-044/ses-1/eeg/sub-044_ses-1_task-EyesClosed_acq-pre_channels.tsv",
+      "relative_path": "sub-044/ses-1/eeg/sub-044_ses-1_task-EyesClosed_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 24196896,
+      "downloaded": true,
+      "etag": "ebcc1cd85b8822e9e266cb185f49dd4b",
+      "last_modified": "Wed, 31 Jul 2024 06:46:33 GMT",
+      "object_key": "ds005385/sub-044/ses-1/eeg/sub-044_ses-1_task-EyesClosed_acq-pre_eeg.edf",
+      "relative_path": "sub-044/ses-1/eeg/sub-044_ses-1_task-EyesClosed_acq-pre_eeg.edf",
+      "sha256": "f388bf69d4ce051644a8f7b9dad57daf019bce0cf50c101d93fe075edb2d7458"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "c139979a57750dee89b5171410e20357",
+      "last_modified": "Wed, 31 Jul 2024 06:46:34 GMT",
+      "object_key": "ds005385/sub-044/ses-1/eeg/sub-044_ses-1_task-EyesClosed_acq-pre_eeg.json",
+      "relative_path": "sub-044/ses-1/eeg/sub-044_ses-1_task-EyesClosed_acq-pre_eeg.json",
+      "sha256": "19a796c323377868eaa54293da270cad21001c3846fba11bcf89f9542c8dd6a4"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:46:34 GMT",
+      "object_key": "ds005385/sub-044/ses-1/eeg/sub-044_ses-1_task-EyesClosed_acq-pre_events.json",
+      "relative_path": "sub-044/ses-1/eeg/sub-044_ses-1_task-EyesClosed_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:46:34 GMT",
+      "object_key": "ds005385/sub-044/ses-1/eeg/sub-044_ses-1_task-EyesClosed_acq-pre_events.tsv",
+      "relative_path": "sub-044/ses-1/eeg/sub-044_ses-1_task-EyesClosed_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:46:37 GMT",
+      "object_key": "ds005385/sub-044/ses-1/eeg/sub-044_ses-1_task-EyesOpen_acq-pre_channels.tsv",
+      "relative_path": "sub-044/ses-1/eeg/sub-044_ses-1_task-EyesOpen_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 24456896,
+      "downloaded": true,
+      "etag": "d75b8b040fc81981dda75fa145fce8db",
+      "last_modified": "Wed, 31 Jul 2024 06:46:37 GMT",
+      "object_key": "ds005385/sub-044/ses-1/eeg/sub-044_ses-1_task-EyesOpen_acq-pre_eeg.edf",
+      "relative_path": "sub-044/ses-1/eeg/sub-044_ses-1_task-EyesOpen_acq-pre_eeg.edf",
+      "sha256": "e074af2ab44a83bc74fe21f71a3d6f6711539d08de79d78cc187b6a9772cbfd6"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "87a45bc10c8f934823e170f68fae9769",
+      "last_modified": "Wed, 31 Jul 2024 06:46:38 GMT",
+      "object_key": "ds005385/sub-044/ses-1/eeg/sub-044_ses-1_task-EyesOpen_acq-pre_eeg.json",
+      "relative_path": "sub-044/ses-1/eeg/sub-044_ses-1_task-EyesOpen_acq-pre_eeg.json",
+      "sha256": "77ccf22ccfb6c7b50fe54ab5597cb231bd159e23ef0efb83bb41d96a51c08630"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:46:38 GMT",
+      "object_key": "ds005385/sub-044/ses-1/eeg/sub-044_ses-1_task-EyesOpen_acq-pre_events.json",
+      "relative_path": "sub-044/ses-1/eeg/sub-044_ses-1_task-EyesOpen_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:46:38 GMT",
+      "object_key": "ds005385/sub-044/ses-1/eeg/sub-044_ses-1_task-EyesOpen_acq-pre_events.tsv",
+      "relative_path": "sub-044/ses-1/eeg/sub-044_ses-1_task-EyesOpen_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:46:41 GMT",
+      "object_key": "ds005385/sub-044/ses-2/eeg/sub-044_ses-2_task-EyesClosed_acq-pre_channels.tsv",
+      "relative_path": "sub-044/ses-2/eeg/sub-044_ses-2_task-EyesClosed_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 23806896,
+      "downloaded": true,
+      "etag": "fdd02466800d7ae5d846f0f4fa3ea8bc",
+      "last_modified": "Wed, 31 Jul 2024 06:46:41 GMT",
+      "object_key": "ds005385/sub-044/ses-2/eeg/sub-044_ses-2_task-EyesClosed_acq-pre_eeg.edf",
+      "relative_path": "sub-044/ses-2/eeg/sub-044_ses-2_task-EyesClosed_acq-pre_eeg.edf",
+      "sha256": "c854ead06be18d43307aa14401206781e159c7f291a80ae41b2083fc54dca1b6"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "19f86a7fc56e6c84882307bb481844b1",
+      "last_modified": "Wed, 31 Jul 2024 06:46:42 GMT",
+      "object_key": "ds005385/sub-044/ses-2/eeg/sub-044_ses-2_task-EyesClosed_acq-pre_eeg.json",
+      "relative_path": "sub-044/ses-2/eeg/sub-044_ses-2_task-EyesClosed_acq-pre_eeg.json",
+      "sha256": "46fb8c9afd77adbb808c6bc755cd7efb8d415a8f8ecc6458296a4b259acbdcfc"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:46:42 GMT",
+      "object_key": "ds005385/sub-044/ses-2/eeg/sub-044_ses-2_task-EyesClosed_acq-pre_events.json",
+      "relative_path": "sub-044/ses-2/eeg/sub-044_ses-2_task-EyesClosed_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:46:42 GMT",
+      "object_key": "ds005385/sub-044/ses-2/eeg/sub-044_ses-2_task-EyesClosed_acq-pre_events.tsv",
+      "relative_path": "sub-044/ses-2/eeg/sub-044_ses-2_task-EyesClosed_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:46:45 GMT",
+      "object_key": "ds005385/sub-044/ses-2/eeg/sub-044_ses-2_task-EyesOpen_acq-pre_channels.tsv",
+      "relative_path": "sub-044/ses-2/eeg/sub-044_ses-2_task-EyesOpen_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 23936896,
+      "downloaded": true,
+      "etag": "5f695927c55a99567c2faf67feb2ff13",
+      "last_modified": "Wed, 31 Jul 2024 06:46:45 GMT",
+      "object_key": "ds005385/sub-044/ses-2/eeg/sub-044_ses-2_task-EyesOpen_acq-pre_eeg.edf",
+      "relative_path": "sub-044/ses-2/eeg/sub-044_ses-2_task-EyesOpen_acq-pre_eeg.edf",
+      "sha256": "c07a731d4fb898982f1466680af39deff16fc70f0da17326158969a7cf7e5a89"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "19f86a7fc56e6c84882307bb481844b1",
+      "last_modified": "Wed, 31 Jul 2024 06:46:46 GMT",
+      "object_key": "ds005385/sub-044/ses-2/eeg/sub-044_ses-2_task-EyesOpen_acq-pre_eeg.json",
+      "relative_path": "sub-044/ses-2/eeg/sub-044_ses-2_task-EyesOpen_acq-pre_eeg.json",
+      "sha256": "46fb8c9afd77adbb808c6bc755cd7efb8d415a8f8ecc6458296a4b259acbdcfc"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:46:47 GMT",
+      "object_key": "ds005385/sub-044/ses-2/eeg/sub-044_ses-2_task-EyesOpen_acq-pre_events.json",
+      "relative_path": "sub-044/ses-2/eeg/sub-044_ses-2_task-EyesOpen_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:46:47 GMT",
+      "object_key": "ds005385/sub-044/ses-2/eeg/sub-044_ses-2_task-EyesOpen_acq-pre_events.tsv",
+      "relative_path": "sub-044/ses-2/eeg/sub-044_ses-2_task-EyesOpen_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 206,
+      "downloaded": true,
+      "etag": "b8f2bc17292c74a3e17c0816f452f4a9",
+      "last_modified": "Wed, 31 Jul 2024 06:46:47 GMT",
+      "object_key": "ds005385/sub-044/sub-044_sessions.json",
+      "relative_path": "sub-044/sub-044_sessions.json",
+      "sha256": "bbbc0bbebda663beecb66f74bbc4f254b539d10ef78a8d8e729e49c24717d08e"
+    },
+    {
+      "bytes": 48,
+      "downloaded": true,
+      "etag": "e75b343853c0c7c9e32c761dc3636500",
+      "last_modified": "Wed, 31 Jul 2024 06:46:47 GMT",
+      "object_key": "ds005385/sub-044/sub-044_sessions.tsv",
+      "relative_path": "sub-044/sub-044_sessions.tsv",
+      "sha256": "d46deeae65b2455eecb08bb4241c7732d4fbf734f0bb8aa91932ac45e2e7b8ef"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:46:58 GMT",
+      "object_key": "ds005385/sub-046/ses-1/eeg/sub-046_ses-1_task-EyesClosed_acq-pre_channels.tsv",
+      "relative_path": "sub-046/ses-1/eeg/sub-046_ses-1_task-EyesClosed_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 23936896,
+      "downloaded": true,
+      "etag": "612f6daeefd565f37f00d7af790950e3",
+      "last_modified": "Wed, 31 Jul 2024 06:46:58 GMT",
+      "object_key": "ds005385/sub-046/ses-1/eeg/sub-046_ses-1_task-EyesClosed_acq-pre_eeg.edf",
+      "relative_path": "sub-046/ses-1/eeg/sub-046_ses-1_task-EyesClosed_acq-pre_eeg.edf",
+      "sha256": "6139c5ec9e44aef6f2052538e30caf1dc50428b3d8678edae09ab6a68b5a46e6"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "2d1ea974d98648d2ec5e023ab85d7501",
+      "last_modified": "Wed, 31 Jul 2024 06:46:59 GMT",
+      "object_key": "ds005385/sub-046/ses-1/eeg/sub-046_ses-1_task-EyesClosed_acq-pre_eeg.json",
+      "relative_path": "sub-046/ses-1/eeg/sub-046_ses-1_task-EyesClosed_acq-pre_eeg.json",
+      "sha256": "e018a6ad5845ef8c03db68044fb5bc496e309e7aaafa1d68142ee2cd799fe1df"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:46:59 GMT",
+      "object_key": "ds005385/sub-046/ses-1/eeg/sub-046_ses-1_task-EyesClosed_acq-pre_events.json",
+      "relative_path": "sub-046/ses-1/eeg/sub-046_ses-1_task-EyesClosed_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:47:00 GMT",
+      "object_key": "ds005385/sub-046/ses-1/eeg/sub-046_ses-1_task-EyesClosed_acq-pre_events.tsv",
+      "relative_path": "sub-046/ses-1/eeg/sub-046_ses-1_task-EyesClosed_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:47:02 GMT",
+      "object_key": "ds005385/sub-046/ses-1/eeg/sub-046_ses-1_task-EyesOpen_acq-pre_channels.tsv",
+      "relative_path": "sub-046/ses-1/eeg/sub-046_ses-1_task-EyesOpen_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 29656896,
+      "downloaded": true,
+      "etag": "dc6f21e25cf58c32b1dbc39ba7affd21",
+      "last_modified": "Wed, 31 Jul 2024 06:47:02 GMT",
+      "object_key": "ds005385/sub-046/ses-1/eeg/sub-046_ses-1_task-EyesOpen_acq-pre_eeg.edf",
+      "relative_path": "sub-046/ses-1/eeg/sub-046_ses-1_task-EyesOpen_acq-pre_eeg.edf",
+      "sha256": "149e21a9f5d93a4ea6260dc1c4a6894ebb3fb2439747254a6541f7233e4fe3d4"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "53c3cd8d60fee8ec01281142c952f077",
+      "last_modified": "Wed, 31 Jul 2024 06:47:03 GMT",
+      "object_key": "ds005385/sub-046/ses-1/eeg/sub-046_ses-1_task-EyesOpen_acq-pre_eeg.json",
+      "relative_path": "sub-046/ses-1/eeg/sub-046_ses-1_task-EyesOpen_acq-pre_eeg.json",
+      "sha256": "5d6805f9a467f4b06343c3091889f0aceb728a781bb5919085ebc30dd9375ac8"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:47:04 GMT",
+      "object_key": "ds005385/sub-046/ses-1/eeg/sub-046_ses-1_task-EyesOpen_acq-pre_events.json",
+      "relative_path": "sub-046/ses-1/eeg/sub-046_ses-1_task-EyesOpen_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:47:04 GMT",
+      "object_key": "ds005385/sub-046/ses-1/eeg/sub-046_ses-1_task-EyesOpen_acq-pre_events.tsv",
+      "relative_path": "sub-046/ses-1/eeg/sub-046_ses-1_task-EyesOpen_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:47:06 GMT",
+      "object_key": "ds005385/sub-046/ses-2/eeg/sub-046_ses-2_task-EyesClosed_acq-pre_channels.tsv",
+      "relative_path": "sub-046/ses-2/eeg/sub-046_ses-2_task-EyesClosed_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 26666896,
+      "downloaded": true,
+      "etag": "8167dd69091fcbf6c7789e215b8136e9",
+      "last_modified": "Wed, 31 Jul 2024 06:47:06 GMT",
+      "object_key": "ds005385/sub-046/ses-2/eeg/sub-046_ses-2_task-EyesClosed_acq-pre_eeg.edf",
+      "relative_path": "sub-046/ses-2/eeg/sub-046_ses-2_task-EyesClosed_acq-pre_eeg.edf",
+      "sha256": "bd7f2b1fc3fc39ce75def29d7d18c9605ec671146fa6c02c1a59d36371790f54"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "6ebe95a3ce65835ece36ce85b5dcba19",
+      "last_modified": "Wed, 31 Jul 2024 06:47:07 GMT",
+      "object_key": "ds005385/sub-046/ses-2/eeg/sub-046_ses-2_task-EyesClosed_acq-pre_eeg.json",
+      "relative_path": "sub-046/ses-2/eeg/sub-046_ses-2_task-EyesClosed_acq-pre_eeg.json",
+      "sha256": "94df8b207436b592095bee20b3d319578683bb5bfd0c8767144587ac6a744aad"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:47:08 GMT",
+      "object_key": "ds005385/sub-046/ses-2/eeg/sub-046_ses-2_task-EyesClosed_acq-pre_events.json",
+      "relative_path": "sub-046/ses-2/eeg/sub-046_ses-2_task-EyesClosed_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:47:08 GMT",
+      "object_key": "ds005385/sub-046/ses-2/eeg/sub-046_ses-2_task-EyesClosed_acq-pre_events.tsv",
+      "relative_path": "sub-046/ses-2/eeg/sub-046_ses-2_task-EyesClosed_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:47:10 GMT",
+      "object_key": "ds005385/sub-046/ses-2/eeg/sub-046_ses-2_task-EyesOpen_acq-pre_channels.tsv",
+      "relative_path": "sub-046/ses-2/eeg/sub-046_ses-2_task-EyesOpen_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 23936896,
+      "downloaded": true,
+      "etag": "4c3c26259e2d4a56bea21be91109c255",
+      "last_modified": "Wed, 31 Jul 2024 06:47:10 GMT",
+      "object_key": "ds005385/sub-046/ses-2/eeg/sub-046_ses-2_task-EyesOpen_acq-pre_eeg.edf",
+      "relative_path": "sub-046/ses-2/eeg/sub-046_ses-2_task-EyesOpen_acq-pre_eeg.edf",
+      "sha256": "bfacea779d9255867c557f5777768a5d6ebf5f97387da7189834e6d5a69c45f9"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "2d1ea974d98648d2ec5e023ab85d7501",
+      "last_modified": "Wed, 31 Jul 2024 06:47:11 GMT",
+      "object_key": "ds005385/sub-046/ses-2/eeg/sub-046_ses-2_task-EyesOpen_acq-pre_eeg.json",
+      "relative_path": "sub-046/ses-2/eeg/sub-046_ses-2_task-EyesOpen_acq-pre_eeg.json",
+      "sha256": "e018a6ad5845ef8c03db68044fb5bc496e309e7aaafa1d68142ee2cd799fe1df"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:47:11 GMT",
+      "object_key": "ds005385/sub-046/ses-2/eeg/sub-046_ses-2_task-EyesOpen_acq-pre_events.json",
+      "relative_path": "sub-046/ses-2/eeg/sub-046_ses-2_task-EyesOpen_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:47:12 GMT",
+      "object_key": "ds005385/sub-046/ses-2/eeg/sub-046_ses-2_task-EyesOpen_acq-pre_events.tsv",
+      "relative_path": "sub-046/ses-2/eeg/sub-046_ses-2_task-EyesOpen_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 206,
+      "downloaded": true,
+      "etag": "b8f2bc17292c74a3e17c0816f452f4a9",
+      "last_modified": "Wed, 31 Jul 2024 06:47:12 GMT",
+      "object_key": "ds005385/sub-046/sub-046_sessions.json",
+      "relative_path": "sub-046/sub-046_sessions.json",
+      "sha256": "bbbc0bbebda663beecb66f74bbc4f254b539d10ef78a8d8e729e49c24717d08e"
+    },
+    {
+      "bytes": 48,
+      "downloaded": true,
+      "etag": "896c3b4e08fd8828f54f0a9e16bd25c3",
+      "last_modified": "Wed, 31 Jul 2024 06:47:12 GMT",
+      "object_key": "ds005385/sub-046/sub-046_sessions.tsv",
+      "relative_path": "sub-046/sub-046_sessions.tsv",
+      "sha256": "0c63dc51c75933504a7b108f30b2327ba4a5f81418352abf3c5a68d054856fdf"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:47:15 GMT",
+      "object_key": "ds005385/sub-047/ses-1/eeg/sub-047_ses-1_task-EyesClosed_acq-pre_channels.tsv",
+      "relative_path": "sub-047/ses-1/eeg/sub-047_ses-1_task-EyesClosed_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 24456896,
+      "downloaded": true,
+      "etag": "c31c051492fae4720f0adaba44d7e3e7",
+      "last_modified": "Wed, 31 Jul 2024 06:47:15 GMT",
+      "object_key": "ds005385/sub-047/ses-1/eeg/sub-047_ses-1_task-EyesClosed_acq-pre_eeg.edf",
+      "relative_path": "sub-047/ses-1/eeg/sub-047_ses-1_task-EyesClosed_acq-pre_eeg.edf",
+      "sha256": "e4469fb7924502a35b9855d93ac0f8fe4650e338b4c5b2af2f4287c18ad5f209"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "87a45bc10c8f934823e170f68fae9769",
+      "last_modified": "Wed, 31 Jul 2024 06:47:16 GMT",
+      "object_key": "ds005385/sub-047/ses-1/eeg/sub-047_ses-1_task-EyesClosed_acq-pre_eeg.json",
+      "relative_path": "sub-047/ses-1/eeg/sub-047_ses-1_task-EyesClosed_acq-pre_eeg.json",
+      "sha256": "77ccf22ccfb6c7b50fe54ab5597cb231bd159e23ef0efb83bb41d96a51c08630"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:47:16 GMT",
+      "object_key": "ds005385/sub-047/ses-1/eeg/sub-047_ses-1_task-EyesClosed_acq-pre_events.json",
+      "relative_path": "sub-047/ses-1/eeg/sub-047_ses-1_task-EyesClosed_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:47:16 GMT",
+      "object_key": "ds005385/sub-047/ses-1/eeg/sub-047_ses-1_task-EyesClosed_acq-pre_events.tsv",
+      "relative_path": "sub-047/ses-1/eeg/sub-047_ses-1_task-EyesClosed_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:47:18 GMT",
+      "object_key": "ds005385/sub-047/ses-1/eeg/sub-047_ses-1_task-EyesOpen_acq-pre_channels.tsv",
+      "relative_path": "sub-047/ses-1/eeg/sub-047_ses-1_task-EyesOpen_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 24066896,
+      "downloaded": true,
+      "etag": "afbadef27b60b72ffd95386566244064",
+      "last_modified": "Wed, 31 Jul 2024 06:47:19 GMT",
+      "object_key": "ds005385/sub-047/ses-1/eeg/sub-047_ses-1_task-EyesOpen_acq-pre_eeg.edf",
+      "relative_path": "sub-047/ses-1/eeg/sub-047_ses-1_task-EyesOpen_acq-pre_eeg.edf",
+      "sha256": "4a0873fca3a4bc48640ae78d50279360c67d10a91ae50fc25a6614a168c4a6e8"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "1aeb2a826dc14ff8bad1e9886b353840",
+      "last_modified": "Wed, 31 Jul 2024 06:47:19 GMT",
+      "object_key": "ds005385/sub-047/ses-1/eeg/sub-047_ses-1_task-EyesOpen_acq-pre_eeg.json",
+      "relative_path": "sub-047/ses-1/eeg/sub-047_ses-1_task-EyesOpen_acq-pre_eeg.json",
+      "sha256": "a98d158f2fbab8239e37e3927f2a42c994d09aee45151fbbe80bb0f1f04c0ba1"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:47:20 GMT",
+      "object_key": "ds005385/sub-047/ses-1/eeg/sub-047_ses-1_task-EyesOpen_acq-pre_events.json",
+      "relative_path": "sub-047/ses-1/eeg/sub-047_ses-1_task-EyesOpen_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:47:20 GMT",
+      "object_key": "ds005385/sub-047/ses-1/eeg/sub-047_ses-1_task-EyesOpen_acq-pre_events.tsv",
+      "relative_path": "sub-047/ses-1/eeg/sub-047_ses-1_task-EyesOpen_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:47:23 GMT",
+      "object_key": "ds005385/sub-047/ses-2/eeg/sub-047_ses-2_task-EyesClosed_acq-pre_channels.tsv",
+      "relative_path": "sub-047/ses-2/eeg/sub-047_ses-2_task-EyesClosed_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 23806896,
+      "downloaded": true,
+      "etag": "03a30a7549607f296252223e35218117",
+      "last_modified": "Wed, 31 Jul 2024 06:47:23 GMT",
+      "object_key": "ds005385/sub-047/ses-2/eeg/sub-047_ses-2_task-EyesClosed_acq-pre_eeg.edf",
+      "relative_path": "sub-047/ses-2/eeg/sub-047_ses-2_task-EyesClosed_acq-pre_eeg.edf",
+      "sha256": "29c402e1399aaef33d3a31e6bf106a4ec5305c3be92f9482e083829999c3155c"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "19f86a7fc56e6c84882307bb481844b1",
+      "last_modified": "Wed, 31 Jul 2024 06:47:24 GMT",
+      "object_key": "ds005385/sub-047/ses-2/eeg/sub-047_ses-2_task-EyesClosed_acq-pre_eeg.json",
+      "relative_path": "sub-047/ses-2/eeg/sub-047_ses-2_task-EyesClosed_acq-pre_eeg.json",
+      "sha256": "46fb8c9afd77adbb808c6bc755cd7efb8d415a8f8ecc6458296a4b259acbdcfc"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:47:24 GMT",
+      "object_key": "ds005385/sub-047/ses-2/eeg/sub-047_ses-2_task-EyesClosed_acq-pre_events.json",
+      "relative_path": "sub-047/ses-2/eeg/sub-047_ses-2_task-EyesClosed_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:47:25 GMT",
+      "object_key": "ds005385/sub-047/ses-2/eeg/sub-047_ses-2_task-EyesClosed_acq-pre_events.tsv",
+      "relative_path": "sub-047/ses-2/eeg/sub-047_ses-2_task-EyesClosed_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:47:27 GMT",
+      "object_key": "ds005385/sub-047/ses-2/eeg/sub-047_ses-2_task-EyesOpen_acq-pre_channels.tsv",
+      "relative_path": "sub-047/ses-2/eeg/sub-047_ses-2_task-EyesOpen_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 24846896,
+      "downloaded": true,
+      "etag": "a124d775c0d99fda5d4857388c80ed63",
+      "last_modified": "Wed, 31 Jul 2024 06:47:27 GMT",
+      "object_key": "ds005385/sub-047/ses-2/eeg/sub-047_ses-2_task-EyesOpen_acq-pre_eeg.edf",
+      "relative_path": "sub-047/ses-2/eeg/sub-047_ses-2_task-EyesOpen_acq-pre_eeg.edf",
+      "sha256": "fcc1f0cf6ee64a95dc95cf2fa81cf6ec0c626f5002acbfb6b47b1b79cda85694"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "5745d0460cd608a70afbb5a78c3571a8",
+      "last_modified": "Wed, 31 Jul 2024 06:47:28 GMT",
+      "object_key": "ds005385/sub-047/ses-2/eeg/sub-047_ses-2_task-EyesOpen_acq-pre_eeg.json",
+      "relative_path": "sub-047/ses-2/eeg/sub-047_ses-2_task-EyesOpen_acq-pre_eeg.json",
+      "sha256": "d6f4dbf63da11aa5b43b321ce85f6816a1a4b98f027a7e65a027a9ddf77e615f"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:47:28 GMT",
+      "object_key": "ds005385/sub-047/ses-2/eeg/sub-047_ses-2_task-EyesOpen_acq-pre_events.json",
+      "relative_path": "sub-047/ses-2/eeg/sub-047_ses-2_task-EyesOpen_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:47:29 GMT",
+      "object_key": "ds005385/sub-047/ses-2/eeg/sub-047_ses-2_task-EyesOpen_acq-pre_events.tsv",
+      "relative_path": "sub-047/ses-2/eeg/sub-047_ses-2_task-EyesOpen_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 206,
+      "downloaded": true,
+      "etag": "b8f2bc17292c74a3e17c0816f452f4a9",
+      "last_modified": "Wed, 31 Jul 2024 06:47:29 GMT",
+      "object_key": "ds005385/sub-047/sub-047_sessions.json",
+      "relative_path": "sub-047/sub-047_sessions.json",
+      "sha256": "bbbc0bbebda663beecb66f74bbc4f254b539d10ef78a8d8e729e49c24717d08e"
+    },
+    {
+      "bytes": 48,
+      "downloaded": true,
+      "etag": "e75b343853c0c7c9e32c761dc3636500",
+      "last_modified": "Wed, 31 Jul 2024 06:47:29 GMT",
+      "object_key": "ds005385/sub-047/sub-047_sessions.tsv",
+      "relative_path": "sub-047/sub-047_sessions.tsv",
+      "sha256": "d46deeae65b2455eecb08bb4241c7732d4fbf734f0bb8aa91932ac45e2e7b8ef"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:48:12 GMT",
+      "object_key": "ds005385/sub-050/ses-1/eeg/sub-050_ses-1_task-EyesClosed_acq-pre_channels.tsv",
+      "relative_path": "sub-050/ses-1/eeg/sub-050_ses-1_task-EyesClosed_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 26146896,
+      "downloaded": true,
+      "etag": "e288710a042974dd0cdc177665ad0483",
+      "last_modified": "Wed, 31 Jul 2024 06:48:12 GMT",
+      "object_key": "ds005385/sub-050/ses-1/eeg/sub-050_ses-1_task-EyesClosed_acq-pre_eeg.edf",
+      "relative_path": "sub-050/ses-1/eeg/sub-050_ses-1_task-EyesClosed_acq-pre_eeg.edf",
+      "sha256": "654a2afe87a4c0f5af2b4ef6f6e6ca4a05e6a37c4beb7103f2de173bdae7c9ee"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "cd97630f225372ea47af81ed1e43d1bb",
+      "last_modified": "Wed, 31 Jul 2024 06:48:13 GMT",
+      "object_key": "ds005385/sub-050/ses-1/eeg/sub-050_ses-1_task-EyesClosed_acq-pre_eeg.json",
+      "relative_path": "sub-050/ses-1/eeg/sub-050_ses-1_task-EyesClosed_acq-pre_eeg.json",
+      "sha256": "4d25e3aea424728ddbb400e7f91c91b208168ac3fa4996586c283b63eb6f2c30"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:48:13 GMT",
+      "object_key": "ds005385/sub-050/ses-1/eeg/sub-050_ses-1_task-EyesClosed_acq-pre_events.json",
+      "relative_path": "sub-050/ses-1/eeg/sub-050_ses-1_task-EyesClosed_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:48:14 GMT",
+      "object_key": "ds005385/sub-050/ses-1/eeg/sub-050_ses-1_task-EyesClosed_acq-pre_events.tsv",
+      "relative_path": "sub-050/ses-1/eeg/sub-050_ses-1_task-EyesClosed_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:48:16 GMT",
+      "object_key": "ds005385/sub-050/ses-1/eeg/sub-050_ses-1_task-EyesOpen_acq-pre_channels.tsv",
+      "relative_path": "sub-050/ses-1/eeg/sub-050_ses-1_task-EyesOpen_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 24326896,
+      "downloaded": true,
+      "etag": "1603a7320e9595d0d0678df614061328",
+      "last_modified": "Wed, 31 Jul 2024 06:48:16 GMT",
+      "object_key": "ds005385/sub-050/ses-1/eeg/sub-050_ses-1_task-EyesOpen_acq-pre_eeg.edf",
+      "relative_path": "sub-050/ses-1/eeg/sub-050_ses-1_task-EyesOpen_acq-pre_eeg.edf",
+      "sha256": "4452b9cf7b4ccb9d0ee13cb9e0f1f404e3cc43f026b9f74835ffb70403ab2106"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "d33da31a1f7016df5cc59662d72cdf0c",
+      "last_modified": "Wed, 31 Jul 2024 06:48:17 GMT",
+      "object_key": "ds005385/sub-050/ses-1/eeg/sub-050_ses-1_task-EyesOpen_acq-pre_eeg.json",
+      "relative_path": "sub-050/ses-1/eeg/sub-050_ses-1_task-EyesOpen_acq-pre_eeg.json",
+      "sha256": "a00aa85bd96c2f83b458c107ec1801d3534a548eb2d72e5649d074bde037e7c2"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:48:17 GMT",
+      "object_key": "ds005385/sub-050/ses-1/eeg/sub-050_ses-1_task-EyesOpen_acq-pre_events.json",
+      "relative_path": "sub-050/ses-1/eeg/sub-050_ses-1_task-EyesOpen_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:48:17 GMT",
+      "object_key": "ds005385/sub-050/ses-1/eeg/sub-050_ses-1_task-EyesOpen_acq-pre_events.tsv",
+      "relative_path": "sub-050/ses-1/eeg/sub-050_ses-1_task-EyesOpen_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:48:20 GMT",
+      "object_key": "ds005385/sub-050/ses-2/eeg/sub-050_ses-2_task-EyesClosed_acq-pre_channels.tsv",
+      "relative_path": "sub-050/ses-2/eeg/sub-050_ses-2_task-EyesClosed_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 24066896,
+      "downloaded": true,
+      "etag": "86f66571602995975d1d9c8d2525651a",
+      "last_modified": "Wed, 31 Jul 2024 06:48:20 GMT",
+      "object_key": "ds005385/sub-050/ses-2/eeg/sub-050_ses-2_task-EyesClosed_acq-pre_eeg.edf",
+      "relative_path": "sub-050/ses-2/eeg/sub-050_ses-2_task-EyesClosed_acq-pre_eeg.edf",
+      "sha256": "10ed2e46ae80cbd6e3bffab1438e238ab030b4274754d09d2415a43e9dbb1b82"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "1aeb2a826dc14ff8bad1e9886b353840",
+      "last_modified": "Wed, 31 Jul 2024 06:48:21 GMT",
+      "object_key": "ds005385/sub-050/ses-2/eeg/sub-050_ses-2_task-EyesClosed_acq-pre_eeg.json",
+      "relative_path": "sub-050/ses-2/eeg/sub-050_ses-2_task-EyesClosed_acq-pre_eeg.json",
+      "sha256": "a98d158f2fbab8239e37e3927f2a42c994d09aee45151fbbe80bb0f1f04c0ba1"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:48:21 GMT",
+      "object_key": "ds005385/sub-050/ses-2/eeg/sub-050_ses-2_task-EyesClosed_acq-pre_events.json",
+      "relative_path": "sub-050/ses-2/eeg/sub-050_ses-2_task-EyesClosed_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:48:21 GMT",
+      "object_key": "ds005385/sub-050/ses-2/eeg/sub-050_ses-2_task-EyesClosed_acq-pre_events.tsv",
+      "relative_path": "sub-050/ses-2/eeg/sub-050_ses-2_task-EyesClosed_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:48:23 GMT",
+      "object_key": "ds005385/sub-050/ses-2/eeg/sub-050_ses-2_task-EyesOpen_acq-pre_channels.tsv",
+      "relative_path": "sub-050/ses-2/eeg/sub-050_ses-2_task-EyesOpen_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 23936896,
+      "downloaded": true,
+      "etag": "81a3bd4770716d0b69f6eb07ec0764eb",
+      "last_modified": "Wed, 31 Jul 2024 06:48:24 GMT",
+      "object_key": "ds005385/sub-050/ses-2/eeg/sub-050_ses-2_task-EyesOpen_acq-pre_eeg.edf",
+      "relative_path": "sub-050/ses-2/eeg/sub-050_ses-2_task-EyesOpen_acq-pre_eeg.edf",
+      "sha256": "1aea043aae429f286dcf74ee0ecb226337f7d6a1c553c186c9de4bbdf58a863b"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "19f86a7fc56e6c84882307bb481844b1",
+      "last_modified": "Wed, 31 Jul 2024 06:48:25 GMT",
+      "object_key": "ds005385/sub-050/ses-2/eeg/sub-050_ses-2_task-EyesOpen_acq-pre_eeg.json",
+      "relative_path": "sub-050/ses-2/eeg/sub-050_ses-2_task-EyesOpen_acq-pre_eeg.json",
+      "sha256": "46fb8c9afd77adbb808c6bc755cd7efb8d415a8f8ecc6458296a4b259acbdcfc"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:48:25 GMT",
+      "object_key": "ds005385/sub-050/ses-2/eeg/sub-050_ses-2_task-EyesOpen_acq-pre_events.json",
+      "relative_path": "sub-050/ses-2/eeg/sub-050_ses-2_task-EyesOpen_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:48:25 GMT",
+      "object_key": "ds005385/sub-050/ses-2/eeg/sub-050_ses-2_task-EyesOpen_acq-pre_events.tsv",
+      "relative_path": "sub-050/ses-2/eeg/sub-050_ses-2_task-EyesOpen_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 206,
+      "downloaded": true,
+      "etag": "b8f2bc17292c74a3e17c0816f452f4a9",
+      "last_modified": "Wed, 31 Jul 2024 06:48:25 GMT",
+      "object_key": "ds005385/sub-050/sub-050_sessions.json",
+      "relative_path": "sub-050/sub-050_sessions.json",
+      "sha256": "bbbc0bbebda663beecb66f74bbc4f254b539d10ef78a8d8e729e49c24717d08e"
+    },
+    {
+      "bytes": 48,
+      "downloaded": true,
+      "etag": "d59f6fa72642436d69ed52a906b58d1b",
+      "last_modified": "Wed, 31 Jul 2024 06:48:26 GMT",
+      "object_key": "ds005385/sub-050/sub-050_sessions.tsv",
+      "relative_path": "sub-050/sub-050_sessions.tsv",
+      "sha256": "b7b8c9c37a8af6a3c4d094e187b16f5417addf0aab6f1fe7147e6dd9d7e6fc04"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:49:02 GMT",
+      "object_key": "ds005385/sub-053/ses-1/eeg/sub-053_ses-1_task-EyesClosed_acq-pre_channels.tsv",
+      "relative_path": "sub-053/ses-1/eeg/sub-053_ses-1_task-EyesClosed_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 24196896,
+      "downloaded": true,
+      "etag": "db88206553e83660c4968d27677645c4",
+      "last_modified": "Wed, 31 Jul 2024 06:49:02 GMT",
+      "object_key": "ds005385/sub-053/ses-1/eeg/sub-053_ses-1_task-EyesClosed_acq-pre_eeg.edf",
+      "relative_path": "sub-053/ses-1/eeg/sub-053_ses-1_task-EyesClosed_acq-pre_eeg.edf",
+      "sha256": "86163d73e3343fd7ecb2e145e82efecb29ada97ac78525e4f841aba3c735f3a1"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "c139979a57750dee89b5171410e20357",
+      "last_modified": "Wed, 31 Jul 2024 06:49:03 GMT",
+      "object_key": "ds005385/sub-053/ses-1/eeg/sub-053_ses-1_task-EyesClosed_acq-pre_eeg.json",
+      "relative_path": "sub-053/ses-1/eeg/sub-053_ses-1_task-EyesClosed_acq-pre_eeg.json",
+      "sha256": "19a796c323377868eaa54293da270cad21001c3846fba11bcf89f9542c8dd6a4"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:49:03 GMT",
+      "object_key": "ds005385/sub-053/ses-1/eeg/sub-053_ses-1_task-EyesClosed_acq-pre_events.json",
+      "relative_path": "sub-053/ses-1/eeg/sub-053_ses-1_task-EyesClosed_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:49:04 GMT",
+      "object_key": "ds005385/sub-053/ses-1/eeg/sub-053_ses-1_task-EyesClosed_acq-pre_events.tsv",
+      "relative_path": "sub-053/ses-1/eeg/sub-053_ses-1_task-EyesClosed_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:49:06 GMT",
+      "object_key": "ds005385/sub-053/ses-1/eeg/sub-053_ses-1_task-EyesOpen_acq-pre_channels.tsv",
+      "relative_path": "sub-053/ses-1/eeg/sub-053_ses-1_task-EyesOpen_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 24196896,
+      "downloaded": true,
+      "etag": "586f00822d3e3094c352da07f782db68",
+      "last_modified": "Wed, 31 Jul 2024 06:49:06 GMT",
+      "object_key": "ds005385/sub-053/ses-1/eeg/sub-053_ses-1_task-EyesOpen_acq-pre_eeg.edf",
+      "relative_path": "sub-053/ses-1/eeg/sub-053_ses-1_task-EyesOpen_acq-pre_eeg.edf",
+      "sha256": "b6415a4d780c93e70e939d99056ff8e30ea80728476e828f2c98aa5b41815970"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "c139979a57750dee89b5171410e20357",
+      "last_modified": "Wed, 31 Jul 2024 06:49:07 GMT",
+      "object_key": "ds005385/sub-053/ses-1/eeg/sub-053_ses-1_task-EyesOpen_acq-pre_eeg.json",
+      "relative_path": "sub-053/ses-1/eeg/sub-053_ses-1_task-EyesOpen_acq-pre_eeg.json",
+      "sha256": "19a796c323377868eaa54293da270cad21001c3846fba11bcf89f9542c8dd6a4"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:49:07 GMT",
+      "object_key": "ds005385/sub-053/ses-1/eeg/sub-053_ses-1_task-EyesOpen_acq-pre_events.json",
+      "relative_path": "sub-053/ses-1/eeg/sub-053_ses-1_task-EyesOpen_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:49:08 GMT",
+      "object_key": "ds005385/sub-053/ses-1/eeg/sub-053_ses-1_task-EyesOpen_acq-pre_events.tsv",
+      "relative_path": "sub-053/ses-1/eeg/sub-053_ses-1_task-EyesOpen_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:49:11 GMT",
+      "object_key": "ds005385/sub-053/ses-2/eeg/sub-053_ses-2_task-EyesClosed_acq-pre_channels.tsv",
+      "relative_path": "sub-053/ses-2/eeg/sub-053_ses-2_task-EyesClosed_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 25496896,
+      "downloaded": true,
+      "etag": "967441072eb379f017ca68a0133ab055",
+      "last_modified": "Wed, 31 Jul 2024 06:49:11 GMT",
+      "object_key": "ds005385/sub-053/ses-2/eeg/sub-053_ses-2_task-EyesClosed_acq-pre_eeg.edf",
+      "relative_path": "sub-053/ses-2/eeg/sub-053_ses-2_task-EyesClosed_acq-pre_eeg.edf",
+      "sha256": "d6f21022150d6c4242dbd92b08739e5c085b697c1872934680689e32ff793f1f"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "f0704636114703e11483d606beec734f",
+      "last_modified": "Wed, 31 Jul 2024 06:49:12 GMT",
+      "object_key": "ds005385/sub-053/ses-2/eeg/sub-053_ses-2_task-EyesClosed_acq-pre_eeg.json",
+      "relative_path": "sub-053/ses-2/eeg/sub-053_ses-2_task-EyesClosed_acq-pre_eeg.json",
+      "sha256": "40109f47a006e98e3ef82064ea2194b96a378e74238ad2aca7f3a3a320908698"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:49:12 GMT",
+      "object_key": "ds005385/sub-053/ses-2/eeg/sub-053_ses-2_task-EyesClosed_acq-pre_events.json",
+      "relative_path": "sub-053/ses-2/eeg/sub-053_ses-2_task-EyesClosed_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:49:12 GMT",
+      "object_key": "ds005385/sub-053/ses-2/eeg/sub-053_ses-2_task-EyesClosed_acq-pre_events.tsv",
+      "relative_path": "sub-053/ses-2/eeg/sub-053_ses-2_task-EyesClosed_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:49:14 GMT",
+      "object_key": "ds005385/sub-053/ses-2/eeg/sub-053_ses-2_task-EyesOpen_acq-pre_channels.tsv",
+      "relative_path": "sub-053/ses-2/eeg/sub-053_ses-2_task-EyesOpen_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 24066896,
+      "downloaded": true,
+      "etag": "7f355e036697980a436401961c6fbc31",
+      "last_modified": "Wed, 31 Jul 2024 06:49:15 GMT",
+      "object_key": "ds005385/sub-053/ses-2/eeg/sub-053_ses-2_task-EyesOpen_acq-pre_eeg.edf",
+      "relative_path": "sub-053/ses-2/eeg/sub-053_ses-2_task-EyesOpen_acq-pre_eeg.edf",
+      "sha256": "9fe3f5ec5efe44b9932ebc91c8002bb7eea073b8cfb23671d0d4b9f506f72812"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "1aeb2a826dc14ff8bad1e9886b353840",
+      "last_modified": "Wed, 31 Jul 2024 06:49:16 GMT",
+      "object_key": "ds005385/sub-053/ses-2/eeg/sub-053_ses-2_task-EyesOpen_acq-pre_eeg.json",
+      "relative_path": "sub-053/ses-2/eeg/sub-053_ses-2_task-EyesOpen_acq-pre_eeg.json",
+      "sha256": "a98d158f2fbab8239e37e3927f2a42c994d09aee45151fbbe80bb0f1f04c0ba1"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:49:16 GMT",
+      "object_key": "ds005385/sub-053/ses-2/eeg/sub-053_ses-2_task-EyesOpen_acq-pre_events.json",
+      "relative_path": "sub-053/ses-2/eeg/sub-053_ses-2_task-EyesOpen_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:49:16 GMT",
+      "object_key": "ds005385/sub-053/ses-2/eeg/sub-053_ses-2_task-EyesOpen_acq-pre_events.tsv",
+      "relative_path": "sub-053/ses-2/eeg/sub-053_ses-2_task-EyesOpen_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 206,
+      "downloaded": true,
+      "etag": "b8f2bc17292c74a3e17c0816f452f4a9",
+      "last_modified": "Wed, 31 Jul 2024 06:49:16 GMT",
+      "object_key": "ds005385/sub-053/sub-053_sessions.json",
+      "relative_path": "sub-053/sub-053_sessions.json",
+      "sha256": "bbbc0bbebda663beecb66f74bbc4f254b539d10ef78a8d8e729e49c24717d08e"
+    },
+    {
+      "bytes": 48,
+      "downloaded": true,
+      "etag": "a77d183aee8514233912674e9a8959cd",
+      "last_modified": "Wed, 31 Jul 2024 06:49:17 GMT",
+      "object_key": "ds005385/sub-053/sub-053_sessions.tsv",
+      "relative_path": "sub-053/sub-053_sessions.tsv",
+      "sha256": "101d71b6701e4fe83607764f69e47d70aaf66e0ab0bcacec8492a3202627c45c"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:49:19 GMT",
+      "object_key": "ds005385/sub-054/ses-1/eeg/sub-054_ses-1_task-EyesClosed_acq-pre_channels.tsv",
+      "relative_path": "sub-054/ses-1/eeg/sub-054_ses-1_task-EyesClosed_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 23806896,
+      "downloaded": true,
+      "etag": "aa90e0031152141a2a9d7b62d4cb4278",
+      "last_modified": "Wed, 31 Jul 2024 06:49:19 GMT",
+      "object_key": "ds005385/sub-054/ses-1/eeg/sub-054_ses-1_task-EyesClosed_acq-pre_eeg.edf",
+      "relative_path": "sub-054/ses-1/eeg/sub-054_ses-1_task-EyesClosed_acq-pre_eeg.edf",
+      "sha256": "faa0801d56198b5c036da328b328753e31c03ed90df5a428be7c64a45165c86d"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "c8dbd14a2096ff1973a3d40c8a043373",
+      "last_modified": "Wed, 31 Jul 2024 06:49:20 GMT",
+      "object_key": "ds005385/sub-054/ses-1/eeg/sub-054_ses-1_task-EyesClosed_acq-pre_eeg.json",
+      "relative_path": "sub-054/ses-1/eeg/sub-054_ses-1_task-EyesClosed_acq-pre_eeg.json",
+      "sha256": "a8eaefb2053ab066971a875e639575e2c8b886aceadbbfb5da1c3bb75c960b4c"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:49:21 GMT",
+      "object_key": "ds005385/sub-054/ses-1/eeg/sub-054_ses-1_task-EyesClosed_acq-pre_events.json",
+      "relative_path": "sub-054/ses-1/eeg/sub-054_ses-1_task-EyesClosed_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:49:21 GMT",
+      "object_key": "ds005385/sub-054/ses-1/eeg/sub-054_ses-1_task-EyesClosed_acq-pre_events.tsv",
+      "relative_path": "sub-054/ses-1/eeg/sub-054_ses-1_task-EyesClosed_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:49:24 GMT",
+      "object_key": "ds005385/sub-054/ses-1/eeg/sub-054_ses-1_task-EyesOpen_acq-pre_channels.tsv",
+      "relative_path": "sub-054/ses-1/eeg/sub-054_ses-1_task-EyesOpen_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 24846896,
+      "downloaded": true,
+      "etag": "92401968cffc1bd5625c28f9aa89550b",
+      "last_modified": "Wed, 31 Jul 2024 06:49:24 GMT",
+      "object_key": "ds005385/sub-054/ses-1/eeg/sub-054_ses-1_task-EyesOpen_acq-pre_eeg.edf",
+      "relative_path": "sub-054/ses-1/eeg/sub-054_ses-1_task-EyesOpen_acq-pre_eeg.edf",
+      "sha256": "10dac1959444809d9f241c65322c36755eefa7a92277a20ef949a0e39701d099"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "3721c26022eabe1628d9589e55e50624",
+      "last_modified": "Wed, 31 Jul 2024 06:49:25 GMT",
+      "object_key": "ds005385/sub-054/ses-1/eeg/sub-054_ses-1_task-EyesOpen_acq-pre_eeg.json",
+      "relative_path": "sub-054/ses-1/eeg/sub-054_ses-1_task-EyesOpen_acq-pre_eeg.json",
+      "sha256": "18848021f684f3536958a8fe0aa6cb79ff06cf8bbb305b0577e576a8d3cb4a90"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:49:26 GMT",
+      "object_key": "ds005385/sub-054/ses-1/eeg/sub-054_ses-1_task-EyesOpen_acq-pre_events.json",
+      "relative_path": "sub-054/ses-1/eeg/sub-054_ses-1_task-EyesOpen_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:49:26 GMT",
+      "object_key": "ds005385/sub-054/ses-1/eeg/sub-054_ses-1_task-EyesOpen_acq-pre_events.tsv",
+      "relative_path": "sub-054/ses-1/eeg/sub-054_ses-1_task-EyesOpen_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:49:29 GMT",
+      "object_key": "ds005385/sub-054/ses-2/eeg/sub-054_ses-2_task-EyesClosed_acq-pre_channels.tsv",
+      "relative_path": "sub-054/ses-2/eeg/sub-054_ses-2_task-EyesClosed_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 23806896,
+      "downloaded": true,
+      "etag": "9981d48b47f0944fbc59747eaadd3a74",
+      "last_modified": "Wed, 31 Jul 2024 06:49:29 GMT",
+      "object_key": "ds005385/sub-054/ses-2/eeg/sub-054_ses-2_task-EyesClosed_acq-pre_eeg.edf",
+      "relative_path": "sub-054/ses-2/eeg/sub-054_ses-2_task-EyesClosed_acq-pre_eeg.edf",
+      "sha256": "7e0bd3308ccb14cbae86838ec8032d0bca7f52ef0cdeb7bb290ced8c6fdfa7b9"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "c8dbd14a2096ff1973a3d40c8a043373",
+      "last_modified": "Wed, 31 Jul 2024 06:49:31 GMT",
+      "object_key": "ds005385/sub-054/ses-2/eeg/sub-054_ses-2_task-EyesClosed_acq-pre_eeg.json",
+      "relative_path": "sub-054/ses-2/eeg/sub-054_ses-2_task-EyesClosed_acq-pre_eeg.json",
+      "sha256": "a8eaefb2053ab066971a875e639575e2c8b886aceadbbfb5da1c3bb75c960b4c"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:49:32 GMT",
+      "object_key": "ds005385/sub-054/ses-2/eeg/sub-054_ses-2_task-EyesClosed_acq-pre_events.json",
+      "relative_path": "sub-054/ses-2/eeg/sub-054_ses-2_task-EyesClosed_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:49:32 GMT",
+      "object_key": "ds005385/sub-054/ses-2/eeg/sub-054_ses-2_task-EyesClosed_acq-pre_events.tsv",
+      "relative_path": "sub-054/ses-2/eeg/sub-054_ses-2_task-EyesClosed_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:49:35 GMT",
+      "object_key": "ds005385/sub-054/ses-2/eeg/sub-054_ses-2_task-EyesOpen_acq-pre_channels.tsv",
+      "relative_path": "sub-054/ses-2/eeg/sub-054_ses-2_task-EyesOpen_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 23676896,
+      "downloaded": true,
+      "etag": "b6be3f3f6ae2e22d9ae925b714ea6f69",
+      "last_modified": "Wed, 31 Jul 2024 06:49:35 GMT",
+      "object_key": "ds005385/sub-054/ses-2/eeg/sub-054_ses-2_task-EyesOpen_acq-pre_eeg.edf",
+      "relative_path": "sub-054/ses-2/eeg/sub-054_ses-2_task-EyesOpen_acq-pre_eeg.edf",
+      "sha256": "8338894c6408265e859add99d4a49dfa75df295617d46704c2c3dd6dccf29b2b"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "a88988a682dcb6f97079dd493097cdc8",
+      "last_modified": "Wed, 31 Jul 2024 06:49:36 GMT",
+      "object_key": "ds005385/sub-054/ses-2/eeg/sub-054_ses-2_task-EyesOpen_acq-pre_eeg.json",
+      "relative_path": "sub-054/ses-2/eeg/sub-054_ses-2_task-EyesOpen_acq-pre_eeg.json",
+      "sha256": "47ca3eadcdbb1b8d1d740c48f7d00edaacd62b25be685c8aa6cfd9bb114a73f7"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:49:36 GMT",
+      "object_key": "ds005385/sub-054/ses-2/eeg/sub-054_ses-2_task-EyesOpen_acq-pre_events.json",
+      "relative_path": "sub-054/ses-2/eeg/sub-054_ses-2_task-EyesOpen_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:49:36 GMT",
+      "object_key": "ds005385/sub-054/ses-2/eeg/sub-054_ses-2_task-EyesOpen_acq-pre_events.tsv",
+      "relative_path": "sub-054/ses-2/eeg/sub-054_ses-2_task-EyesOpen_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 206,
+      "downloaded": true,
+      "etag": "b8f2bc17292c74a3e17c0816f452f4a9",
+      "last_modified": "Wed, 31 Jul 2024 06:49:36 GMT",
+      "object_key": "ds005385/sub-054/sub-054_sessions.json",
+      "relative_path": "sub-054/sub-054_sessions.json",
+      "sha256": "bbbc0bbebda663beecb66f74bbc4f254b539d10ef78a8d8e729e49c24717d08e"
+    },
+    {
+      "bytes": 48,
+      "downloaded": true,
+      "etag": "e75b343853c0c7c9e32c761dc3636500",
+      "last_modified": "Wed, 31 Jul 2024 06:49:37 GMT",
+      "object_key": "ds005385/sub-054/sub-054_sessions.tsv",
+      "relative_path": "sub-054/sub-054_sessions.tsv",
+      "sha256": "d46deeae65b2455eecb08bb4241c7732d4fbf734f0bb8aa91932ac45e2e7b8ef"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:50:29 GMT",
+      "object_key": "ds005385/sub-059/ses-1/eeg/sub-059_ses-1_task-EyesClosed_acq-pre_channels.tsv",
+      "relative_path": "sub-059/ses-1/eeg/sub-059_ses-1_task-EyesClosed_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 23936896,
+      "downloaded": true,
+      "etag": "7ce868c63d95527cc3f271710a1dcb8c",
+      "last_modified": "Wed, 31 Jul 2024 06:50:29 GMT",
+      "object_key": "ds005385/sub-059/ses-1/eeg/sub-059_ses-1_task-EyesClosed_acq-pre_eeg.edf",
+      "relative_path": "sub-059/ses-1/eeg/sub-059_ses-1_task-EyesClosed_acq-pre_eeg.edf",
+      "sha256": "fd3584a41e727420168372f88ed7a22081c778b9b3313e30e13c8d95ec342936"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "19f86a7fc56e6c84882307bb481844b1",
+      "last_modified": "Wed, 31 Jul 2024 06:50:30 GMT",
+      "object_key": "ds005385/sub-059/ses-1/eeg/sub-059_ses-1_task-EyesClosed_acq-pre_eeg.json",
+      "relative_path": "sub-059/ses-1/eeg/sub-059_ses-1_task-EyesClosed_acq-pre_eeg.json",
+      "sha256": "46fb8c9afd77adbb808c6bc755cd7efb8d415a8f8ecc6458296a4b259acbdcfc"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:50:31 GMT",
+      "object_key": "ds005385/sub-059/ses-1/eeg/sub-059_ses-1_task-EyesClosed_acq-pre_events.json",
+      "relative_path": "sub-059/ses-1/eeg/sub-059_ses-1_task-EyesClosed_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:50:31 GMT",
+      "object_key": "ds005385/sub-059/ses-1/eeg/sub-059_ses-1_task-EyesClosed_acq-pre_events.tsv",
+      "relative_path": "sub-059/ses-1/eeg/sub-059_ses-1_task-EyesClosed_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:50:33 GMT",
+      "object_key": "ds005385/sub-059/ses-1/eeg/sub-059_ses-1_task-EyesOpen_acq-pre_channels.tsv",
+      "relative_path": "sub-059/ses-1/eeg/sub-059_ses-1_task-EyesOpen_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 24066896,
+      "downloaded": true,
+      "etag": "aaff873eef23e2ace88abf879b86a744",
+      "last_modified": "Wed, 31 Jul 2024 06:50:33 GMT",
+      "object_key": "ds005385/sub-059/ses-1/eeg/sub-059_ses-1_task-EyesOpen_acq-pre_eeg.edf",
+      "relative_path": "sub-059/ses-1/eeg/sub-059_ses-1_task-EyesOpen_acq-pre_eeg.edf",
+      "sha256": "4628c3eb01f2622e14afb5c2abb8b342458c70e0b5943edf8e87947970f6c3b8"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "2d1ea974d98648d2ec5e023ab85d7501",
+      "last_modified": "Wed, 31 Jul 2024 06:50:34 GMT",
+      "object_key": "ds005385/sub-059/ses-1/eeg/sub-059_ses-1_task-EyesOpen_acq-pre_eeg.json",
+      "relative_path": "sub-059/ses-1/eeg/sub-059_ses-1_task-EyesOpen_acq-pre_eeg.json",
+      "sha256": "e018a6ad5845ef8c03db68044fb5bc496e309e7aaafa1d68142ee2cd799fe1df"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:50:35 GMT",
+      "object_key": "ds005385/sub-059/ses-1/eeg/sub-059_ses-1_task-EyesOpen_acq-pre_events.json",
+      "relative_path": "sub-059/ses-1/eeg/sub-059_ses-1_task-EyesOpen_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:50:35 GMT",
+      "object_key": "ds005385/sub-059/ses-1/eeg/sub-059_ses-1_task-EyesOpen_acq-pre_events.tsv",
+      "relative_path": "sub-059/ses-1/eeg/sub-059_ses-1_task-EyesOpen_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:50:37 GMT",
+      "object_key": "ds005385/sub-059/ses-2/eeg/sub-059_ses-2_task-EyesClosed_acq-pre_channels.tsv",
+      "relative_path": "sub-059/ses-2/eeg/sub-059_ses-2_task-EyesClosed_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 23936896,
+      "downloaded": true,
+      "etag": "ecf7b1084d159f389b041bdcbd4a3763",
+      "last_modified": "Wed, 31 Jul 2024 06:50:37 GMT",
+      "object_key": "ds005385/sub-059/ses-2/eeg/sub-059_ses-2_task-EyesClosed_acq-pre_eeg.edf",
+      "relative_path": "sub-059/ses-2/eeg/sub-059_ses-2_task-EyesClosed_acq-pre_eeg.edf",
+      "sha256": "8e1e75bb6c4839681054e2a0a190a5bdc3d8a02091cb3066f414fd88f6d6633c"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "19f86a7fc56e6c84882307bb481844b1",
+      "last_modified": "Wed, 31 Jul 2024 06:50:38 GMT",
+      "object_key": "ds005385/sub-059/ses-2/eeg/sub-059_ses-2_task-EyesClosed_acq-pre_eeg.json",
+      "relative_path": "sub-059/ses-2/eeg/sub-059_ses-2_task-EyesClosed_acq-pre_eeg.json",
+      "sha256": "46fb8c9afd77adbb808c6bc755cd7efb8d415a8f8ecc6458296a4b259acbdcfc"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:50:39 GMT",
+      "object_key": "ds005385/sub-059/ses-2/eeg/sub-059_ses-2_task-EyesClosed_acq-pre_events.json",
+      "relative_path": "sub-059/ses-2/eeg/sub-059_ses-2_task-EyesClosed_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:50:39 GMT",
+      "object_key": "ds005385/sub-059/ses-2/eeg/sub-059_ses-2_task-EyesClosed_acq-pre_events.tsv",
+      "relative_path": "sub-059/ses-2/eeg/sub-059_ses-2_task-EyesClosed_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:50:41 GMT",
+      "object_key": "ds005385/sub-059/ses-2/eeg/sub-059_ses-2_task-EyesOpen_acq-pre_channels.tsv",
+      "relative_path": "sub-059/ses-2/eeg/sub-059_ses-2_task-EyesOpen_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 23676896,
+      "downloaded": true,
+      "etag": "34111d84f30e05620db14f7483b18fa2",
+      "last_modified": "Wed, 31 Jul 2024 06:50:41 GMT",
+      "object_key": "ds005385/sub-059/ses-2/eeg/sub-059_ses-2_task-EyesOpen_acq-pre_eeg.edf",
+      "relative_path": "sub-059/ses-2/eeg/sub-059_ses-2_task-EyesOpen_acq-pre_eeg.edf",
+      "sha256": "6299d4272abbce1c14e3db23a99e0d70e0d3a134ceb1afc941a62356f60f86e7"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "c8dbd14a2096ff1973a3d40c8a043373",
+      "last_modified": "Wed, 31 Jul 2024 06:50:42 GMT",
+      "object_key": "ds005385/sub-059/ses-2/eeg/sub-059_ses-2_task-EyesOpen_acq-pre_eeg.json",
+      "relative_path": "sub-059/ses-2/eeg/sub-059_ses-2_task-EyesOpen_acq-pre_eeg.json",
+      "sha256": "a8eaefb2053ab066971a875e639575e2c8b886aceadbbfb5da1c3bb75c960b4c"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:50:43 GMT",
+      "object_key": "ds005385/sub-059/ses-2/eeg/sub-059_ses-2_task-EyesOpen_acq-pre_events.json",
+      "relative_path": "sub-059/ses-2/eeg/sub-059_ses-2_task-EyesOpen_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:50:43 GMT",
+      "object_key": "ds005385/sub-059/ses-2/eeg/sub-059_ses-2_task-EyesOpen_acq-pre_events.tsv",
+      "relative_path": "sub-059/ses-2/eeg/sub-059_ses-2_task-EyesOpen_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 206,
+      "downloaded": true,
+      "etag": "b8f2bc17292c74a3e17c0816f452f4a9",
+      "last_modified": "Wed, 31 Jul 2024 06:50:43 GMT",
+      "object_key": "ds005385/sub-059/sub-059_sessions.json",
+      "relative_path": "sub-059/sub-059_sessions.json",
+      "sha256": "bbbc0bbebda663beecb66f74bbc4f254b539d10ef78a8d8e729e49c24717d08e"
+    },
+    {
+      "bytes": 48,
+      "downloaded": true,
+      "etag": "e75b343853c0c7c9e32c761dc3636500",
+      "last_modified": "Wed, 31 Jul 2024 06:50:43 GMT",
+      "object_key": "ds005385/sub-059/sub-059_sessions.tsv",
+      "relative_path": "sub-059/sub-059_sessions.tsv",
+      "sha256": "d46deeae65b2455eecb08bb4241c7732d4fbf734f0bb8aa91932ac45e2e7b8ef"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:52:47 GMT",
+      "object_key": "ds005385/sub-073/ses-1/eeg/sub-073_ses-1_task-EyesClosed_acq-pre_channels.tsv",
+      "relative_path": "sub-073/ses-1/eeg/sub-073_ses-1_task-EyesClosed_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 23936896,
+      "downloaded": true,
+      "etag": "ddbee75dcdd4740d1fefcb4564dea4c1",
+      "last_modified": "Wed, 31 Jul 2024 06:52:48 GMT",
+      "object_key": "ds005385/sub-073/ses-1/eeg/sub-073_ses-1_task-EyesClosed_acq-pre_eeg.edf",
+      "relative_path": "sub-073/ses-1/eeg/sub-073_ses-1_task-EyesClosed_acq-pre_eeg.edf",
+      "sha256": "52a0adcc3ba719cff34267cfd8f8eecaf76e4016ab50f307ec1253083f71bd76"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "2d1ea974d98648d2ec5e023ab85d7501",
+      "last_modified": "Wed, 31 Jul 2024 06:52:48 GMT",
+      "object_key": "ds005385/sub-073/ses-1/eeg/sub-073_ses-1_task-EyesClosed_acq-pre_eeg.json",
+      "relative_path": "sub-073/ses-1/eeg/sub-073_ses-1_task-EyesClosed_acq-pre_eeg.json",
+      "sha256": "e018a6ad5845ef8c03db68044fb5bc496e309e7aaafa1d68142ee2cd799fe1df"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:52:49 GMT",
+      "object_key": "ds005385/sub-073/ses-1/eeg/sub-073_ses-1_task-EyesClosed_acq-pre_events.json",
+      "relative_path": "sub-073/ses-1/eeg/sub-073_ses-1_task-EyesClosed_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:52:49 GMT",
+      "object_key": "ds005385/sub-073/ses-1/eeg/sub-073_ses-1_task-EyesClosed_acq-pre_events.tsv",
+      "relative_path": "sub-073/ses-1/eeg/sub-073_ses-1_task-EyesClosed_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:52:51 GMT",
+      "object_key": "ds005385/sub-073/ses-1/eeg/sub-073_ses-1_task-EyesOpen_acq-pre_channels.tsv",
+      "relative_path": "sub-073/ses-1/eeg/sub-073_ses-1_task-EyesOpen_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 24196896,
+      "downloaded": true,
+      "etag": "6d3c34eb98fe8da7e5e90773227f19bd",
+      "last_modified": "Wed, 31 Jul 2024 06:52:51 GMT",
+      "object_key": "ds005385/sub-073/ses-1/eeg/sub-073_ses-1_task-EyesOpen_acq-pre_eeg.edf",
+      "relative_path": "sub-073/ses-1/eeg/sub-073_ses-1_task-EyesOpen_acq-pre_eeg.edf",
+      "sha256": "ff5ae4c468a216b6a31b939b48fc9171b9ad16b3434ca5056dff46df49a82ee3"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "1aeb2a826dc14ff8bad1e9886b353840",
+      "last_modified": "Wed, 31 Jul 2024 06:52:52 GMT",
+      "object_key": "ds005385/sub-073/ses-1/eeg/sub-073_ses-1_task-EyesOpen_acq-pre_eeg.json",
+      "relative_path": "sub-073/ses-1/eeg/sub-073_ses-1_task-EyesOpen_acq-pre_eeg.json",
+      "sha256": "a98d158f2fbab8239e37e3927f2a42c994d09aee45151fbbe80bb0f1f04c0ba1"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:52:53 GMT",
+      "object_key": "ds005385/sub-073/ses-1/eeg/sub-073_ses-1_task-EyesOpen_acq-pre_events.json",
+      "relative_path": "sub-073/ses-1/eeg/sub-073_ses-1_task-EyesOpen_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:52:53 GMT",
+      "object_key": "ds005385/sub-073/ses-1/eeg/sub-073_ses-1_task-EyesOpen_acq-pre_events.tsv",
+      "relative_path": "sub-073/ses-1/eeg/sub-073_ses-1_task-EyesOpen_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:52:55 GMT",
+      "object_key": "ds005385/sub-073/ses-2/eeg/sub-073_ses-2_task-EyesClosed_acq-pre_channels.tsv",
+      "relative_path": "sub-073/ses-2/eeg/sub-073_ses-2_task-EyesClosed_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 24456896,
+      "downloaded": true,
+      "etag": "00fb7d182f934999aedffb4cde48ebf5",
+      "last_modified": "Wed, 31 Jul 2024 06:52:55 GMT",
+      "object_key": "ds005385/sub-073/ses-2/eeg/sub-073_ses-2_task-EyesClosed_acq-pre_eeg.edf",
+      "relative_path": "sub-073/ses-2/eeg/sub-073_ses-2_task-EyesClosed_acq-pre_eeg.edf",
+      "sha256": "851da51b3b9baa8cab3b4b471ba4d1551086da15898a6456b16d8a0eaf6edb6e"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "87a45bc10c8f934823e170f68fae9769",
+      "last_modified": "Wed, 31 Jul 2024 06:52:56 GMT",
+      "object_key": "ds005385/sub-073/ses-2/eeg/sub-073_ses-2_task-EyesClosed_acq-pre_eeg.json",
+      "relative_path": "sub-073/ses-2/eeg/sub-073_ses-2_task-EyesClosed_acq-pre_eeg.json",
+      "sha256": "77ccf22ccfb6c7b50fe54ab5597cb231bd159e23ef0efb83bb41d96a51c08630"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:52:56 GMT",
+      "object_key": "ds005385/sub-073/ses-2/eeg/sub-073_ses-2_task-EyesClosed_acq-pre_events.json",
+      "relative_path": "sub-073/ses-2/eeg/sub-073_ses-2_task-EyesClosed_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:52:57 GMT",
+      "object_key": "ds005385/sub-073/ses-2/eeg/sub-073_ses-2_task-EyesClosed_acq-pre_events.tsv",
+      "relative_path": "sub-073/ses-2/eeg/sub-073_ses-2_task-EyesClosed_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 1228,
+      "downloaded": true,
+      "etag": "9f8b4daf129c6da057dd1d001c97faf9",
+      "last_modified": "Wed, 31 Jul 2024 06:52:59 GMT",
+      "object_key": "ds005385/sub-073/ses-2/eeg/sub-073_ses-2_task-EyesOpen_acq-pre_channels.tsv",
+      "relative_path": "sub-073/ses-2/eeg/sub-073_ses-2_task-EyesOpen_acq-pre_channels.tsv",
+      "sha256": "ba4ce6af865979008b4d46ed29b89e5f0096502e627b885af874d76d36cfab99"
+    },
+    {
+      "bytes": 24456896,
+      "downloaded": true,
+      "etag": "eb13a20be61e80a967350723bad50476",
+      "last_modified": "Wed, 31 Jul 2024 06:52:59 GMT",
+      "object_key": "ds005385/sub-073/ses-2/eeg/sub-073_ses-2_task-EyesOpen_acq-pre_eeg.edf",
+      "relative_path": "sub-073/ses-2/eeg/sub-073_ses-2_task-EyesOpen_acq-pre_eeg.edf",
+      "sha256": "80cb283954297340cb7245522949fa22d04439049611813cda911f892523d4a3"
+    },
+    {
+      "bytes": 1087,
+      "downloaded": true,
+      "etag": "d33da31a1f7016df5cc59662d72cdf0c",
+      "last_modified": "Wed, 31 Jul 2024 06:53:00 GMT",
+      "object_key": "ds005385/sub-073/ses-2/eeg/sub-073_ses-2_task-EyesOpen_acq-pre_eeg.json",
+      "relative_path": "sub-073/ses-2/eeg/sub-073_ses-2_task-EyesOpen_acq-pre_eeg.json",
+      "sha256": "a00aa85bd96c2f83b458c107ec1801d3534a548eb2d72e5649d074bde037e7c2"
+    },
+    {
+      "bytes": 237,
+      "downloaded": true,
+      "etag": "d32ee5cd5adf4b8d4aacc928e0329bb8",
+      "last_modified": "Wed, 31 Jul 2024 06:53:00 GMT",
+      "object_key": "ds005385/sub-073/ses-2/eeg/sub-073_ses-2_task-EyesOpen_acq-pre_events.json",
+      "relative_path": "sub-073/ses-2/eeg/sub-073_ses-2_task-EyesOpen_acq-pre_events.json",
+      "sha256": "ca0cb920ae27339ced5f483b9e7ac608db3de86639e70ed6224e8f47c4c6cad1"
+    },
+    {
+      "bytes": 35,
+      "downloaded": true,
+      "etag": "b208098d27dee50997b33275b2d84b9c",
+      "last_modified": "Wed, 31 Jul 2024 06:53:01 GMT",
+      "object_key": "ds005385/sub-073/ses-2/eeg/sub-073_ses-2_task-EyesOpen_acq-pre_events.tsv",
+      "relative_path": "sub-073/ses-2/eeg/sub-073_ses-2_task-EyesOpen_acq-pre_events.tsv",
+      "sha256": "0cc3a5d93b8ff4f026acdac9d855d9479185e91931374dc2140abbe01dc988a1"
+    },
+    {
+      "bytes": 206,
+      "downloaded": true,
+      "etag": "b8f2bc17292c74a3e17c0816f452f4a9",
+      "last_modified": "Wed, 31 Jul 2024 06:53:01 GMT",
+      "object_key": "ds005385/sub-073/sub-073_sessions.json",
+      "relative_path": "sub-073/sub-073_sessions.json",
+      "sha256": "bbbc0bbebda663beecb66f74bbc4f254b539d10ef78a8d8e729e49c24717d08e"
+    },
+    {
+      "bytes": 48,
+      "downloaded": true,
+      "etag": "34da961fe335573275e198c63fdd784b",
+      "last_modified": "Wed, 31 Jul 2024 06:53:01 GMT",
+      "object_key": "ds005385/sub-073/sub-073_sessions.tsv",
+      "relative_path": "sub-073/sub-073_sessions.tsv",
+      "sha256": "4a5a4e8f9cd0cb4e4f634bfb25ed613e8033a22a846285582f60623d4c21a8e4"
+    }
+  ],
+  "schema_version": 1,
+  "subject_metadata": [
+    {
+      "age": 60,
+      "handedness": "right",
+      "late_ses1": 0,
+      "late_ses2": 0.0,
+      "participant_id": "sub-001",
+      "session1": "yes",
+      "session2": "yes",
+      "sex": "F"
+    },
+    {
+      "age": 48,
+      "handedness": "right",
+      "late_ses1": 0,
+      "late_ses2": 0.0,
+      "participant_id": "sub-028",
+      "session1": "yes",
+      "session2": "yes",
+      "sex": "M"
+    },
+    {
+      "age": 32,
+      "handedness": "right",
+      "late_ses1": 0,
+      "late_ses2": 0.0,
+      "participant_id": "sub-033",
+      "session1": "yes",
+      "session2": "yes",
+      "sex": "M"
+    },
+    {
+      "age": 49,
+      "handedness": "right",
+      "late_ses1": 0,
+      "late_ses2": 0.0,
+      "participant_id": "sub-038",
+      "session1": "yes",
+      "session2": "yes",
+      "sex": "M"
+    },
+    {
+      "age": 27,
+      "handedness": "right",
+      "late_ses1": 0,
+      "late_ses2": 0.0,
+      "participant_id": "sub-044",
+      "session1": "yes",
+      "session2": "yes",
+      "sex": "F"
+    },
+    {
+      "age": 49,
+      "handedness": "right",
+      "late_ses1": 0,
+      "late_ses2": 0.0,
+      "participant_id": "sub-046",
+      "session1": "yes",
+      "session2": "yes",
+      "sex": "F"
+    },
+    {
+      "age": 67,
+      "handedness": "right",
+      "late_ses1": 0,
+      "late_ses2": 0.0,
+      "participant_id": "sub-047",
+      "session1": "yes",
+      "session2": "yes",
+      "sex": "M"
+    },
+    {
+      "age": 59,
+      "handedness": "right",
+      "late_ses1": 0,
+      "late_ses2": 0.0,
+      "participant_id": "sub-050",
+      "session1": "yes",
+      "session2": "yes",
+      "sex": "F"
+    },
+    {
+      "age": 42,
+      "handedness": "right",
+      "late_ses1": 0,
+      "late_ses2": 0.0,
+      "participant_id": "sub-053",
+      "session1": "yes",
+      "session2": "yes",
+      "sex": "F"
+    },
+    {
+      "age": 31,
+      "handedness": "right",
+      "late_ses1": 0,
+      "late_ses2": 0.0,
+      "participant_id": "sub-054",
+      "session1": "yes",
+      "session2": "yes",
+      "sex": "M"
+    },
+    {
+      "age": 60,
+      "handedness": "right",
+      "late_ses1": 0,
+      "late_ses2": 0.0,
+      "participant_id": "sub-059",
+      "session1": "yes",
+      "session2": "yes",
+      "sex": "M"
+    },
+    {
+      "age": 35,
+      "handedness": "right",
+      "late_ses1": 0,
+      "late_ses2": 0.0,
+      "participant_id": "sub-073",
+      "session1": "yes",
+      "session2": "yes",
+      "sex": "F"
+    }
+  ],
+  "subjects": [
+    "001",
+    "028",
+    "033",
+    "038",
+    "044",
+    "046",
+    "047",
+    "050",
+    "053",
+    "054",
+    "059",
+    "073"
+  ],
+  "total_bytes": 1169668549
+}
