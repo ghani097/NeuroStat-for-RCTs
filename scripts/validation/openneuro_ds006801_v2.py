@@ -275,6 +275,26 @@ def _detect_bad_channels(raw: Any, threshold: float = 6.0) -> list[str]:
     ]
 
 
+def _matches_cleaning_contract(qc: dict[str, Any]) -> bool:
+    if qc.get("schema") != "neurostat.public_cleaning_qc.v1":
+        return False
+    cleaning = qc.get("cleaning", {})
+    expected = {
+        "resample_hz": 200.0,
+        "bandpass_hz": [1.0, 45.0],
+        "reference": "average_applied",
+        "bad_channel_method": "log-variance robust z > 6",
+        "ica_method": "extended_infomax",
+        "ica_components": 25,
+        "ica_random_state": 42,
+        "window_seconds": 4.0,
+        "window_peak_to_peak_limit_uv": 150.0,
+        "window_absolute_peak_limit_uv": 150.0,
+        "window_log_rms_robust_z_limit": 8.0,
+    }
+    return all(cleaning.get(key) == value for key, value in expected.items())
+
+
 def _clean_recording(source: Path, destination: Path) -> dict[str, Any]:
     import mne
     from mne.preprocessing import ICA
@@ -444,7 +464,8 @@ def prepare_dataset(root: Path, cohort_name: str) -> Path:
                         for extension, item in qc.get("source_files", {}).items()
                     }
                     reuse = (
-                        qc.get("output", {}).get("sha256") == _sha256(destination)
+                        _matches_cleaning_contract(qc)
+                        and qc.get("output", {}).get("sha256") == _sha256(destination)
                         and recorded_sources == expected_sources
                     )
                 if not reuse:
@@ -695,6 +716,10 @@ def run_v2(project_path: Path) -> Path:
     }
     target = project_path.parent / "workflow_result.json"
     _atomic_json(target, payload)
+    if not result.success:
+        raise RuntimeError(
+            f"V2 workflow did not complete successfully; inspect {target}"
+        )
     return target
 
 

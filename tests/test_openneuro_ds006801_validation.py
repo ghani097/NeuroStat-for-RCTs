@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
 from scripts.validation import openneuro_ds006801_v2 as validation
 
@@ -60,6 +62,44 @@ def test_atomic_json_replaces_nonfinite_values_with_null(tmp_path: Path) -> None
         "finite": 1.0,
         "missing": None,
     }
+
+
+def test_cleaned_output_reuse_requires_the_fixed_cleaning_contract() -> None:
+    cleaning = {
+        "resample_hz": 200.0,
+        "bandpass_hz": [1.0, 45.0],
+        "reference": "average_applied",
+        "bad_channel_method": "log-variance robust z > 6",
+        "ica_method": "extended_infomax",
+        "ica_components": 25,
+        "ica_random_state": 42,
+        "window_seconds": 4.0,
+        "window_peak_to_peak_limit_uv": 150.0,
+        "window_absolute_peak_limit_uv": 150.0,
+        "window_log_rms_robust_z_limit": 8.0,
+    }
+    qc = {"schema": "neurostat.public_cleaning_qc.v1", "cleaning": cleaning}
+
+    assert validation._matches_cleaning_contract(qc)
+    cleaning["window_seconds"] = 2.0
+    assert not validation._matches_cleaning_contract(qc)
+
+
+def test_run_v2_records_and_raises_on_workflow_failure(
+    tmp_path: Path, monkeypatch
+) -> None:
+    project = tmp_path / "project.yaml"
+    project.write_text("schema_version: 1\n", encoding="utf-8")
+    monkeypatch.setattr(
+        "neurostat.workflow.run_workflow",
+        lambda *_args, **_kwargs: SimpleNamespace(success=False, outcomes=()),
+    )
+
+    with pytest.raises(RuntimeError, match="did not complete successfully"):
+        validation.run_v2(project)
+
+    result = json.loads((tmp_path / "workflow_result.json").read_text())
+    assert result["success"] is False
 
 
 def test_complete_partial_download_is_finalized_without_network(
