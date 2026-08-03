@@ -28,6 +28,17 @@ The analyses are intentionally separated by the claim they test.
 The posterior-channel GEDAI versus Traditional PhysioNet comparison is a
 preprocessing sensitivity check, not a source-space validation endpoint.
 
+4. OpenNeuro longitudinal replication
+   - `openneuro_ds005385_replication.py` downloads a fixed, age/sex-balanced
+     12-participant subset of OpenNeuro `ds005385` to a user-supplied directory
+     outside Git.
+   - It processes pre-cognitive eyes-open and eyes-closed continuous resting EEG
+     from baseline and approximately five-year follow-up through the NeuroStat
+     Traditional sensor-space path.
+   - The pre-registered endpoint and unchanged pass/fail thresholds are recorded
+     in `ds005385_replication_plan.json`. Compact checksums, subject results, and
+     runtime provenance are written to `provenance/ds005385_v1.0.3/`.
+
 ## Requirements
 
 Install the project dependencies from the repository root:
@@ -65,6 +76,18 @@ Main outputs:
 - `scripts/validation/physionet_data/source_space_iclabel/physionet_source_subject_results.csv`
 - `scripts/validation/physionet_data/source_space_iclabel/physionet_source_results.json`
 - `scripts/validation/physionet_data/source_space_iclabel/physionet_source_paired.png`
+
+Run the OpenNeuro longitudinal replication (PowerShell example):
+
+```powershell
+python scripts\validation\openneuro_ds005385_replication.py `
+  --data-root "E:\path\outside\the\repository\ds005385-v1.0.3"
+```
+
+Use `--download-only` or `--run-only` to resume one stage. The script rejects a
+data root located inside the Git worktree and verifies the dataset DOI before
+analysis. The default pilot downloads 48 EDF recordings (four per subject) plus
+BIDS metadata; pass `--subjects` to expand the analysis deterministically.
 
 The scripts do not store raw PhysioNet data or MNE fsaverage files in this
 repository. Those assets are downloaded or cached locally by MNE/PhysioNet tooling.
