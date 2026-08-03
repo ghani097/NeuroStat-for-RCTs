@@ -1,0 +1,86 @@
+{
+  "alpha_edge_negative_fraction": 0.26821773485513606,
+  "alpha_peak_frequency": {
+    "cohens_d": -0.7038662071389687,
+    "old_mean_hz": 9.546666666666669,
+    "old_minus_young_hz": -0.5599999999999952,
+    "old_n": 30,
+    "one_sided_permutation_p": 0.0042999570004299955,
+    "young_mean_hz": 10.106666666666664,
+    "young_n": 30
+  },
+  "bands": [
+    {
+      "band": "theta",
+      "cohens_d": 0.021769173392343615,
+      "old_mean": 0.08761049165485847,
+      "old_minus_young": 0.0002553218400405677,
+      "old_n": 30,
+      "old_sd": 0.012587744808524757,
+      "one_sided_permutation_p": 0.5326946730532695,
+      "welch_t": 0.08431164600924843,
+      "welch_two_sided_p": 0.9331056769940008,
+      "young_mean": 0.0873551698148179,
+      "young_n": 30,
+      "young_sd": 0.010801324411573226
+    },
+    {
+      "band": "alpha",
+      "cohens_d": 0.3281059720732429,
+      "old_mean": 0.12196265720938812,
+      "old_minus_young": 0.009531669843597088,
+      "old_n": 30,
+      "old_sd": 0.03621132033912884,
+      "one_sided_permutation_p": 0.892841071589284,
+      "welch_t": 1.2707489656308655,
+      "welch_two_sided_p": 0.2104376211852913,
+      "young_mean": 0.11243098736579103,
+      "young_n": 30,
+      "young_sd": 0.0194065207867079
+    },
+    {
+      "band": "beta",
+      "cohens_d": 0.6271845128806495,
+      "old_mean": 0.07723509712734908,
+      "old_minus_young": 0.00596761875963446,
+      "old_n": 30,
+      "old_sd": 0.011021839325596784,
+      "one_sided_permutation_p": 0.991220087799122,
+      "welch_t": 2.4290751733859666,
+      "welch_two_sided_p": 0.01863388185937834,
+      "young_mean": 0.07126747836771462,
+      "young_n": 30,
+      "young_sd": 0.007719259447788975
+    },
+    {
+      "band": "gamma",
+      "cohens_d": 0.023733319533682143,
+      "old_mean": 0.06946752719643239,
+      "old_minus_young": 0.00034536067353879707,
+      "old_n": 30,
+      "old_sd": 0.01730486814461831,
+      "one_sided_permutation_p": 0.5366646333536664,
+      "welch_t": 0.09191875130417011,
+      "welch_two_sided_p": 0.9271335350576085,
+      "young_mean": 0.06912216652289359,
+      "young_n": 30,
+      "young_sd": 0.011137628941267736
+    }
+  ],
+  "connectivity_manifest_sha256": "7bac7230dd522a3da5541905e60919de05b67811ffc60614ab55979318e1d6a8",
+  "criteria": {
+    "positive_control_alpha_peak": true,
+    "primary_alpha_global": false,
+    "support_alpha_edge_direction": false,
+    "support_alpha_strongest_band": false
+  },
+  "dataset_doi": "10.1038/sdata.2018.308",
+  "interpretation": "Directional conceptual replication only; NeuroStat V2 and DISCOVER-EEG use different atlases, inverse solvers, and phase-connectivity estimators.",
+  "participants": 60,
+  "primary_replication_passed": false,
+  "published_target_doi": "10.1038/s41597-023-02525-0",
+  "records_verified": 60,
+  "schema": "neurostat.lemon_replication_results.v1",
+  "source_data_included": false,
+  "workflow_duration_seconds": 997.8230719566345
+}

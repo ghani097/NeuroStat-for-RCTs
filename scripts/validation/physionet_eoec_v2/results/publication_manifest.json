@@ -1,0 +1,13 @@
+{
+  "dataset_doi": "10.13026/C28G6P",
+  "files": {
+    "README.md": "911ea357c3768ea6b2d950208987b5266f301d840400570a20d5e3d5c9a82710",
+    "band_paired_summary.csv": "30e2e06beba48ed7de13429f087eb1d093c3b9abb3437d18e855491b35c69751",
+    "physionet_eoec_v2_dashboard.png": "d2775108dc4f9c98f98aa60c08d66e83360c83b24ded3d63b2feae4ed53ad954",
+    "subject_band_results.csv": "65ecf592330936c9534905e423bb088989abfd06c2a889d35f115fb43570788f",
+    "validation_protocol.json": "0ab5de117329133525fe8011956005f8c3dd66563f5493d6842f23026ee4c418",
+    "validation_results.json": "e69990b59ae9fdb53df68931489b192efb406ee92ebe31e8675755cf5c423851"
+  },
+  "published_target_doi": "10.1038/s41598-024-68532-2",
+  "schema": "neurostat.physionet_eoec_publication_bundle.v1"
+}

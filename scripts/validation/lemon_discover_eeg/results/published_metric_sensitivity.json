@@ -1,0 +1,43 @@
+{
+  "alpha_edge_negative_fraction": 0.38937664618086043,
+  "bands": [
+    {
+      "band": "theta",
+      "cohens_d": -0.046432451174756126,
+      "old_mean": 0.02720738668988617,
+      "old_minus_young": -0.0006298976965386123,
+      "one_sided_permutation_p": 0.43139568604313955,
+      "young_mean": 0.02783728438642478
+    },
+    {
+      "band": "alpha",
+      "cohens_d": 0.1398364039134574,
+      "old_mean": 0.0668211472556905,
+      "old_minus_young": 0.0046603808253349865,
+      "one_sided_permutation_p": 0.6951930480695193,
+      "young_mean": 0.06216076643035551
+    },
+    {
+      "band": "beta",
+      "cohens_d": 0.3971149703006393,
+      "old_mean": 0.017793195553913604,
+      "old_minus_young": 0.0031512718582984694,
+      "one_sided_permutation_p": 0.9342906570934291,
+      "young_mean": 0.014641923695615134
+    },
+    {
+      "band": "gamma",
+      "cohens_d": 0.1848736329182323,
+      "old_mean": 0.014135047609040644,
+      "old_minus_young": 0.003094308147544413,
+      "one_sided_permutation_p": 0.7454425455745443,
+      "young_mean": 0.011040739461496231
+    }
+  ],
+  "directional_alpha_pass": false,
+  "method": "mne-connectivity wpli2_debiased on unchanged V2 DK68 scout artifacts",
+  "published_method": "DISCOVER-EEG used source-space debiased wPLI with a different atlas and inverse solver",
+  "schema": "neurostat.lemon_published_metric_sensitivity.v1",
+  "scout_manifest_sha256": "b2858a4ba5df6d2c71797a670ef789a7e97ec9955b97cffe9ce0d15e289bc09a",
+  "status": "post-primary exploratory sensitivity; does not alter the failed PLI primary endpoint"
+}

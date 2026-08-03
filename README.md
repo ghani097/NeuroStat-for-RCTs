@@ -113,6 +113,28 @@ Simulated 64-channel EEG with three planted connectivity patterns (alpha, beta, 
 
 Replicated the well-established eyes-closed > eyes-open alpha connectivity effect using 20 subjects from the PhysioNet database. Both pathways detected the effect with large effect sizes (Traditional: *d* = 0.83; GEDAI: *d* = 0.89; both *p* < .002).
 
+### V2 Public Biological Confirmation
+
+The actual V2 high-level workflow independently confirmed the published
+source-level DK68 alpha-PLI eye-state direction in a held-out 89-person
+PhysioNet cohort (S021-S109): eyes-closed minus eyes-open global alpha PLI
+= 0.011522, paired *dz* = 0.706, 67/89 positive, one-sided sign-flip
+*p* < .00001. The target paper used source reconstruction, DK68, PLI, and
+8-13 Hz alpha ([Scientific Reports 2024](https://doi.org/10.1038/s41598-024-68532-2)).
+
+[![V2 PhysioNet confirmation dashboard](scripts/validation/physionet_eoec_v2/results/physionet_eoec_v2_dashboard.png)](scripts/validation/physionet_eoec_v2/results/README.md)
+
+A separate 60-person LEMON age-connectivity test did **not** replicate its
+frozen global alpha-PLI hypothesis, although its alpha-peak-frequency positive
+control passed. The negative outcome and debiased-wPLI sensitivity are retained
+in the public bundle rather than omitted.
+
+[![LEMON replication dashboard](scripts/validation/lemon_discover_eeg/results/lemon_v2_replication_dashboard.png)](scripts/validation/lemon_discover_eeg/results/README.md)
+
+The V2 protocol, aggregate results, visible plots, and SHA-256 manifests are in
+[`scripts/validation/README.md`](scripts/validation/README.md). Raw public EEG
+and intermediate source artifacts remain outside Git.
+
 ### Run Validation
 
 ```bash
@@ -124,6 +146,9 @@ python scripts/validation/physionet_validation.py
 
 # GEDAI vs Traditional comparison on real data
 python scripts/validation/physionet_method_comparison.py
+
+# V2 held-out public biological confirmation
+python scripts/validation/physionet_eoec_v2.py all --cohort confirmation
 ```
 
 

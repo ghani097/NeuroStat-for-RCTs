@@ -39,6 +39,29 @@ The analyses are intentionally separated by the claim they test.
      and artifact integrity. Group-by-time PLI estimates are exploratory because
      no directional connectivity hypothesis was preregistered for this dataset.
 
+5. LEMON aging falsification test
+   - `lemon_discover_eeg_v2.py` runs the actual V2 workflow on 60 public,
+     eyes-closed LEMON recordings and tests a frozen global alpha-connectivity
+     age hypothesis derived from DISCOVER-EEG.
+   - The primary V2 PLI endpoint did not replicate, and a post-primary
+     debiased-wPLI sensitivity also failed. The independent alpha-peak-frequency
+     positive control passed. All three results are retained in the tracked
+     report rather than selecting only favorable evidence.
+
+6. Independent PhysioNet V2 biological confirmation
+   - `physionet_eoec_v2.py` tests the published finding that source-level DK68
+     alpha PLI network strength decreases on eye opening and increases on eye
+     closing ([Scientific Reports 2024](https://doi.org/10.1038/s41598-024-68532-2)).
+   - Because the paper's own recordings are not public, the independent dataset
+     is PhysioNet EEGMMIDB v1.0.0 ([DOI 10.13026/C28G6P](https://doi.org/10.13026/C28G6P)):
+     run 1 eyes open and run 2 eyes closed.
+   - S001-S020 were used for discovery. The endpoint and test were then frozen
+     before the independent S021-S109 confirmation workflow was opened.
+   - The 89-person confirmation passed: global alpha PLI increased by 0.011522
+     on eye closure (paired dz 0.706; 67/89 positive; one-sided sign-flip
+     p < 0.00001). Posterior DK14 support increased by 0.037124 (dz 1.002;
+     77/89 positive; p < 0.00001).
+
 The posterior-channel GEDAI versus Traditional PhysioNet comparison is a
 preprocessing sensitivity check, not a source-space validation endpoint.
 
@@ -82,6 +105,33 @@ Main outputs:
 
 The scripts do not store raw PhysioNet data or MNE fsaverage files in this
 repository. Those assets are downloaded or cached locally by MNE/PhysioNet tooling.
+
+## LEMON and PhysioNet biological validation
+
+LEMON raw data and full V2 artifacts default to a sibling
+`NeuroStat-v2-public-validation/lemon` directory. The final tracked report is
+under `scripts/validation/lemon_discover_eeg/results`:
+
+```powershell
+python scripts\validation\lemon_discover_eeg_v2.py all --cohort replication
+python scripts\validation\lemon_discover_eeg_v2.py sensitivity --cohort replication
+python scripts\validation\lemon_discover_eeg_v2.py publish --cohort replication
+```
+
+PhysioNet raw data and full artifacts similarly remain outside Git. Reproduce
+the locked discovery and independent confirmation as follows:
+
+```powershell
+python scripts\validation\physionet_eoec_v2.py all --cohort discovery
+python scripts\validation\physionet_eoec_v2.py all --cohort confirmation
+```
+
+The portable confirmation report is under
+`scripts/validation/physionet_eoec_v2/results`, including subject-level CSV,
+paired summaries, protocol/result JSON, a 300-DPI dashboard, and a SHA-256
+publication manifest. This biological confirmation complements, but does not
+replace, the exact estimator-oracle and synthetic known-phase tests. No finite
+validation suite guarantees correctness for every future dataset.
 
 ## OpenNeuro ds006801 v2 validation
 

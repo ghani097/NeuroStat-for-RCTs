@@ -18,10 +18,10 @@ from neurostat.connectivity import (
     continuous_multitaper_pli,
     evoked_average_hilbert_pli,
     iter_scout_windows,
+    methods,
     scout_window_count,
 )
 from neurostat.scouts.artifacts import ScoutStream, write_scout_artifact
-
 
 V7_BANDS = (
     Band("theta", 3.5, 7.5),
@@ -99,8 +99,6 @@ def test_evoked_pli_invariants_and_nyquist_rejection() -> None:
 def test_evoked_kernel_reads_rows_only_and_uses_no_nodes_squared_sample_tensor(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import neurostat.connectivity.methods as methods
-
     rng = np.random.default_rng(77)
     values = rng.normal(size=(4, 200_003))
 
@@ -231,6 +229,50 @@ def test_continuous_multitaper_agrees_with_direct_mne_connectivity(tmp_path: Pat
     direct = np.maximum(direct, direct.T)
     np.fill_diagonal(direct, 0.0)
     np.testing.assert_allclose(streamed.matrices[0], direct, rtol=0.0, atol=0.0)
+
+
+def test_continuous_multitaper_recovers_known_phase_lag_ground_truth(
+    tmp_path: Path,
+) -> None:
+    sfreq = 100.0
+    window_samples = int(sfreq * 2)
+    time = np.arange(window_samples) / sfreq
+    reference = np.sin(2 * np.pi * 10 * time)
+    positive_lag = np.sin(2 * np.pi * 10 * time + np.pi / 2)
+    negative_lag = np.sin(2 * np.pi * 10 * time - np.pi / 2)
+    values = np.vstack(
+        [
+            np.tile(reference, 20),
+            np.tile(positive_lag, 20),
+            np.concatenate(
+                [
+                    positive_lag if index % 2 == 0 else negative_lag
+                    for index in range(20)
+                ]
+            ),
+        ]
+    )
+    path = _scout_artifact(tmp_path, values, sfreq)
+    config = ContinuousMultitaperConnectivity(
+        (Band("alpha", 8.0, 13.0),),
+        window_seconds=2.0,
+        tail_policy="drop",
+        mt_bandwidth=2.0,
+        mt_adaptive=False,
+        mt_low_bias=True,
+        n_jobs=1,
+    )
+
+    matrix = continuous_multitaper_pli(
+        path,
+        ("reference", "consistent-lag", "balanced-lag"),
+        sfreq,
+        values.shape[1],
+        config,
+    ).matrices[0]
+
+    assert matrix[0, 1] > 0.99
+    assert matrix[0, 2] < 0.05
 
 
 def test_scout_artifact_chunking_and_payload_corruption_detection(tmp_path: Path) -> None:

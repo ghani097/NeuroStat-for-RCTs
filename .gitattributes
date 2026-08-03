@@ -1,2 +1,6 @@
 # Publication hashes cover exact bytes; do not rewrite JSON line endings on checkout.
 scripts/validation/openneuro_ds006801/results/*.json -text
+scripts/validation/lemon_discover_eeg/results/*.json -text
+scripts/validation/lemon_discover_eeg/results/*.md -text
+scripts/validation/physionet_eoec_v2/results/*.json -text
+scripts/validation/physionet_eoec_v2/results/*.md -text

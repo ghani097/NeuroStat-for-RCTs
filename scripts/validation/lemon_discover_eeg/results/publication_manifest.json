@@ -1,0 +1,17 @@
+{
+  "dataset_doi": "10.1038/sdata.2018.308",
+  "files": {
+    "README.md": "0d97e07ca95018a0291ae2921a8e2e68f6d9ea3fec88702fec038e382c9388ce",
+    "alpha_edge_effect_matrix.csv": "f95236bef5e15286ba3db092887a270d4ea10dda901ecef24051b05769bbeec3",
+    "band_group_summary.csv": "77e5c032fdcf040d6a18461a30b2521b0a6c76bf3f1f78b2652bc86dda901b42",
+    "lemon_v2_replication_dashboard.png": "e9840de43ded1d19d32a52c3defb244f88bf6d47a670ce945380997da8110a26",
+    "published_metric_sensitivity.json": "45422c13bf08b550bbea2af2ed92fc157c07c78d04be805762eec09b457ceaa7",
+    "published_metric_sensitivity.png": "66ed0c6865e80afe32dc41f17d68115b33bcb7931388adeb6df05f1264d5e576",
+    "published_metric_subject_results.csv": "45ad3c193ae10e92b36f033294c15d4b8a510d899074d47ff7c166b99d177ab5",
+    "subject_band_results.csv": "91058bfa38346810a5dbd2568558599f9c7c6ac9f165b369ab95a384f948bda6",
+    "validation_protocol.json": "393c73a9443a7c62002658419937dc0fa775861d0984050db2e53bc7e0a4d4bf",
+    "validation_results.json": "af8f234bd9a71a4295ecfbc983719713cd3c5f4b70b99670b49dce19a0334054"
+  },
+  "published_target_doi": "10.1038/s41597-023-02525-0",
+  "schema": "neurostat.lemon_publication_bundle.v1"
+}

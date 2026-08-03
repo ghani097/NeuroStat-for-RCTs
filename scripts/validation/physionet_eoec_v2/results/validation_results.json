@@ -1,0 +1,123 @@
+{
+  "cohort": "confirmation",
+  "connectivity_manifest_sha256": "a9d7c83bd890ace9c50b91894fdcbbea601355c05f3fdba81411e60cf511cb65",
+  "dataset_doi": "10.13026/C28G6P",
+  "participants": 89,
+  "primary": {
+    "band": "alpha",
+    "cohens_dz": 0.7064736756010601,
+    "difference_ec_minus_eo": 0.01152233186049564,
+    "direction_ec_gt_eo": 67,
+    "eyes_closed_mean": 0.1862562749552125,
+    "eyes_open_mean": 0.1747339430947169,
+    "n": 89,
+    "one_sided_sign_flip_p": 9.99990000099999e-06,
+    "scope": "global"
+  },
+  "primary_replication_passed": true,
+  "published_target_doi": "10.1038/s41598-024-68532-2",
+  "records_verified": 178,
+  "schema": "neurostat.physionet_eoec_results.v1",
+  "source_data_included": false,
+  "summaries": [
+    {
+      "band": "theta",
+      "cohens_dz": -0.19203486852088952,
+      "difference_ec_minus_eo": -0.001592500156191944,
+      "direction_ec_gt_eo": 35,
+      "eyes_closed_mean": 0.1576569308849744,
+      "eyes_open_mean": 0.15924943104116634,
+      "n": 89,
+      "one_sided_sign_flip_p": 0.963310366896331,
+      "scope": "global"
+    },
+    {
+      "band": "theta",
+      "cohens_dz": 0.102934918987504,
+      "difference_ec_minus_eo": 0.0021612178915549696,
+      "direction_ec_gt_eo": 49,
+      "eyes_closed_mean": 0.16081820800921925,
+      "eyes_open_mean": 0.15865699011766426,
+      "n": 89,
+      "one_sided_sign_flip_p": 0.17007829921700782,
+      "scope": "posterior"
+    },
+    {
+      "band": "alpha",
+      "cohens_dz": 0.7064736756010601,
+      "difference_ec_minus_eo": 0.01152233186049564,
+      "direction_ec_gt_eo": 67,
+      "eyes_closed_mean": 0.1862562749552125,
+      "eyes_open_mean": 0.1747339430947169,
+      "n": 89,
+      "one_sided_sign_flip_p": 9.99990000099999e-06,
+      "scope": "global"
+    },
+    {
+      "band": "alpha",
+      "cohens_dz": 1.0017618699723705,
+      "difference_ec_minus_eo": 0.037123924764374205,
+      "direction_ec_gt_eo": 77,
+      "eyes_closed_mean": 0.21265326433865764,
+      "eyes_open_mean": 0.1755293395742834,
+      "n": 89,
+      "one_sided_sign_flip_p": 9.99990000099999e-06,
+      "scope": "posterior"
+    },
+    {
+      "band": "beta",
+      "cohens_dz": 0.017016780685895832,
+      "difference_ec_minus_eo": 0.00021755071305731876,
+      "direction_ec_gt_eo": 48,
+      "eyes_closed_mean": 0.1798171262467758,
+      "eyes_open_mean": 0.17959957553371847,
+      "n": 89,
+      "one_sided_sign_flip_p": 0.4347156528434716,
+      "scope": "global"
+    },
+    {
+      "band": "beta",
+      "cohens_dz": 0.08820132862371019,
+      "difference_ec_minus_eo": 0.0017848176435656374,
+      "direction_ec_gt_eo": 50,
+      "eyes_closed_mean": 0.1829575667777915,
+      "eyes_open_mean": 0.18117274913422587,
+      "n": 89,
+      "one_sided_sign_flip_p": 0.20561794382056178,
+      "scope": "posterior"
+    },
+    {
+      "band": "gamma",
+      "cohens_dz": -0.08409902230134789,
+      "difference_ec_minus_eo": -0.0015449849233673,
+      "direction_ec_gt_eo": 41,
+      "eyes_closed_mean": 0.183405461127936,
+      "eyes_open_mean": 0.18495044605130334,
+      "n": 89,
+      "one_sided_sign_flip_p": 0.7842121578784212,
+      "scope": "global"
+    },
+    {
+      "band": "gamma",
+      "cohens_dz": -0.40161191912913274,
+      "difference_ec_minus_eo": -0.010127999341482492,
+      "direction_ec_gt_eo": 33,
+      "eyes_closed_mean": 0.17586986047660208,
+      "eyes_open_mean": 0.18599785981808456,
+      "n": 89,
+      "one_sided_sign_flip_p": 0.999940000599994,
+      "scope": "posterior"
+    }
+  ],
+  "supporting_posterior": {
+    "band": "alpha",
+    "cohens_dz": 1.0017618699723705,
+    "difference_ec_minus_eo": 0.037123924764374205,
+    "direction_ec_gt_eo": 77,
+    "eyes_closed_mean": 0.21265326433865764,
+    "eyes_open_mean": 0.1755293395742834,
+    "n": 89,
+    "one_sided_sign_flip_p": 9.99990000099999e-06,
+    "scope": "posterior"
+  }
+}
