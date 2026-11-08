@@ -12,6 +12,7 @@ from typing import Any, TypeVar
 import yaml
 
 from neurostat.analysis_profiles import parse_analysis_profile
+from neurostat.io.formats import RAW_READER_FORMATS
 from neurostat.project import CleanProject, load_project
 
 from .discovery import DiscoveredRecord, format_for_path, slugify
@@ -72,6 +73,11 @@ class StudyForm:
     mne_n_jobs: int = 1
     preprocessing_output_root: Path | None = None
     preprocessing_settings: Mapping[str, Any] = field(default_factory=dict)
+    # Reader options for BDF, EDF, BrainVision, Poly5, XDF and WiBCI CSV input.
+    input_channel_map: str = "auto"
+    xdf_stream: str | None = None
+    csv_sampling_rate: float | None = None
+    staging_root: Path | None = None
     networks: Mapping[str, tuple[str, ...]] = field(default_factory=default_networks)
     project_file: Path | None = None
 
@@ -88,6 +94,21 @@ class StudyForm:
         if self.preprocessing_output_root is not None:
             return self.preprocessing_output_root
         return self.output_root / "preprocessed"
+
+    @property
+    def resolved_staging_root(self) -> Path:
+        """Return where raw non-SET input is converted to SET for v1."""
+        if self.staging_root is not None:
+            return self.staging_root
+        return self.output_root / "staged_raw"
+
+    def reader_options(self) -> dict[str, Any]:
+        """Reader keyword arguments shared by staging and the project records."""
+        return {
+            "channel_map": self.input_channel_map or "auto",
+            "stream": self.xdf_stream,
+            "sampling_rate": self.csv_sampling_rate,
+        }
 
 
 def validate_form(
@@ -181,7 +202,8 @@ def recommended_profile_pair(
 ) -> AnalysisProfilePair | None:
     """Return the only source pairing the discovered data can actually use.
 
-    The scout stage is strict: `mne_fsaverage` needs continuous raw SET/FIF,
+    The scout stage is strict: `mne_fsaverage` needs continuous raw data read
+    through MNE (any format except FieldTrip),
     because FieldTrip coordinate units are not canonicalized, while
     `fixed_linear_operator` needs retained epochs. Data that is all one shape has
     exactly one legal pairing; mixed data has none.
@@ -190,7 +212,7 @@ def recommended_profile_pair(
     formats = {record.format for record in records}
     if not kinds:
         return None
-    if kinds == {"raw"} and formats <= {"set", "fif"}:
+    if kinds == {"raw"} and formats <= RAW_READER_FORMATS:
         return AnalysisProfilePair.MNE_FSAVERAGE_CONTINUOUS
     if kinds == {"epochs"}:
         return AnalysisProfilePair.FIXED_EVOKED
@@ -212,16 +234,16 @@ def _profile_pair_problems(
     if form.profile_pair is AnalysisProfilePair.MNE_FSAVERAGE_CONTINUOUS:
         epoched = sorted({r.record_id for r in records if r.data_kind != "raw"})
         wrong_format = sorted(
-            {r.record_id for r in records if r.format not in {"set", "fif"}}
+            {r.record_id for r in records if r.format not in RAW_READER_FORMATS}
         )
         if epoched or wrong_format:
             problems.append(
-                "The MNE fsaverage source needs continuous raw SET or FIF data, but "
+                "The MNE fsaverage source needs continuous raw data (not FieldTrip), but "
                 f"{len(epoched or wrong_format)} discovered record(s) are not "
                 "(for example "
                 f"{(epoched or wrong_format)[0]}). Switch Source/Connectivity to the "
                 "fixed linear operator pairing and supply a sensor-to-scout operator, "
-                "or ingest raw SET/FIF instead."
+                "or ingest continuous raw recordings instead."
             )
     elif form.profile_pair is AnalysisProfilePair.FIXED_EVOKED:
         continuous = sorted({r.record_id for r in records if r.data_kind != "epochs"})
@@ -256,7 +278,7 @@ def build_project_document(
         },
         "input": {"state": "cleaned"},
         "analysis_profiles": {"default": _analysis_profile(form)},
-        "records": [_record_document(record) for record in records],
+        "records": [_record_document(record, form) for record in records],
         "output": {"root": str(form.output_root)},
     }
     if _requests_stage(stages, "network_models"):
@@ -470,7 +492,7 @@ def _analysis_profile(form: StudyForm) -> dict[str, Any]:
     }
 
 
-def _record_document(record: DiscoveredRecord) -> dict[str, Any]:
+def _record_document(record: DiscoveredRecord, form: StudyForm | None = None) -> dict[str, Any]:
     item: dict[str, Any] = {
         "record_id": record.record_id,
         "participant_id": record.participant_id,
@@ -486,6 +508,13 @@ def _record_document(record: DiscoveredRecord) -> dict[str, Any]:
         item["mat_variable"] = record.mat_variable
     if record.samples_per_epoch is not None:
         item["samples_per_epoch"] = record.samples_per_epoch
+    if form is not None and record.format not in {"set", "fif", "fieldtrip_mat"}:
+        if form.input_channel_map and form.input_channel_map != "auto":
+            item["channel_map"] = form.input_channel_map
+        if record.format == "xdf" and form.xdf_stream:
+            item["stream"] = form.xdf_stream
+        if record.format == "wibci_csv" and form.csv_sampling_rate:
+            item["sampling_rate"] = float(form.csv_sampling_rate)
     return item
 
 

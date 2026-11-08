@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from ..io.formats import RAW_READER_FORMATS
 from ..analysis_profiles import (
     FixedLinearSource,
     MNEFsaverageSource,
@@ -147,9 +148,9 @@ def run_scouts(
             if isinstance(config, MNEFsaverageSource):
                 if record.data_kind != "raw":
                     raise ScoutError(f"{record.record_id}: mne_fsaverage requires data_kind raw")
-                if record.format not in {"set", "fif"}:
+                if record.format not in RAW_READER_FORMATS:
                     raise ScoutError(
-                        f"{record.record_id}: mne_fsaverage requires an MNE-ingested SET/FIF recording "
+                        f"{record.record_id}: mne_fsaverage requires an MNE-ingested continuous recording "
                         "because FieldTrip coordinate units are not canonicalized"
                     )
             canonical_entry = ingest_entries[record.record_id]

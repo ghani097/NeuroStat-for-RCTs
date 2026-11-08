@@ -11,6 +11,9 @@ from typing import Any, Mapping
 import yaml
 
 from .contracts import RecordKey
+from .io.channel_maps import PRESETS as _CHANNEL_MAP_PRESETS
+from .io.formats import FORMATS as _FORMAT_SPECS
+from .io.formats import format_for_path
 
 _RECORD_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*\Z")
 _TOP = {
@@ -27,9 +30,11 @@ _TOP = {
     "graphvar",
     "brainnet",
 }
-_RECORD = {"record_id", "participant_id", "arm", "session", "condition", "data_kind", "format", "path", "analysis_profile", "mat_variable", "samples_per_epoch", "data_unit"}
+_RECORD = {"record_id", "participant_id", "arm", "session", "condition", "data_kind", "format", "path", "analysis_profile", "mat_variable", "samples_per_epoch", "data_unit", "channel_map", "stream", "sampling_rate"}
 _REQUIRED = {"record_id", "participant_id", "arm", "session", "condition", "data_kind", "format", "path", "analysis_profile"}
-_FORMATS = {"set": {".set"}, "fif": {".fif", ".fif.gz"}, "fieldtrip_mat": {".mat"}}
+_FORMATS = {key: set(spec.extensions) for key, spec in _FORMAT_SPECS.items()}
+# Units each format may declare; MNE-backed formats are always volts.
+_UNITS = {"fieldtrip_mat": {"V", "mV", "uV", "native"}, "xdf": {"V", "mV", "uV"}, "wibci_csv": {"uV"}}
 
 
 class ProjectValidationError(ValueError):
@@ -95,6 +100,13 @@ class ProjectRecord:
     mat_variable: str | None = None
     samples_per_epoch: int | None = None
     data_unit: str | None = None
+    channel_map: str | None = None
+    stream: str | None = None
+    sampling_rate: float | None = None
+
+    def reader_options(self) -> dict[str, Any]:
+        """Keyword arguments for :func:`neurostat.io.reader.load_recording`."""
+        return {"channel_map": self.channel_map or "auto", "data_unit": self.data_unit, "stream": self.stream, "sampling_rate": self.sampling_rate}
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,7 +119,13 @@ class CleanProject:
     extras: Mapping[str, Mapping[str, Any]]
 
     def normalized(self) -> dict[str, Any]:
-        return {"schema_version": 1, "study": {"id": self.study.id, "arms": list(self.study.arms), "sessions": list(self.study.sessions), "conditions": list(self.study.conditions)}, "input": {"state": "cleaned"}, "records": [{"record_id": r.record_id, "participant_id": r.key.participant_id, "arm": r.key.arm, "session": r.key.session, "condition": r.key.condition, "data_kind": r.data_kind, "format": r.format, "path": str(r.path), "analysis_profile": r.analysis_profile, "mat_variable": r.mat_variable, "samples_per_epoch": r.samples_per_epoch, "data_unit": r.data_unit} for r in self.records], "analysis_profiles": _thaw(self.analysis_profiles), "output": {"root": str(self.output_root)}, **_thaw(self.extras)}
+        return {"schema_version": 1, "study": {"id": self.study.id, "arms": list(self.study.arms), "sessions": list(self.study.sessions), "conditions": list(self.study.conditions)}, "input": {"state": "cleaned"}, "records": [{"record_id": r.record_id, "participant_id": r.key.participant_id, "arm": r.key.arm, "session": r.key.session, "condition": r.key.condition, "data_kind": r.data_kind, "format": r.format, "path": str(r.path), "analysis_profile": r.analysis_profile, "mat_variable": r.mat_variable, "samples_per_epoch": r.samples_per_epoch, "data_unit": r.data_unit, **_reader_fields(r)} for r in self.records], "analysis_profiles": _thaw(self.analysis_profiles), "output": {"root": str(self.output_root)}, **_thaw(self.extras)}
+
+
+def _reader_fields(record: ProjectRecord) -> dict[str, Any]:
+    # Only present when set, so existing projects keep their frozen digests.
+    fields = {"channel_map": record.channel_map, "stream": record.stream, "sampling_rate": record.sampling_rate}
+    return {key: value for key, value in fields.items() if value is not None}
 
 
 def _thaw(value: Any) -> Any:
@@ -146,10 +164,12 @@ def _record(row: Mapping[str, Any], base: Path, index: int, study: Study, profil
     if key.arm not in study.arms or key.session not in study.sessions or key.condition not in study.conditions: raise ProjectValidationError(f"record {rid} references an undeclared arm, session, or condition")
     kind, fmt = _string(row["data_kind"], "data_kind"), _string(row["format"], "format")
     if kind not in {"raw", "epochs"} or fmt not in _FORMATS: raise ProjectValidationError(f"record {rid} has unsupported format or data_kind")
+    if kind not in _FORMAT_SPECS[fmt].data_kinds: raise ProjectValidationError(f"record {rid}: {_FORMAT_SPECS[fmt].label} supports data_kind {', '.join(_FORMAT_SPECS[fmt].data_kinds)} only")
     source = (base / _string(row["path"], "path")).resolve()
     if not source.is_file(): raise ProjectValidationError(f"record {rid} path is not a file: {source}")
     lower = source.name.lower()
     if not any(lower.endswith(ext) for ext in _FORMATS[fmt]): raise ProjectValidationError(f"record {rid} path extension does not match format {fmt}")
+    if _FORMAT_SPECS[fmt].sniffed and format_for_path(source) != fmt: raise ProjectValidationError(f"record {rid} file header does not look like {_FORMAT_SPECS[fmt].label}")
     profile = _string(row["analysis_profile"], "analysis_profile")
     if profile not in profiles: raise ProjectValidationError(f"record {rid} references undeclared analysis profile {profile!r}")
     spe = row.get("samples_per_epoch")
@@ -162,9 +182,34 @@ def _record(row: Mapping[str, Any], base: Path, index: int, study: Study, profil
     unit = None if unit_raw is None or unit_raw == "" else unit_raw
     if unit is not None and (not isinstance(unit, str) or unit not in {"V", "mV", "uV", "native"}): raise ProjectValidationError(f"record {rid}.data_unit is invalid")
     if fmt in {"set", "fif"} and unit not in (None, "V"): raise ProjectValidationError(f"record {rid}: SET/FIF data_unit must be V or blank")
+    if unit is not None and unit not in _UNITS.get(fmt, {"V"}): raise ProjectValidationError(f"record {rid}: {_FORMAT_SPECS[fmt].label} data_unit must be one of {', '.join(sorted(_UNITS.get(fmt, {'V'})))} or blank")
+    channel_map, stream, sampling_rate = _reader_options(row, rid, fmt, base)
     if mat_variable is not None and fmt != "fieldtrip_mat": raise ProjectValidationError(f"record {rid}.mat_variable is only valid for FieldTrip")
     if spe is not None and (fmt != "fieldtrip_mat" or kind != "epochs"): raise ProjectValidationError(f"record {rid}.samples_per_epoch is only valid for FieldTrip epochs")
-    return ProjectRecord(rid, key, kind, fmt, source, profile, mat_variable, spe, unit)
+    return ProjectRecord(rid, key, kind, fmt, source, profile, mat_variable, spe, unit, channel_map, stream, sampling_rate)
+
+
+def _reader_options(row: Mapping[str, Any], rid: str, fmt: str, base: Path) -> tuple[str | None, str | None, float | None]:
+    def optional(name: str) -> Any:
+        value = row.get(name)
+        return None if value is None or value == "" else value
+    channel_map, stream, rate = optional("channel_map"), optional("stream"), optional("sampling_rate")
+    if channel_map is not None:
+        if fmt == "fieldtrip_mat": raise ProjectValidationError(f"record {rid}.channel_map is not valid for FieldTrip")
+        channel_map = _string(channel_map, f"record {rid}.channel_map")
+        if channel_map not in _CHANNEL_MAP_PRESETS:
+            mapped = (base / channel_map).resolve()
+            if not mapped.is_file(): raise ProjectValidationError(f"record {rid}.channel_map must be one of {', '.join(_CHANNEL_MAP_PRESETS)} or an existing TSV/CSV file: {mapped}")
+            channel_map = str(mapped)
+    if stream is not None:
+        if fmt != "xdf": raise ProjectValidationError(f"record {rid}.stream is only valid for XDF")
+        stream = _string(str(stream), f"record {rid}.stream")
+    if rate is not None:
+        if fmt != "wibci_csv": raise ProjectValidationError(f"record {rid}.sampling_rate is only valid for WiBCI CSV")
+        try: rate = float(rate)
+        except (TypeError, ValueError): rate = float("nan")
+        if isinstance(row.get("sampling_rate"), bool) or not rate > 0 or rate == float("inf"): raise ProjectValidationError(f"record {rid}.sampling_rate must be a positive number")
+    return channel_map, stream, rate
 
 
 def load_project(project_file: str | Path) -> CleanProject:
