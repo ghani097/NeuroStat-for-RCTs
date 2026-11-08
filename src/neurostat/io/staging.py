@@ -76,6 +76,33 @@ def stage_as_set(
     return tuple(staged)
 
 
+def preview_records(
+    records: Iterable[StageableRecord],
+    *,
+    reader_options: Mapping[str, Any] | None = None,
+    per_arm: int = 1,
+) -> list[tuple[StageableRecord, Mapping[str, Any] | None, str | None]]:
+    """Read the first ``per_arm`` records of each arm; return summaries or errors.
+
+    Used by the GUI "Check files" button so a wrong channel map, rate or unit
+    shows up before a long run starts.
+    """
+    options = dict(reader_options or {})
+    seen: dict[str, int] = {}
+    results: list[tuple[StageableRecord, Mapping[str, Any] | None, str | None]] = []
+    for record in records:
+        if seen.get(record.arm, 0) >= per_arm:
+            continue
+        seen[record.arm] = seen.get(record.arm, 0) + 1
+        try:
+            loaded = load_recording(record.path, record.format, preload=False, **_options_for(record.format, options))
+        except Exception as exc:  # reported to the user, never raised from a preview
+            results.append((record, None, str(exc)))
+        else:
+            results.append((record, loaded.summary(), None))
+    return results
+
+
 def _options_for(fmt: str, options: Mapping[str, Any]) -> dict[str, Any]:
     chosen = {"channel_map": options.get("channel_map") or "auto"}
     if fmt == "xdf" and options.get("stream"):
@@ -160,4 +187,4 @@ def _atomic_json(path: Path, value: Any) -> None:
     os.replace(name, path)
 
 
-__all__ = ["PROVENANCE_SCHEMA", "StagedFile", "StagingError", "needs_staging", "stage_as_set"]
+__all__ = ["PROVENANCE_SCHEMA", "StagedFile", "StagingError", "needs_staging", "preview_records", "stage_as_set"]

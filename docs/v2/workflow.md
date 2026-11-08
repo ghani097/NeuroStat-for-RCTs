@@ -17,8 +17,9 @@ canonical contract used by the later stages.**
 Artifact rejection, filtering, re-referencing, ICA, and every other cleaning
 decision stay with whatever tool produced your data. The project schema enforces
 this: `input` must be exactly `{state: cleaned}`, and any other value is rejected
-when the project loads. Accepted input formats are EEGLAB `.set`, FIFF `.fif`, and
-FieldTrip `.mat`.
+when the project loads. Accepted input formats are EEGLAB `.set`, FIFF `.fif`,
+FieldTrip `.mat`, BioSemi `.bdf`, EDF, BrainVision `.vhdr`, TMSi `.Poly5`, LSL `.xdf`
+and WiBCI `.csv` (see [input formats](input-formats.md)).
 
 ## Installation
 
@@ -132,8 +133,10 @@ Three on-disk layouts are recognised automatically:
 | `Group/Session/Subject/file` | `study/GroupA/pre/subject-01/preprocessed_raw.fif` |
 
 The last is what v1 preprocessing itself writes, so cleaned output is discovered
-without rearranging anything. `.set`, `.fif` and FieldTrip `.mat` are all
-recognised, and `*_cleaned` files are skipped the way v1 skipped them.
+without rearranging anything. Every format in [input formats](input-formats.md)
+is recognised, and `*_cleaned` files are skipped the way v1 skipped them. Raw
+files that v1 cannot read are converted to `.set` under `<output>/staged_raw`
+before preprocessing.
 
 The middle two layouts are the same shape on disk, so the session names you type
 are what tells them apart. If a folder does not match any layout the GUI says so

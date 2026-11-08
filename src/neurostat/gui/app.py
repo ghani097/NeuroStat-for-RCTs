@@ -38,7 +38,17 @@ _STAGE_LABELS: tuple[tuple[str, str], ...] = (
 
 _LAYOUT_HINT = (
     "Layouts detected automatically: Group/Session/file, "
-    "Group/Subject/Session/file, Group/Session/Subject/file"
+    "Group/Subject/Session/file, Group/Session/Subject/file. "
+    "Files: EEGLAB .set, MNE .fif, FieldTrip .mat, BioSemi .bdf, EDF/EDF+, "
+    "BrainVision .vhdr, TMSi .Poly5, LSL .xdf and WiBCI .csv"
+)
+
+_CHANNEL_MAPS: tuple[tuple[str, str], ...] = (
+    ("Auto-detect", "auto"),
+    ("Keep file labels", "none"),
+    ("TMSi 64 (ExG1-64, drop M1/M2)", "tmsi64"),
+    ("BioSemi 32 (A1-B32)", "biosemi32"),
+    ("BioSemi 64 (A1-B32)", "biosemi64"),
 )
 
 _MNE_LABEL = "MNE fsaverage + continuous multitaper PLI"
@@ -206,6 +216,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         content_layout.addWidget(self._create_study_design_group())
         content_layout.addWidget(self._create_data_state_group())
+        content_layout.addWidget(self._create_input_format_group())
         self.preprocessing_settings_group = self._create_preprocessing_settings_group()
         self.preprocessing_pipeline_group = self._create_preprocessing_pipeline_group()
         self.advanced_options_group = self._create_advanced_options_group()
@@ -275,6 +286,40 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         note.setWordWrap(True)
         layout.addWidget(note, 1)
+        return group
+
+    def _create_input_format_group(self) -> object:
+        group = QtWidgets.QGroupBox("Input files")
+        layout = QtWidgets.QGridLayout(group)
+        layout.addWidget(QtWidgets.QLabel("Channel labels:"), 0, 0)
+        self.channel_map_combo = QtWidgets.QComboBox()
+        for label, value in _CHANNEL_MAPS:
+            self.channel_map_combo.addItem(label, value)
+        layout.addWidget(self.channel_map_combo, 0, 1)
+        self.channel_map_browse_button = QtWidgets.QPushButton("Load map file...")
+        layout.addWidget(self.channel_map_browse_button, 0, 2)
+        layout.addWidget(QtWidgets.QLabel("WiBCI CSV rate (Hz):"), 1, 0)
+        self.csv_rate_input = QtWidgets.QDoubleSpinBox()
+        self.csv_rate_input.setRange(1.0, 100000.0)
+        self.csv_rate_input.setDecimals(1)
+        self.csv_rate_input.setValue(250.0)
+        layout.addWidget(self.csv_rate_input, 1, 1)
+        layout.addWidget(QtWidgets.QLabel("XDF stream name:"), 2, 0)
+        self.xdf_stream_input = QtWidgets.QLineEdit()
+        self.xdf_stream_input.setPlaceholderText("blank = the single EEG stream")
+        layout.addWidget(self.xdf_stream_input, 2, 1)
+        self.check_files_button = QtWidgets.QPushButton("Check files")
+        self.check_files_button.setToolTip(
+            "Read the first file of each group and report channels, rate, "
+            "duration, events and unmatched labels."
+        )
+        layout.addWidget(self.check_files_button, 2, 2)
+        note = QtWidgets.QLabel(
+            "Formats are detected from the file extension. Raw files that v1 "
+            "cannot read are converted to .set under <output>/staged_raw first."
+        )
+        note.setWordWrap(True)
+        layout.addWidget(note, 3, 0, 1, 3)
         return group
 
     def _create_preprocessing_settings_group(self) -> object:
@@ -615,6 +660,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.custom_network_check.toggled.connect(self._custom_network_toggled)
         self.custom_network_button.clicked.connect(self._choose_custom_network)
         self.scan_button.clicked.connect(self._scan_records)
+        self.check_files_button.clicked.connect(self._check_files)
+        self.channel_map_browse_button.clicked.connect(self._browse_channel_map)
         self.run_button.clicked.connect(self._start_run)
         self.open_project_button.clicked.connect(self._choose_project)
         self.clear_log_button.clicked.connect(self.log_display.clear)
@@ -989,7 +1036,68 @@ class MainWindow(QtWidgets.QMainWindow):
             mne_source_space=self._optional_path(self.source_space_input.text()),
             mne_bem=self._optional_path(self.bem_input.text()),
             preprocessing_settings=self._preprocessing_settings(),
+            input_channel_map=str(self.channel_map_combo.currentData() or "auto"),
+            xdf_stream=self.xdf_stream_input.text().strip() or None,
+            csv_sampling_rate=(
+                None
+                if self.csv_rate_input.value() == 250.0
+                else self.csv_rate_input.value()
+            ),
             networks=self._selected_networks(),
+        )
+
+    def _browse_channel_map(self) -> None:
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "Select channel map (two columns: file label, new label)",
+            "",
+            "Channel maps (*.tsv *.csv *.txt)",
+        )
+        if not path:
+            return
+        index = self.channel_map_combo.findData(path)
+        if index < 0:
+            self.channel_map_combo.addItem(f"File: {Path(path).name}", path)
+            index = self.channel_map_combo.count() - 1
+        self.channel_map_combo.setCurrentIndex(index)
+
+    def _check_files(self) -> None:
+        from neurostat.io.staging import preview_records
+
+        try:
+            records, _layout = self._discover_from_widgets()
+            form = self._build_form()
+        except ValueError as exc:
+            self._set_status(str(exc))
+            self._log(str(exc))
+            return
+        if not records:
+            self._set_status("no EEG files found to check")
+            return
+        problems = 0
+        for record, summary, error in preview_records(
+            records, reader_options=form.reader_options()
+        ):
+            if error is not None:
+                problems += 1
+                self._log(f"{record.path.name}: cannot read: {error}")
+                continue
+            assert summary is not None
+            self._log(
+                f"{record.path.name} [{summary['format']}]: {summary['channels']} channels, "
+                f"{summary['sfreq']:g} Hz, {summary['duration_seconds']:.1f} s, "
+                f"{summary['events']} events, labels {summary['channel_map']}"
+            )
+            if summary["unmatched_labels"]:
+                problems += 1
+                self._log(
+                    "  no standard position for: "
+                    + ", ".join(summary["unmatched_labels"][:12])
+                )
+            for note in summary["notes"]:
+                self._log(f"  note: {note}")
+        self._set_status(
+            "files look readable" if not problems else f"{problems} file problem(s); see log"
         )
 
     def _frequency_bands(self) -> Mapping[str, tuple[float, float]]:

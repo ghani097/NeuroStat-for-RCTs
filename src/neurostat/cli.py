@@ -103,7 +103,45 @@ def _build_parser() -> argparse.ArgumentParser:
     brainnet_render.add_argument("project", metavar="PROJECT")
     brainnet_render.add_argument("--artifact-run", required=True, metavar="RUN_DIR")
     brainnet_render.add_argument("--json", action="store_true", dest="as_json")
+    convert = commands.add_parser(
+        "convert",
+        help="Convert BDF, EDF, BrainVision, Poly5, XDF or WiBCI CSV to .set or .fif.",
+    )
+    convert.add_argument("inputs", nargs="+", metavar="INPUT")
+    convert.add_argument("--to", choices=("set", "fif"), default="set")
+    convert.add_argument("--out", metavar="DIR", help="Output folder (default: beside each input).")
+    convert.add_argument("--format", dest="input_format", metavar="FORMAT", help="Override format detection.")
+    convert.add_argument("--channel-map", default="auto", metavar="MAP", help="auto, none, tmsi64, biosemi32, biosemi64, or a TSV file.")
+    convert.add_argument("--sampling-rate", type=float, metavar="HZ", help="WiBCI CSV only (default 250).")
+    convert.add_argument("--stream", metavar="NAME", help="XDF stream name (default: the single EEG stream).")
+    convert.add_argument("--data-unit", choices=("V", "mV", "uV"), help="XDF/WiBCI only: override the stored unit.")
+    convert.add_argument("--overwrite", action="store_true")
+    convert.add_argument("--json", action="store_true", dest="as_json")
     return parser
+
+
+def _convert(args: Any) -> list[dict[str, Any]]:
+    from pathlib import Path
+
+    from .io.formats import data_stem
+    from .io.reader import load_recording
+
+    results = []
+    for item in args.inputs:
+        source = Path(item)
+        loaded = load_recording(source, args.input_format, channel_map=args.channel_map, data_unit=args.data_unit, stream=args.stream, sampling_rate=args.sampling_rate)
+        folder = Path(args.out) if args.out else source.parent
+        folder.mkdir(parents=True, exist_ok=True)
+        suffix = ".set" if args.to == "set" else "_raw.fif"
+        target = folder / f"{data_stem(source)}{suffix}"
+        if target.exists() and not args.overwrite:
+            raise FileExistsError(f"{target} exists; pass --overwrite to replace it")
+        if args.to == "set":
+            loaded.raw.export(target, fmt="eeglab", overwrite=True, verbose="ERROR")
+        else:
+            loaded.raw.save(target, overwrite=True, verbose="ERROR")
+        results.append({"input": str(source), "output": str(target), **loaded.summary()})
+    return results
 
 
 def _workflow_json(result: Any) -> dict[str, Any]:
@@ -139,6 +177,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not args.command:
         return 0
     try:
+        if args.command == "convert":
+            converted = _convert(args)
+            if args.as_json:
+                print(json.dumps(converted, sort_keys=True))
+            else:
+                for item in converted:
+                    print(f"{item['input']} -> {item['output']} ({item['channels']} channels, {item['sfreq']:g} Hz, {item['duration_seconds']:.1f} s)")
+                    for note in item["notes"]:
+                        print(f"  note: {note}")
+            return 0
         if args.command == "run":
             from .workflow import run_workflow
 

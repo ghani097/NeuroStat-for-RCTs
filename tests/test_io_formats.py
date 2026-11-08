@@ -166,3 +166,20 @@ def test_channel_map_file(tmp_path):
     mapping.write_text("from\tto\nCh1\tFp1\nCh2\t\n", encoding="utf-8")
     name, resolved = resolve_channel_map(str(mapping), ["Ch1", "Ch2"])
     assert name == "file:map.tsv" and resolved == {"Ch1": "Fp1", "Ch2": ""}
+
+
+def test_convert_cli_writes_set_and_fif(tmp_path, capsys):
+    import mne
+
+    from neurostat.cli import main
+
+    source = tmp_path / "rec.edf"
+    write_edf(source, _signal(), LABELS, SFREQ)
+    assert main(["convert", str(source), "--out", str(tmp_path / "out")]) == 0
+    assert "6 channels, 256 Hz" in capsys.readouterr().out
+    converted = mne.io.read_raw_eeglab(tmp_path / "out" / "rec.set", verbose="ERROR")
+    assert converted.ch_names == LABELS
+    assert main(["convert", str(source), "--out", str(tmp_path / "out")]) == 2
+    assert "--overwrite" in capsys.readouterr().err
+    assert main(["convert", str(source), "--to", "fif", "--out", str(tmp_path / "out"), "--json"]) == 0
+    assert (tmp_path / "out" / "rec_raw.fif").is_file()

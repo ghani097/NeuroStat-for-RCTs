@@ -2,7 +2,7 @@
 
 `neurostat validate PROJECT` validates schema version 1 without importing scientific readers. `neurostat ingest PROJECT` reads an externally cleaned input and writes a resumable run. The input section must be exactly `input: {state: cleaned}`: ingestion deliberately performs no filtering, resampling, rereferencing, rejection, ICA, interpolation, or other cleaning.
 
-Projects declare a two-arm study, at least two sessions, conditions, profiles, output root, and records inline or in CSV/TSV. Supported explicit format/kind combinations are `set`, `fif`, and `fieldtrip_mat`, each with `raw` or `epochs`. Paths are relative to YAML for inline records and to the manifest for tabular records.
+Projects declare a two-arm study, at least two sessions, conditions, profiles, output root, and records inline or in CSV/TSV. Supported explicit format/kind combinations are `set`, `fif`, and `fieldtrip_mat`, each with `raw` or `epochs`, and `bdf`, `edf`, `brainvision`, `poly5`, `xdf` and `wibci_csv` with `raw` (see [input formats](input-formats.md) for `channel_map`, `stream` and `sampling_rate`). Paths are relative to YAML for inline records and to the manifest for tabular records.
 
 Canonical artifacts use HDF5 schema `neurostat.clean_recording.v1`, float64 `(epochs, channels, samples)` data, UTF-8 labels, times, optional events/positions, source provenance, units, dimensions, and the `externally_cleaned_bypass` marker. MNE SET/FIF inputs are volts; FieldTrip values may declare `V`, `mV`, `uV`, or `native`.
 
