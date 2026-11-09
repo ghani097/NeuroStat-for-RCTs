@@ -363,7 +363,13 @@ def _network_model_family(
         "bands": bands,
         "networks": network_names,
         "sessions": list(form.sessions),
-        "boundary_observation_count": "scout_samples",
+        # The Fisher-z boundary count must match the connectivity route:
+        # scout samples for evoked Hilbert PLI, complete windows for multitaper.
+        "boundary_observation_count": (
+            "connectivity_windows"
+            if form.profile_pair is AnalysisProfilePair.MNE_FSAVERAGE_CONTINUOUS
+            else "scout_samples"
+        ),
         "between_arm_contrasts": [
             {
                 "name": name,
