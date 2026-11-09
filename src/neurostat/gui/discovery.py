@@ -8,6 +8,9 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
+from neurostat.io.formats import data_stem as _registry_stem
+from neurostat.io.formats import format_for_path as _registry_format
+
 
 class Layout(str, Enum):
     """Supported on-disk study layouts."""
@@ -41,11 +44,6 @@ _PROBED_LAYOUTS = (
 )
 _SLUG_SAFE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*\Z")
 _SLUG_CHUNK = re.compile(r"[^A-Za-z0-9_.-]+")
-_FORMAT_EXTENSIONS = {
-    "set": (".set",),
-    "fif": (".fif", ".fif.gz"),
-    "fieldtrip_mat": (".mat",),
-}
 
 
 def detect_layout(base: str | Path, sessions: Iterable[str] | None = None) -> Layout:
@@ -166,12 +164,8 @@ def slugify(value: str) -> str:
 
 
 def format_for_path(path: str | Path) -> str | None:
-    """Map a supported EEG file extension to the v2 project format."""
-    name = Path(path).name.lower()
-    for fmt, extensions in _FORMAT_EXTENSIONS.items():
-        if any(name.endswith(extension) for extension in extensions):
-            return fmt
-    return None
+    """Map a supported EEG file to its v2 project format (see neurostat.io)."""
+    return _registry_format(path)
 
 
 @dataclass(frozen=True, slots=True)
@@ -216,12 +210,7 @@ def _is_cleaned(path: Path) -> bool:
 
 
 def _data_stem(path: Path) -> str:
-    name = path.name
-    lowered = name.lower()
-    for extension in (".fif.gz", ".set", ".fif", ".mat"):
-        if lowered.endswith(extension):
-            return name[: -len(extension)]
-    return path.stem
+    return _registry_stem(path)
 
 
 def _group_session_files(root: Path) -> tuple[_Candidate, ...]:

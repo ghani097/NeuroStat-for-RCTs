@@ -32,6 +32,7 @@ dependencies = [
 
 [project.optional-dependencies]
 gui = ["PyQt6>=6.6.0"]
+formats = ["pyxdf>=1.16"]
 dev = ["build>=1.0", "pytest>=8.0", "setuptools>=68"]
 
 [project.scripts]

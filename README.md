@@ -216,6 +216,7 @@ The application features a modern PyQt5 interface with a dark theme and threaded
 
 The installable v2 package is being introduced alongside the supported v1 launchers. Its staged architecture and compatibility boundary are described in [the v2 architecture notes](docs/v2/architecture.md).
 Clean externally prepared recordings can be validated and ingested with the [v2 clean-data project format](docs/v2/clean-data-ingestion.md).
+Recordings can be EEGLAB, FIFF, FieldTrip, BioSemi BDF, EDF, BrainVision, TMSi Poly5, LSL XDF or WiBCI CSV, raw or cleaned, as listed in [input formats](docs/v2/input-formats.md).
 Source scouts and PLI can then be generated through the documented [fixed-operator/V7-compatible or MNE/continuous routes](docs/v2/source-connectivity.md).
 Completed connectivity runs can be summarized into exact-label networks and analysed with the reproducible [network mixed-model stage](docs/v2/network-models.md).
 Verified connectivity can also be exported to self-contained GraphVar 2.03a workspaces and analysed with the reproducible [GraphVar component-inference stage](docs/v2/graphvar.md).

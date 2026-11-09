@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
@@ -641,3 +641,21 @@ def test_fsaverage_provisioning_is_opt_in() -> None:
     resources = provision_fsaverage()
     assert resources.subject == "fsaverage"
     assert resources.source_space.is_file()
+
+
+def test_network_model_boundary_count_follows_the_connectivity_route(tmp_path: Path) -> None:
+    from neurostat.gui.study_builder import (
+        AnalysisProfilePair,
+        StudyForm,
+        build_network_models_block,
+    )
+
+    form = StudyForm(
+        "s", tmp_path, ("A", "B"), ("pre", "post"), ("rest",), tmp_path, already_cleaned=True
+    )
+    continuous = build_network_models_block(form, {"dmn": ("a", "b")})
+    assert continuous["families"][0]["boundary_observation_count"] == "connectivity_windows"
+    evoked = build_network_models_block(
+        replace(form, profile_pair=AnalysisProfilePair.FIXED_EVOKED), {"dmn": ("a", "b")}
+    )
+    assert evoked["families"][0]["boundary_observation_count"] == "scout_samples"

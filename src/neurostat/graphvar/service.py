@@ -6,7 +6,7 @@ import csv
 import os
 import shutil
 import tempfile
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -356,6 +356,53 @@ def _workspace_completion_valid(
     return True
 
 
+# MATLAB writes v7.3 results through HDF5, which cannot open paths at or over
+# the classic Windows MAX_PATH (260 including the terminator) and reports the
+# file as "corrupt". Every result is written inside an attempt directory.
+_WINDOWS_PATH_LIMIT = 259
+_RUN_ID = "x" * 12
+_ATTEMPT_SUFFIX = "x" * 8  # tempfile.mkdtemp random part
+
+
+def path_limit() -> int | None:
+    """The longest path MATLAB can write to here, or ``None`` when unlimited."""
+    return _WINDOWS_PATH_LIMIT if os.name == "nt" else None
+
+
+def longest_result_path(runs_root: str | Path, workspace_ids: Iterable[str]) -> int:
+    """Length of the deepest path a GraphVar analysis run will write."""
+    root = Path(runs_root).resolve()
+    lengths = [
+        len(
+            str(
+                root
+                / f".graphvar-{_RUN_ID}.partial"
+                / "graphvar"
+                / "workspaces"
+                / workspace
+                / "results"
+                / f".neurostat-CorrResults-attempt-{_ATTEMPT_SUFFIX}"
+                / ".corr_area_1_Group.mat.importing"
+            )
+        )
+        for workspace in workspace_ids
+    ]
+    return max(lengths, default=0)
+
+
+def _check_path_lengths(runs_root: Path, workspace_ids: Iterable[str]) -> None:
+    limit = path_limit()
+    if limit is None:
+        return
+    longest = longest_result_path(runs_root, workspace_ids)
+    if longest > limit:
+        raise GraphVarError(
+            f"GraphVar result paths would be {longest} characters, over the Windows "
+            f"limit of {limit} that MATLAB can write to; move the project output "
+            f"root at least {longest - limit} characters closer to the drive root"
+        )
+
+
 def run_graphvar_analysis(
     project: CleanProject | str | Path,
     workspace_run: GraphVarWorkspaceRun | str | Path,
@@ -449,6 +496,9 @@ def run_graphvar_analysis(
     final = (runs_root / f"graphvar-{run_id}").resolve()
     if final.exists():
         return verify_graphvar_analysis_run(final, lock)
+    if workspace_runner is None and result_files is None:
+        # Only real MATLAB writes results itself; imports and injected runners do not.
+        _check_path_lengths(runs_root, (entry["workspace_id"] for entry in workspace_entries))
     partial = (runs_root / f".graphvar-{run_id}.partial").resolve()
     graphvar_dir = partial / "graphvar"
     if partial.exists():

@@ -6,6 +6,7 @@ from typing import Protocol
 
 import numpy as np
 
+from ..io.formats import RAW_READER_FORMATS
 from ..analysis_profiles import MNEFsaverageSource
 from ..atlas import DK68_LABELS
 from .artifacts import ScoutError, ScoutStream
@@ -48,9 +49,9 @@ class DefaultMNEProjector:
         with h5py.File(canonical_path, "r") as file:
             if str(file.attrs["data_kind"]) != "raw" or file["data"].shape[0] != 1:
                 raise ScoutError("mne_fsaverage requires one canonical continuous raw epoch")
-            if str(file.attrs["format"]) not in {"set", "fif"}:
+            if str(file.attrs["format"]) not in RAW_READER_FORMATS:
                 raise ScoutError(
-                    "mne_fsaverage requires MNE-ingested SET/FIF coordinates in canonical metres"
+                    "mne_fsaverage requires MNE-read coordinates in canonical metres (not FieldTrip)"
                 )
             names = tuple(value.decode("utf-8") if isinstance(value, bytes) else str(value) for value in file["channel_names"][:])
             if "channel_positions" not in file:

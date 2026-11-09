@@ -257,7 +257,7 @@ def test_fieldtrip_raw_is_rejected_before_mne_projector_due_to_coordinate_units(
     project.write_text(text, encoding="utf-8")
     ingest = ingest_project(project)
     projector = FakeMNEProjector()
-    with pytest.raises(RuntimeError, match="MNE-ingested SET/FIF"):
+    with pytest.raises(RuntimeError, match="MNE-ingested"):
         run_scouts(project, ingest, mne_projector=projector)
     assert projector.calls == 0
 

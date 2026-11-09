@@ -130,6 +130,10 @@ class IngestRun:
 
 def source_bundle(record: ProjectRecord) -> SourceBundle:
     files = [record.path]
+    if record.format == "brainvision":
+        from ..io.reader import FormatReadError, companion_files
+        try: files.extend(companion_files(record.path, record.format))
+        except FormatReadError as exc: raise IngestError(f"{record.record_id}: {exc}") from exc
     if record.format == "set":
         # Prefer the actual EEGLAB EEG.data field; same-stem is only a fallback.
         parsed = False
@@ -302,8 +306,21 @@ def _fieldtrip(record: ProjectRecord, bundle: SourceBundle) -> CleanRecording:
     return CleanRecording(record.record_id, record.key, record.data_kind, record.format, record.analysis_profile, fsample, labels, np.stack(arrays) * scale, times, events, positions, unit, "V" if unit != "native" else "native", scale, bundle)
 
 
+def _any_raw(record: ProjectRecord, bundle: SourceBundle) -> CleanRecording:
+    """Continuous BDF, EDF, BrainVision, Poly5, XDF or WiBCI CSV, read in volts."""
+    from ..io.reader import FormatReadError, load_recording
+    try: loaded = load_recording(record.path, record.format, **record.reader_options())
+    except FormatReadError as exc: raise IngestError(f"{record.record_id}: {exc}") from exc
+    raw = loaded.raw
+    positions = np.asarray([ch["loc"][:3] for ch in raw.info["chs"]], dtype=float)
+    if not np.isfinite(positions).all() or not np.any(np.abs(positions) > 0, axis=1).all(): positions = None
+    return CleanRecording(record.record_id, record.key, record.data_kind, record.format, record.analysis_profile, float(raw.info["sfreq"]), tuple(raw.ch_names), raw.get_data()[None, :, :], np.asarray(raw.times, dtype=float), None, positions, "V", "V", 1.0, bundle)
+
+
 def read_record(record: ProjectRecord, bundle: SourceBundle) -> CleanRecording:
-    return _mne(record, bundle) if record.format in {"set", "fif"} else _fieldtrip(record, bundle)
+    if record.format in {"set", "fif"}: return _mne(record, bundle)
+    if record.format == "fieldtrip_mat": return _fieldtrip(record, bundle)
+    return _any_raw(record, bundle)
 
 
 def _write_record(path: Path, recording: CleanRecording) -> str:

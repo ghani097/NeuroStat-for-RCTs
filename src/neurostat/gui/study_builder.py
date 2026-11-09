@@ -12,9 +12,19 @@ from typing import Any, TypeVar
 import yaml
 
 from neurostat.analysis_profiles import parse_analysis_profile
+from neurostat.io.formats import RAW_READER_FORMATS
 from neurostat.project import CleanProject, load_project
 
 from .discovery import DiscoveredRecord, format_for_path, slugify
+from .graphvar_setup import (
+    BrainNetSettings,
+    GraphVarSettings,
+    build_graphvar_block,
+    graph_nodes,
+    settings_problems,
+    workspace_names,
+    write_atlas_workbook,
+)
 from .networks import default_networks
 
 
@@ -72,6 +82,13 @@ class StudyForm:
     mne_n_jobs: int = 1
     preprocessing_output_root: Path | None = None
     preprocessing_settings: Mapping[str, Any] = field(default_factory=dict)
+    # Reader options for BDF, EDF, BrainVision, Poly5, XDF and WiBCI CSV input.
+    input_channel_map: str = "auto"
+    xdf_stream: str | None = None
+    csv_sampling_rate: float | None = None
+    staging_root: Path | None = None
+    graphvar: GraphVarSettings | None = None
+    brainnet: BrainNetSettings | None = None
     networks: Mapping[str, tuple[str, ...]] = field(default_factory=default_networks)
     project_file: Path | None = None
 
@@ -88,6 +105,27 @@ class StudyForm:
         if self.preprocessing_output_root is not None:
             return self.preprocessing_output_root
         return self.output_root / "preprocessed"
+
+    @property
+    def resolved_staging_root(self) -> Path:
+        """Return where raw non-SET input is converted to SET for v1."""
+        if self.staging_root is not None:
+            return self.staging_root
+        return self.output_root / "staged_raw"
+
+    @property
+    def resolved_graphvar_workbook(self) -> Path:
+        """Where the generated GraphVar atlas workbook is written."""
+        name = slugify(self.graphvar.node_set_name) if self.graphvar else "atlas"
+        return self.output_root / "graphvar" / f"atlas-{name}.xlsx"
+
+    def reader_options(self) -> dict[str, Any]:
+        """Reader keyword arguments shared by staging and the project records."""
+        return {
+            "channel_map": self.input_channel_map or "auto",
+            "stream": self.xdf_stream,
+            "sampling_rate": self.csv_sampling_rate,
+        }
 
 
 def validate_form(
@@ -124,6 +162,15 @@ def validate_form(
                 "one arm.",
             )
             break
+
+    if _requests_stage(stages, "graphvar"):
+        problems.extend(
+            settings_problems(
+                form.graphvar, form.brainnet, _requests_stage(stages, "brainnet")
+            )
+        )
+        if form.graphvar is not None:
+            problems.extend(_graphvar_path_problems(form))
 
     duplicate_record_ids = _duplicates(record.record_id for record in records)
     if duplicate_record_ids:
@@ -181,7 +228,8 @@ def recommended_profile_pair(
 ) -> AnalysisProfilePair | None:
     """Return the only source pairing the discovered data can actually use.
 
-    The scout stage is strict: `mne_fsaverage` needs continuous raw SET/FIF,
+    The scout stage is strict: `mne_fsaverage` needs continuous raw data read
+    through MNE (any format except FieldTrip),
     because FieldTrip coordinate units are not canonicalized, while
     `fixed_linear_operator` needs retained epochs. Data that is all one shape has
     exactly one legal pairing; mixed data has none.
@@ -190,7 +238,7 @@ def recommended_profile_pair(
     formats = {record.format for record in records}
     if not kinds:
         return None
-    if kinds == {"raw"} and formats <= {"set", "fif"}:
+    if kinds == {"raw"} and formats <= RAW_READER_FORMATS:
         return AnalysisProfilePair.MNE_FSAVERAGE_CONTINUOUS
     if kinds == {"epochs"}:
         return AnalysisProfilePair.FIXED_EVOKED
@@ -212,16 +260,16 @@ def _profile_pair_problems(
     if form.profile_pair is AnalysisProfilePair.MNE_FSAVERAGE_CONTINUOUS:
         epoched = sorted({r.record_id for r in records if r.data_kind != "raw"})
         wrong_format = sorted(
-            {r.record_id for r in records if r.format not in {"set", "fif"}}
+            {r.record_id for r in records if r.format not in RAW_READER_FORMATS}
         )
         if epoched or wrong_format:
             problems.append(
-                "The MNE fsaverage source needs continuous raw SET or FIF data, but "
+                "The MNE fsaverage source needs continuous raw data (not FieldTrip), but "
                 f"{len(epoched or wrong_format)} discovered record(s) are not "
                 "(for example "
                 f"{(epoched or wrong_format)[0]}). Switch Source/Connectivity to the "
                 "fixed linear operator pairing and supply a sensor-to-scout operator, "
-                "or ingest raw SET/FIF instead."
+                "or ingest continuous raw recordings instead."
             )
     elif form.profile_pair is AnalysisProfilePair.FIXED_EVOKED:
         continuous = sorted({r.record_id for r in records if r.data_kind != "epochs"})
@@ -256,12 +304,43 @@ def build_project_document(
         },
         "input": {"state": "cleaned"},
         "analysis_profiles": {"default": _analysis_profile(form)},
-        "records": [_record_document(record) for record in records],
+        "records": [_record_document(record, form) for record in records],
         "output": {"root": str(form.output_root)},
     }
     if _requests_stage(stages, "network_models"):
         document["network_models"] = build_network_models_block(form, form.networks)
+    if _requests_stage(stages, "graphvar") and form.graphvar is not None:
+        # The brainnet block is added after GraphVar, by the controller, once it
+        # is known which workspaces have a supported component.
+        workbook = write_atlas_workbook(
+            form.resolved_graphvar_workbook, graph_nodes(form.graphvar)
+        )
+        document["graphvar"] = build_graphvar_block(
+            form.graphvar,
+            arms=form.arms,
+            sessions=form.sessions,
+            conditions=form.conditions,
+            bands=form.frequency_bands,
+            workbook=workbook,
+        )
     return document
+
+
+def _graphvar_path_problems(form: StudyForm) -> list[str]:
+    from neurostat.graphvar.service import longest_result_path, path_limit
+
+    limit = path_limit()
+    if limit is None or len(form.sessions) < 2:
+        return []
+    names = workspace_names(form.conditions, form.frequency_bands, form.sessions)
+    longest = longest_result_path(form.output_root / "runs", names)
+    if longest <= limit:
+        return []
+    return [
+        f"GraphVar result paths would be {longest} characters, over the Windows "
+        f"limit of {limit} that MATLAB can write to. Choose a shorter output "
+        f"folder (at least {longest - limit} characters shorter)."
+    ]
 
 
 def build_network_models_block(
@@ -341,7 +420,13 @@ def _network_model_family(
         "bands": bands,
         "networks": network_names,
         "sessions": list(form.sessions),
-        "boundary_observation_count": "scout_samples",
+        # The Fisher-z boundary count must match the connectivity route:
+        # scout samples for evoked Hilbert PLI, complete windows for multitaper.
+        "boundary_observation_count": (
+            "connectivity_windows"
+            if form.profile_pair is AnalysisProfilePair.MNE_FSAVERAGE_CONTINUOUS
+            else "scout_samples"
+        ),
         "between_arm_contrasts": [
             {
                 "name": name,
@@ -470,7 +555,7 @@ def _analysis_profile(form: StudyForm) -> dict[str, Any]:
     }
 
 
-def _record_document(record: DiscoveredRecord) -> dict[str, Any]:
+def _record_document(record: DiscoveredRecord, form: StudyForm | None = None) -> dict[str, Any]:
     item: dict[str, Any] = {
         "record_id": record.record_id,
         "participant_id": record.participant_id,
@@ -486,6 +571,13 @@ def _record_document(record: DiscoveredRecord) -> dict[str, Any]:
         item["mat_variable"] = record.mat_variable
     if record.samples_per_epoch is not None:
         item["samples_per_epoch"] = record.samples_per_epoch
+    if form is not None and record.format not in {"set", "fif", "fieldtrip_mat"}:
+        if form.input_channel_map and form.input_channel_map != "auto":
+            item["channel_map"] = form.input_channel_map
+        if record.format == "xdf" and form.xdf_stream:
+            item["stream"] = form.xdf_stream
+        if record.format == "wibci_csv" and form.csv_sampling_rate:
+            item["sampling_rate"] = float(form.csv_sampling_rate)
     return item
 
 

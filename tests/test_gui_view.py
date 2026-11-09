@@ -181,7 +181,6 @@ def test_graphvar_and_brainnet_stages_enable_after_resources_are_supplied(
 
     window.graphvar_executable_input.setText("matlab")
     window.graphvar_root_input.setText("GraphVar")
-    window.graphvar_workbook_input.setText("atlas.xlsx")
     window.graphvar_viewer_config_input.setText("viewer.mat")
 
     assert window.stage_checks["graphvar"].isEnabled()
@@ -351,3 +350,40 @@ def test_run_uses_the_study_form_and_fills_results(
     assert seen["thread"] != ui_thread
     assert window.results.rowCount() == 1
     assert window.results.item(0, 0).text() == "ingest"
+
+
+def test_check_files_previews_poly5_and_form_carries_reader_options(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import sys
+
+    import numpy as np
+
+    sys.path.insert(0, str(Path(__file__).parent))
+    from io_writers import write_poly5
+
+    names = [f"ExG{i}" for i in range(1, 65)]
+    for arm in ("GroupA", "GroupB"):
+        for session in ("pre", "post"):
+            folder = tmp_path / "study" / arm / session
+            folder.mkdir(parents=True)
+            data = np.zeros((64, 256), dtype=np.float32)
+            write_poly5(folder / "S1.Poly5", data, names, ["uV"] * 64, 128)
+    window = _window(monkeypatch)
+    window.base_input.setText(str(tmp_path / "study"))
+    window.groups_input.setText("GroupA, GroupB")
+    window.sessions_input.setText("pre, post")
+    window.xdf_stream_input.setText("Amp")
+    window.csv_rate_input.setValue(500.0)
+
+    window.check_files_button.click()
+
+    log = window.log_display.toPlainText()
+    assert log.count("[poly5]: 62 channels, 128 Hz, 2.0 s") == 2
+    assert "labels tmsi64" in log
+    form = window._build_form()
+    assert form.reader_options() == {
+        "channel_map": "auto",
+        "stream": "Amp",
+        "sampling_rate": 500.0,
+    }

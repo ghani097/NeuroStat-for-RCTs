@@ -17,8 +17,9 @@ canonical contract used by the later stages.**
 Artifact rejection, filtering, re-referencing, ICA, and every other cleaning
 decision stay with whatever tool produced your data. The project schema enforces
 this: `input` must be exactly `{state: cleaned}`, and any other value is rejected
-when the project loads. Accepted input formats are EEGLAB `.set`, FIFF `.fif`, and
-FieldTrip `.mat`.
+when the project loads. Accepted input formats are EEGLAB `.set`, FIFF `.fif`,
+FieldTrip `.mat`, BioSemi `.bdf`, EDF, BrainVision `.vhdr`, TMSi `.Poly5`, LSL `.xdf`
+and WiBCI `.csv` (see [input formats](input-formats.md)).
 
 ## Installation
 
@@ -132,8 +133,10 @@ Three on-disk layouts are recognised automatically:
 | `Group/Session/Subject/file` | `study/GroupA/pre/subject-01/preprocessed_raw.fif` |
 
 The last is what v1 preprocessing itself writes, so cleaned output is discovered
-without rearranging anything. `.set`, `.fif` and FieldTrip `.mat` are all
-recognised, and `*_cleaned` files are skipped the way v1 skipped them.
+without rearranging anything. Every format in [input formats](input-formats.md)
+is recognised, and `*_cleaned` files are skipped the way v1 skipped them. Raw
+files that v1 cannot read are converted to `.set` under `<output>/staged_raw`
+before preprocessing.
 
 The middle two layouts are the same shape on disk, so the session names you type
 are what tells them apart. If a folder does not match any layout the GUI says so
@@ -163,6 +166,32 @@ linear operator pairing if you have a precomputed sensor-to-scout matrix.
 
 Only two source/connectivity pairings are valid, so they are offered as a single
 choice rather than two menus that could be combined illegally.
+
+### GraphVar and BrainNet
+
+Point the GUI at MATLAB, the GraphVar 2.03a folder and its viewer config, then
+pick the regions GraphVar analyses:
+
+| Choice | Regions |
+|---|---|
+| All 68 DK regions | every Desikan-Killiany region |
+| Triple network | SN 4, CEN 8 and DMN 16 (the v1 and published definition) |
+| Custom set | any regions ticked from the 68, under a name you give (for example a 12-region DAN) |
+
+The atlas workbook is written for you from fsaverage MNI centroids, so there is
+nothing to prepare in Excel. GraphVar compares the first session with each later
+session, first arm against second, for every band and condition. The default is
+5000 permutations.
+
+BrainNet draws only the bands whose GraphVar component passes the node-level
+permutation test, using the top links of that component. That rule is fixed
+before any result is seen. If no band passes, BrainNet is marked skipped with
+the reason, not failed. The BrainNet settings go in a sibling
+`<study>.brainnet.project.yaml`, which keeps every upstream run reusable.
+
+MATLAB cannot save GraphVar results to a Windows path of 260 characters or
+more. The GUI checks this before a run and asks for a shorter output folder when
+it is needed.
 
 ### Pipeline
 
