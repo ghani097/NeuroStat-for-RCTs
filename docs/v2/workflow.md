@@ -167,6 +167,32 @@ linear operator pairing if you have a precomputed sensor-to-scout matrix.
 Only two source/connectivity pairings are valid, so they are offered as a single
 choice rather than two menus that could be combined illegally.
 
+### GraphVar and BrainNet
+
+Point the GUI at MATLAB, the GraphVar 2.03a folder and its viewer config, then
+pick the regions GraphVar analyses:
+
+| Choice | Regions |
+|---|---|
+| All 68 DK regions | every Desikan-Killiany region |
+| Triple network | SN 4, CEN 8 and DMN 16 (the v1 and published definition) |
+| Custom set | any regions ticked from the 68, under a name you give (for example a 12-region DAN) |
+
+The atlas workbook is written for you from fsaverage MNI centroids, so there is
+nothing to prepare in Excel. GraphVar compares the first session with each later
+session, first arm against second, for every band and condition. The default is
+5000 permutations.
+
+BrainNet draws only the bands whose GraphVar component passes the node-level
+permutation test, using the top links of that component. That rule is fixed
+before any result is seen. If no band passes, BrainNet is marked skipped with
+the reason, not failed. The BrainNet settings go in a sibling
+`<study>.brainnet.project.yaml`, which keeps every upstream run reusable.
+
+MATLAB cannot save GraphVar results to a Windows path of 260 characters or
+more. The GUI checks this before a run and asks for a shorter output folder when
+it is needed.
+
 ### Pipeline
 
 Press **Scan** to see every discovered record in a table before anything runs.

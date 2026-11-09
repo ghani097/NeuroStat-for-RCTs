@@ -16,6 +16,15 @@ from neurostat.io.formats import RAW_READER_FORMATS
 from neurostat.project import CleanProject, load_project
 
 from .discovery import DiscoveredRecord, format_for_path, slugify
+from .graphvar_setup import (
+    BrainNetSettings,
+    GraphVarSettings,
+    build_graphvar_block,
+    graph_nodes,
+    settings_problems,
+    workspace_names,
+    write_atlas_workbook,
+)
 from .networks import default_networks
 
 
@@ -78,6 +87,8 @@ class StudyForm:
     xdf_stream: str | None = None
     csv_sampling_rate: float | None = None
     staging_root: Path | None = None
+    graphvar: GraphVarSettings | None = None
+    brainnet: BrainNetSettings | None = None
     networks: Mapping[str, tuple[str, ...]] = field(default_factory=default_networks)
     project_file: Path | None = None
 
@@ -101,6 +112,12 @@ class StudyForm:
         if self.staging_root is not None:
             return self.staging_root
         return self.output_root / "staged_raw"
+
+    @property
+    def resolved_graphvar_workbook(self) -> Path:
+        """Where the generated GraphVar atlas workbook is written."""
+        name = slugify(self.graphvar.node_set_name) if self.graphvar else "atlas"
+        return self.output_root / "graphvar" / f"atlas-{name}.xlsx"
 
     def reader_options(self) -> dict[str, Any]:
         """Reader keyword arguments shared by staging and the project records."""
@@ -145,6 +162,15 @@ def validate_form(
                 "one arm.",
             )
             break
+
+    if _requests_stage(stages, "graphvar"):
+        problems.extend(
+            settings_problems(
+                form.graphvar, form.brainnet, _requests_stage(stages, "brainnet")
+            )
+        )
+        if form.graphvar is not None:
+            problems.extend(_graphvar_path_problems(form))
 
     duplicate_record_ids = _duplicates(record.record_id for record in records)
     if duplicate_record_ids:
@@ -283,7 +309,38 @@ def build_project_document(
     }
     if _requests_stage(stages, "network_models"):
         document["network_models"] = build_network_models_block(form, form.networks)
+    if _requests_stage(stages, "graphvar") and form.graphvar is not None:
+        # The brainnet block is added after GraphVar, by the controller, once it
+        # is known which workspaces have a supported component.
+        workbook = write_atlas_workbook(
+            form.resolved_graphvar_workbook, graph_nodes(form.graphvar)
+        )
+        document["graphvar"] = build_graphvar_block(
+            form.graphvar,
+            arms=form.arms,
+            sessions=form.sessions,
+            conditions=form.conditions,
+            bands=form.frequency_bands,
+            workbook=workbook,
+        )
     return document
+
+
+def _graphvar_path_problems(form: StudyForm) -> list[str]:
+    from neurostat.graphvar.service import longest_result_path, path_limit
+
+    limit = path_limit()
+    if limit is None or len(form.sessions) < 2:
+        return []
+    names = workspace_names(form.conditions, form.frequency_bands, form.sessions)
+    longest = longest_result_path(form.output_root / "runs", names)
+    if longest <= limit:
+        return []
+    return [
+        f"GraphVar result paths would be {longest} characters, over the Windows "
+        f"limit of {limit} that MATLAB can write to. Choose a shorter output "
+        f"folder (at least {longest - limit} characters shorter)."
+    ]
 
 
 def build_network_models_block(

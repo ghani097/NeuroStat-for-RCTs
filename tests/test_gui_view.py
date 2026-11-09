@@ -181,7 +181,6 @@ def test_graphvar_and_brainnet_stages_enable_after_resources_are_supplied(
 
     window.graphvar_executable_input.setText("matlab")
     window.graphvar_root_input.setText("GraphVar")
-    window.graphvar_workbook_input.setText("atlas.xlsx")
     window.graphvar_viewer_config_input.setText("viewer.mat")
 
     assert window.stage_checks["graphvar"].isEnabled()

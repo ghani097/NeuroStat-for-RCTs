@@ -7,7 +7,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
-from neurostat.contracts import ProgressCallback, ProgressEvent, StageName
+from neurostat.contracts import (
+    ProgressCallback,
+    ProgressEvent,
+    StageName,
+    StageResult,
+    StageState,
+)
 from neurostat.project import CleanProject
 from neurostat.workflow import (
     StageOutcome,
@@ -20,6 +26,7 @@ from neurostat.workflow import (
 )
 
 from .discovery import DiscoveredRecord, discover_records
+from .graphvar_setup import build_brainnet_block, supported_workspaces
 from .legacy_bridge import run_v1_preprocessing
 from .study_builder import (
     StudyForm,
@@ -146,7 +153,86 @@ class WorkflowController:
             raise ValueError(message)
         document = build_project_document(form, records, stages=plan)
         project = self._project_writer(document, form.resolved_project_file)
-        return self.run(project, requested, progress=progress, outcome=outcome)
+        if StageName.BRAINNET not in plan or self._runner is not None:
+            return self.run(project, requested, progress=progress, outcome=outcome)
+        # BrainNet can only draw workspaces whose component passed node pFWE,
+        # which is known only after GraphVar. Run up to GraphVar on the main
+        # project, then add the brainnet block in a sibling project file (the
+        # GraphVar identity ignores that block, so nothing upstream reruns).
+        upstream = tuple(stage for stage in plan if stage is not StageName.BRAINNET)
+        result = self.run(project, upstream, progress=progress, outcome=outcome)
+        return self._run_brainnet(form, document, result, progress, outcome)
+
+    def _run_brainnet(
+        self,
+        form: StudyForm,
+        document: dict[str, Any],
+        result: WorkflowResult,
+        progress: ProgressHandler | None,
+        outcome: OutcomeHandler | None,
+    ) -> WorkflowResult:
+        if form.brainnet is None or form.graphvar is None:
+            raise ValueError("BrainNet needs GraphVar and BrainNet settings.")
+        graphvar_run = result[StageName.GRAPHVAR].run
+        graphvar_dir = result[StageName.GRAPHVAR].run_dir
+        if graphvar_run is None or graphvar_dir is None:
+            raise ValueError("GraphVar did not produce a run for BrainNet to draw.")
+        workspaces = supported_workspaces(graphvar_dir, form.brainnet.top_k)
+        if not workspaces:
+            message = (
+                "BrainNet skipped: no GraphVar component passed the node-pFWE test "
+                f"with at least {form.brainnet.top_k} links, so there is nothing to draw."
+            )
+            if progress is not None:
+                progress(ProgressEvent(StageName.BRAINNET, message))
+            skipped = StageOutcome(
+                StageResult(StageName.BRAINNET, StageState.SKIPPED, message=message)
+            )
+            if outcome is not None:
+                outcome(skipped)
+            return WorkflowResult(result.outcomes + (skipped,))
+        if progress is not None:
+            progress(
+                ProgressEvent(
+                    StageName.BRAINNET,
+                    "drawing supported components: " + ", ".join(workspaces),
+                )
+            )
+        brainnet_document = dict(document)
+        brainnet_document["brainnet"] = build_brainnet_block(
+            form.brainnet, form.graphvar, workspaces
+        )
+        project_file = form.resolved_project_file
+        brainnet_project = self._project_writer(
+            brainnet_document,
+            project_file.with_name(project_file.name.replace(".project.yaml", "") + ".brainnet.project.yaml"),
+        )
+        services = self._services
+        try:
+            if services is not None and services.brainnet_build is not None:
+                artifact_run = services.brainnet_build(brainnet_project, graphvar_run)
+            else:
+                from neurostat.brainnet import build_brainnet_artifacts
+
+                artifact_run = build_brainnet_artifacts(brainnet_project, cast(Any, graphvar_run))
+            if services is not None and services.brainnet_render is not None:
+                rendered = services.brainnet_render(brainnet_project, artifact_run)
+            else:
+                from neurostat.brainnet import render_brainnet_artifacts
+
+                rendered = render_brainnet_artifacts(brainnet_project, cast(Any, artifact_run))
+        except (RuntimeError, ValueError, OSError) as exc:
+            failed = StageOutcome(StageResult(StageName.BRAINNET, StageState.FAILED, message=str(exc)))
+            partial = WorkflowResult(result.outcomes + (failed,))
+            if outcome is not None:
+                outcome(failed)
+            raise ControllerWorkflowError(StageName.BRAINNET, partial, str(exc)) from exc
+        done = StageOutcome(StageResult(StageName.BRAINNET, StageState.SUCCEEDED), rendered)
+        if progress is not None:
+            progress(ProgressEvent(StageName.BRAINNET, "brainnet succeeded"))
+        if outcome is not None:
+            outcome(done)
+        return WorkflowResult(result.outcomes + (done,))
 
     def _run_engine(
         self,
